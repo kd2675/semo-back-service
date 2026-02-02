@@ -1,0 +1,90 @@
+spring:
+  application:
+    name: semo-back-service
+  profiles:
+    active: local
+    group:
+      local: local
+      test: test
+      dev: dev
+      prod: prod
+  devtools:
+    livereload:
+      enabled: false
+    restart:
+      enabled: false
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 5000
+            loggerLevel: full
+    discovery:
+      enabled: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+          fetch_size: 50
+  servlet:
+    multipart:
+      maxFileSize: 100MB
+      maxRequestSize: 100MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      FAIL_ON_EMPTY_BEANS: false
+  data:
+    jpa:
+      repositories:
+        enabled: false
+
+# JWT 설정
+jwt:
+  secret: your-super-secret-key-change-this-in-production-12345-this-in-production-12345
+  expiration: 3600000  # 1 hour in milliseconds
+  refresh-expiration: 1209600000  # 14 days in milliseconds
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+    registerWithEureka: true
+    fetchRegistry: true
+  instance:
+    preferIpAddress: true
+    hostname: localhost
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    metrics:
+      enabled: true
+  health:
+    defaults:
+      enabled: true
+  # Micrometer 메트릭 설정
+  metrics:
+    enable:
+      jvm: true
+      system: true
+      web: true
+      tomcat: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
