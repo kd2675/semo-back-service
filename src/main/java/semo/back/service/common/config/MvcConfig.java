@@ -20,7 +20,7 @@ import java.util.List;
  * Gateway Offloading 패턴:
  * - UserContextArgumentResolver를 등록하여 컨트롤러에서
  *   @RequestHeader 대신 UserContext를 직접 받을 수 있게 함
- * - Gateway가 보낸 X-User-Id, X-User-Name, X-User-Role 헤더를
+ * - Gateway가 보낸 X-User-Key, X-User-Name, X-User-Role 헤더를
  *   UserContext 객체로 변환
  */
 @EnableWebMvc
