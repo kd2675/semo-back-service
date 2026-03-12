@@ -38,15 +38,6 @@ public class MvcConfig implements WebMvcConfigurer {
         resolvers.add(new UserContextArgumentResolver());
     }
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**")
-                .allowedOriginPatterns("*")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true);
-    }
-
     @Bean
     public ByteArrayHttpMessageConverter byteArrayHttpMessageConverter() {
         ByteArrayHttpMessageConverter arrayHttpMessageConverter = new ByteArrayHttpMessageConverter();
