@@ -2,6 +2,7 @@ package semo.back.service.feature.club.biz;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -10,16 +11,22 @@ import semo.back.service.common.util.ImageFileUrlResolver;
 import semo.back.service.common.util.ImageFinalizeClient;
 import semo.back.service.database.pub.entity.Club;
 import semo.back.service.database.pub.entity.ClubMember;
+import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
+import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
+import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
+import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.feature.club.vo.ClubCreateResponse;
+import semo.back.service.feature.club.vo.ClubBoardNoticeResponse;
 import semo.back.service.feature.club.vo.ClubBoardResponse;
 import semo.back.service.feature.club.vo.ClubProfileDetailResponse;
 import semo.back.service.feature.club.vo.ClubProfileRecordResponse;
 import semo.back.service.feature.club.vo.ClubProfileResponse;
 import semo.back.service.feature.club.vo.ClubScheduleDayEventsResponse;
+import semo.back.service.feature.club.vo.ClubScheduleEventResponse;
 import semo.back.service.feature.club.vo.ClubScheduleMonthResponse;
 import semo.back.service.feature.club.vo.ClubScheduleResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
@@ -56,10 +63,15 @@ public class ClubService {
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String CLUB_IMAGE_TARGET_DIR = "semo/clubs";
     private static final DateTimeFormatter JOINED_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM yyyy", Locale.ENGLISH);
+    private static final DateTimeFormatter SCHEDULE_MONTH_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH);
+    private static final DateTimeFormatter SCHEDULE_MONTH_SHORT_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH);
+    private static final DateTimeFormatter SCHEDULE_TIME_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH);
 
     private final ClubRepository clubRepository;
     private final ClubMemberRepository clubMemberRepository;
     private final ClubProfileRepository clubProfileRepository;
+    private final ClubNoticeRepository clubNoticeRepository;
+    private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ProfileUserService profileUserService;
     private final ImageFinalizeClient imageFinalizeClient;
     private final ImageFileUrlResolver imageFileUrlResolver;
@@ -139,39 +151,50 @@ public class ClubService {
 
     public ClubBoardResponse getClubBoard(Long clubId, String userKey) {
         MembershipClubPair pair = getMembershipClubPair(clubId, userKey);
+        List<ClubNotice> notices = clubNoticeRepository.findFeed(
+                clubId,
+                null,
+                null,
+                null,
+                null,
+                PageRequest.of(0, 5)
+        );
+        Map<Long, ClubProfile> profileById = clubProfileRepository.findAllById(
+                notices.stream().map(ClubNotice::getAuthorClubProfileId).distinct().toList()
+        ).stream().collect(HashMap::new, (map, profile) -> map.put(profile.getClubProfileId(), profile), HashMap::putAll);
         return new ClubBoardResponse(
                 pair.club().getClubId(),
                 pair.club().getName(),
                 isAdminRole(pair.membership().getRoleCode()),
-                List.of()
+                notices.stream()
+                        .map(notice -> new ClubBoardNoticeResponse(
+                                String.valueOf(notice.getNoticeId()),
+                                toBoardIcon(notice.getCategoryKey()),
+                                notice.getTitle(),
+                                summarizeContent(notice.getContent()),
+                                profileById.get(notice.getAuthorClubProfileId()) == null
+                                        ? "Unknown Member"
+                                        : profileById.get(notice.getAuthorClubProfileId()).getDisplayName(),
+                                formatBoardTimeAgo(notice.getPublishedAt()),
+                                toBoardCategory(notice.getCategoryKey())
+                        ))
+                        .toList()
         );
     }
 
     public ClubScheduleResponse getClubSchedule(Long clubId, String userKey) {
         MembershipClubPair pair = getMembershipClubPair(clubId, userKey);
         LocalDate now = LocalDate.now();
-        LocalDate firstDay = now.withDayOfMonth(1);
-        int leadingBlankDays = firstDay.getDayOfWeek() == DayOfWeek.SUNDAY
-                ? 0
-                : firstDay.getDayOfWeek().getValue();
-
-        ClubScheduleMonthResponse month = new ClubScheduleMonthResponse(
-                "%d-%02d".formatted(now.getYear(), now.getMonthValue()),
-                now.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)),
-                now.format(DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH)),
-                now.getYear(),
-                now.getMonthValue(),
-                leadingBlankDays,
-                now.lengthOfMonth(),
-                now.getDayOfMonth(),
-                List.of(new ClubScheduleDayEventsResponse(now.getDayOfMonth(), List.of()))
+        List<ClubScheduleMonthResponse> months = List.of(
+                toScheduleMonth(clubId, now.withDayOfMonth(1)),
+                toScheduleMonth(clubId, now.plusMonths(1).withDayOfMonth(1))
         );
 
         return new ClubScheduleResponse(
                 pair.club().getClubId(),
                 pair.club().getName(),
                 isAdminRole(pair.membership().getRoleCode()),
-                List.of(month)
+                months
         );
     }
 
@@ -324,6 +347,139 @@ public class ClubService {
 
     private boolean isAdminRole(String roleCode) {
         return ADMIN_ROLE_CODES.contains(roleCode);
+    }
+
+    private ClubScheduleMonthResponse toScheduleMonth(Long clubId, LocalDate month) {
+        LocalDate firstDay = month.withDayOfMonth(1);
+        LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+        LocalDate firstDayOfNextMonth = firstDay.plusMonths(1);
+        int leadingBlankDays = firstDay.getDayOfWeek() == DayOfWeek.SUNDAY
+                ? 0
+                : firstDay.getDayOfWeek().getValue();
+
+        Map<Integer, List<ClubScheduleEventResponse>> eventsByDay = new HashMap<>();
+        clubScheduleEventRepository.findScheduledBetween(clubId, firstDay.atStartOfDay(), firstDayOfNextMonth.atStartOfDay())
+                .forEach(event -> {
+                    LocalDate startDate = event.getStartAt().toLocalDate().isBefore(firstDay)
+                            ? firstDay
+                            : event.getStartAt().toLocalDate();
+                    LocalDate endDate = resolveScheduleEndDate(event, lastDay);
+
+                    for (LocalDate current = startDate; !current.isAfter(endDate); current = current.plusDays(1)) {
+                        int day = current.getDayOfMonth();
+                        eventsByDay.computeIfAbsent(day, ignored -> new java.util.ArrayList<>())
+                                .add(new ClubScheduleEventResponse(
+                                        String.valueOf(event.getEventId()),
+                                        toScheduleIcon(event.getCategoryKey()),
+                                        event.getTitle(),
+                                        event.getLocationLabel() != null ? event.getLocationLabel() : toSummary(event.getDescription()),
+                                        event.getStartAt().format(SCHEDULE_TIME_FORMATTER),
+                                        formatDurationLabel(event.getStartAt(), event.getEndAt()),
+                                        toScheduleTone(event.getCategoryKey())
+                                ));
+                    }
+                });
+
+        List<ClubScheduleDayEventsResponse> days = eventsByDay.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new ClubScheduleDayEventsResponse(entry.getKey(), entry.getValue()))
+                .toList();
+
+        return new ClubScheduleMonthResponse(
+                "%d-%02d".formatted(firstDay.getYear(), firstDay.getMonthValue()),
+                firstDay.format(SCHEDULE_MONTH_LABEL_FORMATTER),
+                firstDay.format(SCHEDULE_MONTH_SHORT_LABEL_FORMATTER),
+                firstDay.getYear(),
+                firstDay.getMonthValue(),
+                leadingBlankDays,
+                firstDay.lengthOfMonth(),
+                month.equals(LocalDate.now().withDayOfMonth(1)) ? LocalDate.now().getDayOfMonth() : 1,
+                days
+        );
+    }
+
+    private LocalDate resolveScheduleEndDate(ClubScheduleEvent event, LocalDate monthLastDay) {
+        if (event.getEndAt() == null) {
+            return event.getStartAt().toLocalDate().isAfter(monthLastDay)
+                    ? monthLastDay
+                    : event.getStartAt().toLocalDate();
+        }
+
+        LocalDate endDate = event.getEndAt().toLocalDate();
+        if (endDate.isAfter(monthLastDay)) {
+            return monthLastDay;
+        }
+        return endDate;
+    }
+
+    private String formatDurationLabel(LocalDateTime startAt, LocalDateTime endAt) {
+        if (startAt == null || endAt == null || !endAt.isAfter(startAt)) {
+            return null;
+        }
+        long minutes = java.time.Duration.between(startAt, endAt).toMinutes();
+        return minutes + " Min";
+    }
+
+    private String summarizeContent(String content) {
+        String normalized = trimToNull(content);
+        if (normalized == null) {
+            return "";
+        }
+        return normalized.length() <= 140 ? normalized : normalized.substring(0, 140) + "...";
+    }
+
+    private String toBoardIcon(String categoryKey) {
+        return switch (categoryKey) {
+            case "TOURNAMENT" -> "sports_tennis";
+            case "MATCH" -> "emoji_events";
+            case "SOCIAL" -> "celebration";
+            default -> "campaign";
+        };
+    }
+
+    private String toBoardCategory(String categoryKey) {
+        return switch (categoryKey) {
+            case "TOURNAMENT" -> "tournaments";
+            case "MATCH" -> "matches";
+            case "SOCIAL" -> "social";
+            default -> "social";
+        };
+    }
+
+    private String toScheduleIcon(String categoryKey) {
+        return switch (categoryKey) {
+            case "TOURNAMENT", "MATCH" -> "sports_tennis";
+            case "SOCIAL" -> "groups";
+            default -> "calendar_month";
+        };
+    }
+
+    private String toScheduleTone(String categoryKey) {
+        return switch (categoryKey) {
+            case "MATCH" -> "amber";
+            case "SOCIAL" -> "slate";
+            default -> "primary";
+        };
+    }
+
+    private String formatBoardTimeAgo(LocalDateTime value) {
+        if (value == null) {
+            return "";
+        }
+        java.time.Duration duration = java.time.Duration.between(value, LocalDateTime.now());
+        long minutes = Math.max(duration.toMinutes(), 0);
+        if (minutes < 1) {
+            return "just now";
+        }
+        if (minutes < 60) {
+            return minutes + "m ago";
+        }
+        long hours = duration.toHours();
+        if (hours < 24) {
+            return hours + "h ago";
+        }
+        long days = duration.toDays();
+        return days + "d ago";
     }
 
     private String formatJoinedLabel(LocalDateTime joinedAt) {

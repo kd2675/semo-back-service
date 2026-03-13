@@ -1,0 +1,65 @@
+package semo.back.service.database.pub.entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import semo.back.service.common.jpa.CommonDateEntity;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "club_schedule_event")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@Builder
+public class ClubScheduleEvent extends CommonDateEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "event_id")
+    private Long eventId;
+
+    @Column(name = "club_id", nullable = false)
+    private Long clubId;
+
+    @Column(name = "author_club_profile_id", nullable = false)
+    private Long authorClubProfileId;
+
+    @Column(name = "linked_notice_id")
+    private Long linkedNoticeId;
+
+    @Column(name = "category_key", nullable = false, length = 30)
+    private String categoryKey;
+
+    @Column(name = "title", nullable = false, length = 200)
+    private String title;
+
+    @Column(name = "description", length = 2000)
+    private String description;
+
+    @Column(name = "location_label", length = 200)
+    private String locationLabel;
+
+    @Column(name = "start_at", nullable = false)
+    private LocalDateTime startAt;
+
+    @Column(name = "end_at")
+    private LocalDateTime endAt;
+
+    @Column(name = "attendee_limit")
+    private Integer attendeeLimit;
+
+    @Column(name = "visibility_status", nullable = false, length = 20)
+    private String visibilityStatus;
+
+    @Column(name = "event_status", nullable = false, length = 20)
+    private String eventStatus;
+}

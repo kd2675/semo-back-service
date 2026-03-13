@@ -45,6 +45,60 @@ CREATE INDEX idx_club_category_active
     ON club (category_key, active, club_id);
 
 -- ============================================================
+-- Club feature catalog / activation
+-- Features are globally catalogued and enabled per club.
+-- User more/admin more menus expand from these rows.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS feature_catalog (
+    feature_key VARCHAR(50) PRIMARY KEY,
+    display_name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NULL,
+    icon_name VARCHAR(50) NOT NULL,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    sort_order INT NOT NULL DEFAULT 0,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS feature_activation (
+    feature_activation_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    feature_key VARCHAR(50) NOT NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 0,
+    enabled_by_club_profile_id BIGINT NULL,
+    enabled_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_feature_activation_key UNIQUE (club_id, feature_key),
+    CONSTRAINT fk_feature_activation_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_feature_activation_catalog FOREIGN KEY (feature_key) REFERENCES feature_catalog(feature_key),
+    CONSTRAINT fk_feature_activation_enabled_by FOREIGN KEY (enabled_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_feature_activation_enabled
+    ON feature_activation (club_id, enabled, feature_key);
+
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    active,
+    sort_order,
+    create_date,
+    update_date
+) VALUES (
+    'ATTENDANCE',
+    'Attendance Check',
+    'Check in members and manage attendance sessions.',
+    'fact_check',
+    1,
+    10,
+    NOW(),
+    NOW()
+);
+
+-- ============================================================
 -- Club membership / role
 -- USER joins club through this table.
 -- One profile can have at most one current membership row per club.
@@ -129,6 +183,9 @@ CREATE TABLE IF NOT EXISTS club_notice (
     category_key VARCHAR(30) NOT NULL DEFAULT 'GENERAL',
     title VARCHAR(200) NOT NULL,
     content TEXT NOT NULL,
+    location_label VARCHAR(200) NULL,
+    schedule_at DATETIME NULL,
+    schedule_end_at DATETIME NULL,
     pinned TINYINT(1) NOT NULL DEFAULT 0,
     published_at DATETIME NOT NULL,
     deleted TINYINT(1) NOT NULL DEFAULT 0,
@@ -144,6 +201,9 @@ CREATE INDEX idx_club_notice_feed
 CREATE INDEX idx_club_notice_pinned
     ON club_notice (club_id, pinned, published_at);
 
+CREATE INDEX idx_club_notice_schedule
+    ON club_notice (club_id, schedule_at, deleted);
+
 -- ============================================================
 -- Schedule / events
 -- Event authors and participants are also club-profile scoped.
@@ -152,6 +212,7 @@ CREATE TABLE IF NOT EXISTS club_schedule_event (
     event_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     club_id BIGINT NOT NULL,
     author_club_profile_id BIGINT NOT NULL,
+    linked_notice_id BIGINT NULL,
     category_key VARCHAR(30) NOT NULL DEFAULT 'GENERAL',
     title VARCHAR(200) NOT NULL,
     description VARCHAR(2000) NULL,
@@ -164,7 +225,8 @@ CREATE TABLE IF NOT EXISTS club_schedule_event (
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT fk_club_schedule_event_club FOREIGN KEY (club_id) REFERENCES club(club_id),
-    CONSTRAINT fk_club_schedule_event_author FOREIGN KEY (author_club_profile_id) REFERENCES club_profile(club_profile_id)
+    CONSTRAINT fk_club_schedule_event_author FOREIGN KEY (author_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_club_schedule_event_notice FOREIGN KEY (linked_notice_id) REFERENCES club_notice(notice_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_club_schedule_event_club_start
@@ -188,6 +250,47 @@ CREATE TABLE IF NOT EXISTS club_event_participant (
 
 CREATE INDEX idx_club_event_participant_profile
     ON club_event_participant (club_profile_id, participation_status);
+
+-- ============================================================
+-- Attendance feature
+-- Attendance is the first real club feature. Sessions are club-scoped and
+-- individual check-ins are club-profile scoped.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS attendance_session (
+    attendance_session_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    created_by_club_profile_id BIGINT NOT NULL,
+    title VARCHAR(120) NOT NULL,
+    attendance_date DATE NOT NULL,
+    open_at DATETIME NOT NULL,
+    close_at DATETIME NULL,
+    session_status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_attendance_session_day UNIQUE (club_id, attendance_date),
+    CONSTRAINT fk_attendance_session_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_attendance_session_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_attendance_session_status
+    ON attendance_session (club_id, session_status, attendance_date);
+
+CREATE TABLE IF NOT EXISTS attendance_checkin (
+    attendance_checkin_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    attendance_session_id BIGINT NOT NULL,
+    club_profile_id BIGINT NOT NULL,
+    status_code VARCHAR(20) NOT NULL DEFAULT 'CHECKED_IN',
+    checked_in_at DATETIME NOT NULL,
+    note VARCHAR(255) NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_attendance_checkin UNIQUE (attendance_session_id, club_profile_id),
+    CONSTRAINT fk_attendance_checkin_session FOREIGN KEY (attendance_session_id) REFERENCES attendance_session(attendance_session_id),
+    CONSTRAINT fk_attendance_checkin_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_attendance_checkin_profile
+    ON attendance_checkin (club_profile_id, checked_in_at);
 
 -- ============================================================
 -- Member stats / profile widgets

@@ -21,4 +21,6 @@ public interface ClubMemberRepository extends JpaRepository<ClubMember, Long> {
               cm.clubMemberId desc
             """)
     List<ClubMember> findActiveMemberships(Long profileId, String membershipStatus);
+
+    List<ClubMember> findByClubIdAndMembershipStatusOrderByJoinedAtAscClubMemberIdAsc(Long clubId, String membershipStatus);
 }

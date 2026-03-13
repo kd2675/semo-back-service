@@ -8,6 +8,9 @@ import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
+import semo.back.service.database.pub.repository.ClubFeatureRepository;
+import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
+import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.vo.ClubCreateResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
@@ -33,10 +36,22 @@ class ClubServiceTest {
     private ClubProfileRepository clubProfileRepository;
 
     @Autowired
+    private ClubFeatureRepository clubFeatureRepository;
+
+    @Autowired
+    private ClubAttendanceCheckInRepository clubAttendanceCheckInRepository;
+
+    @Autowired
+    private ClubAttendanceSessionRepository clubAttendanceSessionRepository;
+
+    @Autowired
     private ProfileUserRepository profileUserRepository;
 
     @BeforeEach
     void setUp() {
+        clubAttendanceCheckInRepository.deleteAll();
+        clubAttendanceSessionRepository.deleteAll();
+        clubFeatureRepository.deleteAll();
         clubProfileRepository.deleteAll();
         clubMemberRepository.deleteAll();
         clubRepository.deleteAll();
