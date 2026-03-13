@@ -14,6 +14,7 @@ TRUNCATE TABLE club_event_participant;
 TRUNCATE TABLE club_schedule_event;
 TRUNCATE TABLE club_notice;
 TRUNCATE TABLE club_join_request;
+TRUNCATE TABLE club_profile;
 TRUNCATE TABLE club_member;
 TRUNCATE TABLE club;
 
