@@ -9,6 +9,8 @@ public record ClubNoticeDetailResponse(
         String content,
         String categoryKey,
         String categoryLabel,
+        String categoryIconName,
+        String categoryAccentTone,
         String authorDisplayName,
         String authorRoleCode,
         String publishedAtLabel,

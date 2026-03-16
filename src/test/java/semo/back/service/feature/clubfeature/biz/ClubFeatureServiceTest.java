@@ -106,9 +106,39 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("ATTENDANCE"))
         );
 
-        assertThat(responses).hasSize(1);
-        assertThat(responses.getFirst().featureKey()).isEqualTo("ATTENDANCE");
-        assertThat(responses.getFirst().enabled()).isTrue();
+        assertThat(responses).hasSize(2);
+        assertThat(responses)
+                .extracting(response -> response.featureKey() + ":" + response.enabled())
+                .containsExactly("ATTENDANCE:true", "TIMELINE:false");
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "ATTENDANCE")).isTrue();
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "TIMELINE")).isFalse();
+    }
+
+    @Test
+    void updateClubFeaturesEnablesTimelineFeature() {
+        Long clubId = clubService.createClub(
+                "feature-user-002",
+                "Feature Admin",
+                new CreateClubRequest(
+                        "Timeline Feature Club",
+                        "타임라인 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+
+        var responses = clubFeatureService.updateClubFeatures(
+                clubId,
+                "feature-user-002",
+                new UpdateClubFeaturesRequest(java.util.List.of("TIMELINE"))
+        );
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses)
+                .extracting(response -> response.featureKey() + ":" + response.enabled())
+                .containsExactly("ATTENDANCE:false", "TIMELINE:true");
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "TIMELINE")).isTrue();
     }
 }

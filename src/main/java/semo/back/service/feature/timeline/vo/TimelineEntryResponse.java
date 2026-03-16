@@ -1,15 +1,15 @@
-package semo.back.service.feature.notice.vo;
+package semo.back.service.feature.timeline.vo;
 
-public record ClubNoticeSummaryResponse(
+public record TimelineEntryResponse(
         Long noticeId,
         String title,
         String summary,
-        String authorDisplayName,
-        String authorRoleCode,
         String categoryKey,
         String categoryLabel,
         String categoryIconName,
         String categoryAccentTone,
+        String authorDisplayName,
+        String publishedAt,
         String publishedAtLabel,
         String timeAgo,
         boolean pinned,

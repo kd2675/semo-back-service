@@ -18,6 +18,7 @@ import semo.back.service.feature.notice.biz.ClubNoticeService;
 import semo.back.service.feature.notice.vo.ClubNoticeDetailResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeUpsertResponse;
+import semo.back.service.feature.notice.vo.NoticeCategoryOptionResponse;
 import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
@@ -41,6 +42,18 @@ public class ClubNoticeController {
         return ResponseDataDTO.of(
                 clubNoticeService.getNoticeFeed(clubId, requireUserKey(userContext), category, query, cursorPublishedAt, cursorNoticeId, size),
                 "공지 피드 조회 성공"
+        );
+    }
+
+    @GetMapping("/categories")
+    public ResponseDataDTO<java.util.List<NoticeCategoryOptionResponse>> getNoticeCategories(
+            @PathVariable Long clubId,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubNoticeService.getCategoryOptions(clubId, requireUserKey(userContext)),
+                "공지 카테고리 조회 성공"
         );
     }
 

@@ -11,6 +11,7 @@ import semo.back.service.database.pub.entity.Club;
 import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
+import semo.back.service.database.pub.entity.NoticeCategoryCatalog;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
@@ -21,6 +22,7 @@ import semo.back.service.feature.notice.vo.ClubNoticeDetailResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeUpsertResponse;
+import semo.back.service.feature.notice.vo.NoticeCategoryOptionResponse;
 import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
 
 import java.time.Duration;
@@ -48,6 +50,7 @@ public class ClubNoticeService {
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
     private final ClubAccessResolver clubAccessResolver;
+    private final NoticeCategorySupport noticeCategorySupport;
 
     public ClubNoticeFeedResponse getNoticeFeed(
             Long clubId,
@@ -67,7 +70,7 @@ public class ClubNoticeService {
 
         List<ClubNotice> notices = clubNoticeRepository.findFeed(
                 clubId,
-                normalizeOptionalCategoryKey(categoryKey),
+                noticeCategorySupport.normalizeOptionalCategoryKey(categoryKey),
                 normalizeQuery(query),
                 cursorDateTime,
                 normalizedCursorNoticeId,
@@ -79,11 +82,13 @@ public class ClubNoticeService {
 
         Map<Long, ClubProfile> profileById = loadProfiles(pageItems);
         Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems);
+        Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
         List<ClubNoticeSummaryResponse> responses = pageItems.stream()
                 .map(notice -> toSummaryResponse(
                         notice,
                         profileById.get(notice.getAuthorClubProfileId()),
-                        linkedTargetsByNoticeId.get(notice.getNoticeId())
+                        linkedTargetsByNoticeId.get(notice.getNoticeId()),
+                        categoryByKey.get(normalizeCategoryKey(notice.getCategoryKey()))
                 ))
                 .toList();
 
@@ -107,6 +112,8 @@ public class ClubNoticeService {
         ClubProfile authorProfile = clubProfileRepository.findById(notice.getAuthorClubProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubProfile", "clubProfileId", notice.getAuthorClubProfileId()));
         LinkedTarget linkedTarget = loadLinkedTarget(notice);
+        NoticeCategoryCatalog category = noticeCategorySupport.getActiveCategoryMap()
+                .get(normalizeCategoryKey(notice.getCategoryKey()));
 
         boolean canManage = isAdminRole(access.membership().getRoleCode())
                 || access.clubProfile().getClubProfileId().equals(notice.getAuthorClubProfileId());
@@ -119,7 +126,9 @@ public class ClubNoticeService {
                 notice.getTitle(),
                 notice.getContent(),
                 notice.getCategoryKey(),
-                toCategoryLabel(notice.getCategoryKey()),
+                category == null ? "General" : category.getDisplayName(),
+                category == null ? "description" : category.getIconName(),
+                category == null ? "slate" : category.getAccentTone(),
                 authorProfile.getDisplayName(),
                 access.membership().getRoleCode(),
                 formatDateTime(notice.getPublishedAt()),
@@ -144,7 +153,7 @@ public class ClubNoticeService {
         ClubNotice notice = clubNoticeRepository.save(ClubNotice.builder()
                 .clubId(clubId)
                 .authorClubProfileId(access.clubProfile().getClubProfileId())
-                .categoryKey(normalizeCategoryKey(request.categoryKey()))
+                .categoryKey(noticeCategorySupport.normalizeRequiredCategoryKey(request.categoryKey()))
                 .title(request.title().trim())
                 .content(request.content().trim())
                 .locationLabel(trimToNull(request.locationLabel()))
@@ -168,7 +177,7 @@ public class ClubNoticeService {
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
-                .categoryKey(normalizeCategoryKey(request.categoryKey()))
+                .categoryKey(noticeCategorySupport.normalizeRequiredCategoryKey(request.categoryKey()))
                 .title(request.title().trim())
                 .content(request.content().trim())
                 .locationLabel(trimToNull(request.locationLabel()))
@@ -205,6 +214,11 @@ public class ClubNoticeService {
 
     public List<ClubNotice> getScheduledNotices(Long clubId, LocalDateTime from, LocalDateTime to) {
         return clubNoticeRepository.findScheduledBetween(clubId, from, to);
+    }
+
+    public List<NoticeCategoryOptionResponse> getCategoryOptions(Long clubId, String userKey) {
+        clubAccessResolver.requireActiveMember(clubId, userKey);
+        return noticeCategorySupport.getCategoryOptions();
     }
 
     private void upsertLinkedScheduleEvent(ClubNotice notice, Long authorClubProfileId) {
@@ -294,7 +308,8 @@ public class ClubNoticeService {
     private ClubNoticeSummaryResponse toSummaryResponse(
             ClubNotice notice,
             ClubProfile authorProfile,
-            LinkedTarget linkedTarget
+            LinkedTarget linkedTarget,
+            NoticeCategoryCatalog category
     ) {
         String authorName = authorProfile == null ? "Unknown Member" : authorProfile.getDisplayName();
         return new ClubNoticeSummaryResponse(
@@ -304,7 +319,9 @@ public class ClubNoticeService {
                 authorName,
                 null,
                 notice.getCategoryKey(),
-                toCategoryLabel(notice.getCategoryKey()),
+                category == null ? "General" : category.getDisplayName(),
+                category == null ? "description" : category.getIconName(),
+                category == null ? "slate" : category.getAccentTone(),
                 formatDateTime(notice.getPublishedAt()),
                 toTimeAgo(notice.getPublishedAt()),
                 notice.isPinned(),
@@ -329,26 +346,9 @@ public class ClubNoticeService {
         return normalized.length() <= 140 ? normalized : normalized.substring(0, 140) + "...";
     }
 
-    private String toCategoryLabel(String categoryKey) {
-        return switch (normalizeCategoryKey(categoryKey)) {
-            case "TOURNAMENT" -> "Tournament";
-            case "MATCH" -> "Match";
-            case "SOCIAL" -> "Social";
-            case "ANNOUNCEMENT" -> "Announcement";
-            default -> "General";
-        };
-    }
-
     private String normalizeCategoryKey(String categoryKey) {
         if (!StringUtils.hasText(categoryKey)) {
             return "ANNOUNCEMENT";
-        }
-        return categoryKey.trim().toUpperCase(Locale.ROOT);
-    }
-
-    private String normalizeOptionalCategoryKey(String categoryKey) {
-        if (!StringUtils.hasText(categoryKey)) {
-            return null;
         }
         return categoryKey.trim().toUpperCase(Locale.ROOT);
     }

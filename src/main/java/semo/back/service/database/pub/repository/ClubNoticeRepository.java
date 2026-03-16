@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import semo.back.service.database.pub.entity.ClubNotice;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +35,29 @@ public interface ClubNoticeRepository extends JpaRepository<ClubNotice, Long> {
             Long clubId,
             String categoryKey,
             String queryText,
+            LocalDateTime cursorPublishedAt,
+            Long cursorNoticeId,
+            Pageable pageable
+    );
+
+    @Query("""
+            select n
+            from ClubNotice n
+            where n.clubId = :clubId
+              and n.deleted = false
+              and n.categoryKey in :visibleCategoryKeys
+              and (:selectedCategoryKey is null or n.categoryKey = :selectedCategoryKey)
+              and (
+                    :cursorPublishedAt is null
+                    or n.publishedAt < :cursorPublishedAt
+                    or (n.publishedAt = :cursorPublishedAt and n.noticeId < :cursorNoticeId)
+                  )
+            order by n.publishedAt desc, n.noticeId desc
+            """)
+    List<ClubNotice> findTimelineFeed(
+            Long clubId,
+            Collection<String> visibleCategoryKeys,
+            String selectedCategoryKey,
             LocalDateTime cursorPublishedAt,
             Long cursorNoticeId,
             Pageable pageable

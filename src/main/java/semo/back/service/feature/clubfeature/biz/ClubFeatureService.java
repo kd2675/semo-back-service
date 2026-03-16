@@ -34,6 +34,14 @@ public class ClubFeatureService {
                     .iconName("fact_check")
                     .active(true)
                     .sortOrder(10)
+                    .build(),
+            FeatureCatalog.builder()
+                    .featureKey("TIMELINE")
+                    .displayName("Timeline")
+                    .description("Browse club activity through notice-based timeline cards.")
+                    .iconName("timeline")
+                    .active(true)
+                    .sortOrder(20)
                     .build()
     );
 
@@ -138,6 +146,7 @@ public class ClubFeatureService {
     private String toUserPath(Long clubId, String featureKey) {
         return switch (normalizeFeatureKey(featureKey)) {
             case "ATTENDANCE" -> "/clubs/%d/more/attendance".formatted(clubId);
+            case "TIMELINE" -> "/clubs/%d/more/timeline".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
     }
@@ -145,6 +154,7 @@ public class ClubFeatureService {
     private String toAdminPath(Long clubId, String featureKey) {
         return switch (normalizeFeatureKey(featureKey)) {
             case "ATTENDANCE" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
+            case "TIMELINE" -> "/clubs/%d/admin/more/timeline".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
     }
