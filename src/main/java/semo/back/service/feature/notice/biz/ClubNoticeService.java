@@ -15,6 +15,7 @@ import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
+import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.notice.vo.ClubNoticeDetailResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
@@ -29,6 +30,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +46,7 @@ public class ClubNoticeService {
     private final ClubRepository clubRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubScheduleEventRepository clubScheduleEventRepository;
+    private final ClubScheduleVoteRepository clubScheduleVoteRepository;
     private final ClubAccessResolver clubAccessResolver;
 
     public ClubNoticeFeedResponse getNoticeFeed(
@@ -74,8 +78,13 @@ public class ClubNoticeService {
         List<ClubNotice> pageItems = hasNext ? notices.subList(0, pageSize) : notices;
 
         Map<Long, ClubProfile> profileById = loadProfiles(pageItems);
+        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems);
         List<ClubNoticeSummaryResponse> responses = pageItems.stream()
-                .map(notice -> toSummaryResponse(notice, profileById.get(notice.getAuthorClubProfileId())))
+                .map(notice -> toSummaryResponse(
+                        notice,
+                        profileById.get(notice.getAuthorClubProfileId()),
+                        linkedTargetsByNoticeId.get(notice.getNoticeId())
+                ))
                 .toList();
 
         ClubNotice lastItem = hasNext ? pageItems.get(pageItems.size() - 1) : null;
@@ -97,6 +106,7 @@ public class ClubNoticeService {
         ClubNotice notice = getNotice(clubId, noticeId);
         ClubProfile authorProfile = clubProfileRepository.findById(notice.getAuthorClubProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubProfile", "clubProfileId", notice.getAuthorClubProfileId()));
+        LinkedTarget linkedTarget = loadLinkedTarget(notice);
 
         boolean canManage = isAdminRole(access.membership().getRoleCode())
                 || access.clubProfile().getClubProfileId().equals(notice.getAuthorClubProfileId());
@@ -120,7 +130,9 @@ public class ClubNoticeService {
                 formatDateTime(notice.getScheduleAt()),
                 formatDateTimeValue(notice.getScheduleEndAt()),
                 formatDateTime(notice.getScheduleEndAt()),
-                canManage
+                canManage,
+                linkedTarget == null ? null : linkedTarget.type(),
+                linkedTarget == null ? null : linkedTarget.targetId()
         );
     }
 
@@ -258,7 +270,32 @@ public class ClubNoticeService {
         return result;
     }
 
-    private ClubNoticeSummaryResponse toSummaryResponse(ClubNotice notice, ClubProfile authorProfile) {
+    private Map<Long, LinkedTarget> loadLinkedTargets(List<ClubNotice> notices) {
+        if (notices.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<Long> noticeIds = notices.stream()
+                .map(ClubNotice::getNoticeId)
+                .collect(Collectors.toSet());
+
+        Map<Long, LinkedTarget> result = new HashMap<>();
+        clubScheduleEventRepository.findByLinkedNoticeIdIn(noticeIds)
+                .forEach(event -> result.put(event.getLinkedNoticeId(), new LinkedTarget("SCHEDULE_EVENT", event.getEventId())));
+        clubScheduleVoteRepository.findByLinkedNoticeIdIn(noticeIds)
+                .forEach(vote -> result.put(vote.getLinkedNoticeId(), new LinkedTarget("SCHEDULE_VOTE", vote.getVoteId())));
+        return result;
+    }
+
+    private LinkedTarget loadLinkedTarget(ClubNotice notice) {
+        return loadLinkedTargets(List.of(notice)).get(notice.getNoticeId());
+    }
+
+    private ClubNoticeSummaryResponse toSummaryResponse(
+            ClubNotice notice,
+            ClubProfile authorProfile,
+            LinkedTarget linkedTarget
+    ) {
         String authorName = authorProfile == null ? "Unknown Member" : authorProfile.getDisplayName();
         return new ClubNoticeSummaryResponse(
                 notice.getNoticeId(),
@@ -272,8 +309,16 @@ public class ClubNoticeService {
                 toTimeAgo(notice.getPublishedAt()),
                 notice.isPinned(),
                 formatDateTime(notice.getScheduleAt()),
-                notice.getLocationLabel()
+                notice.getLocationLabel(),
+                linkedTarget == null ? null : linkedTarget.type(),
+                linkedTarget == null ? null : linkedTarget.targetId()
         );
+    }
+
+    private record LinkedTarget(
+            String type,
+            Long targetId
+    ) {
     }
 
     private String summarizeContent(String content) {

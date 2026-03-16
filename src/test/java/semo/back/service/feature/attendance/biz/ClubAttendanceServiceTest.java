@@ -8,10 +8,15 @@ import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
 import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
+import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
+import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
+import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
+import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
+import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.attendance.vo.AttendanceCheckInRequest;
 import semo.back.service.feature.attendance.vo.CreateAttendanceSessionRequest;
@@ -49,6 +54,9 @@ class ClubAttendanceServiceTest {
     private ClubAttendanceSessionRepository clubAttendanceSessionRepository;
 
     @Autowired
+    private ClubEventParticipantRepository clubEventParticipantRepository;
+
+    @Autowired
     private ClubFeatureRepository clubFeatureRepository;
 
     @Autowired
@@ -61,10 +69,27 @@ class ClubAttendanceServiceTest {
     private ClubRepository clubRepository;
 
     @Autowired
+    private ClubScheduleEventRepository clubScheduleEventRepository;
+
+    @Autowired
+    private ClubScheduleVoteOptionRepository clubScheduleVoteOptionRepository;
+
+    @Autowired
+    private ClubScheduleVoteRepository clubScheduleVoteRepository;
+
+    @Autowired
+    private ClubScheduleVoteSelectionRepository clubScheduleVoteSelectionRepository;
+
+    @Autowired
     private ProfileUserRepository profileUserRepository;
 
     @BeforeEach
     void setUp() {
+        clubScheduleVoteSelectionRepository.deleteAll();
+        clubScheduleVoteOptionRepository.deleteAll();
+        clubScheduleVoteRepository.deleteAll();
+        clubEventParticipantRepository.deleteAll();
+        clubScheduleEventRepository.deleteAll();
         clubAttendanceCheckInRepository.deleteAll();
         clubAttendanceSessionRepository.deleteAll();
         clubFeatureRepository.deleteAll();

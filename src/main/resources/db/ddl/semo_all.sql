@@ -217,9 +217,13 @@ CREATE TABLE IF NOT EXISTS club_schedule_event (
     title VARCHAR(200) NOT NULL,
     description VARCHAR(2000) NULL,
     location_label VARCHAR(200) NULL,
+    participation_condition_text VARCHAR(1000) NULL,
     start_at DATETIME NOT NULL,
     end_at DATETIME NULL,
     attendee_limit INT NULL,
+    participation_enabled TINYINT(1) NOT NULL DEFAULT 0,
+    fee_required TINYINT(1) NOT NULL DEFAULT 0,
+    fee_n_way_split TINYINT(1) NOT NULL DEFAULT 0,
     visibility_status VARCHAR(20) NOT NULL DEFAULT 'CLUB',
     event_status VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED',
     create_date DATETIME NOT NULL,
@@ -250,6 +254,56 @@ CREATE TABLE IF NOT EXISTS club_event_participant (
 
 CREATE INDEX idx_club_event_participant_profile
     ON club_event_participant (club_profile_id, participation_status);
+
+CREATE TABLE IF NOT EXISTS club_schedule_vote (
+    vote_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    author_club_profile_id BIGINT NOT NULL,
+    linked_notice_id BIGINT NULL,
+    title VARCHAR(200) NOT NULL,
+    vote_start_date DATE NOT NULL,
+    vote_end_date DATE NOT NULL,
+    vote_start_time TIME NULL,
+    vote_end_time TIME NULL,
+    closed_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_club_schedule_vote_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_club_schedule_vote_author FOREIGN KEY (author_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_club_schedule_vote_notice FOREIGN KEY (linked_notice_id) REFERENCES club_notice(notice_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_schedule_vote_club
+    ON club_schedule_vote (club_id, create_date);
+
+CREATE TABLE IF NOT EXISTS club_schedule_vote_option (
+    vote_option_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    vote_id BIGINT NOT NULL,
+    option_label VARCHAR(120) NOT NULL,
+    sort_order INT NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_club_schedule_vote_option_vote FOREIGN KEY (vote_id) REFERENCES club_schedule_vote(vote_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_schedule_vote_option_vote
+    ON club_schedule_vote_option (vote_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS club_schedule_vote_selection (
+    vote_selection_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    vote_id BIGINT NOT NULL,
+    vote_option_id BIGINT NOT NULL,
+    club_profile_id BIGINT NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_schedule_vote_selection_vote_profile UNIQUE (vote_id, club_profile_id),
+    CONSTRAINT fk_club_schedule_vote_selection_vote FOREIGN KEY (vote_id) REFERENCES club_schedule_vote(vote_id),
+    CONSTRAINT fk_club_schedule_vote_selection_option FOREIGN KEY (vote_option_id) REFERENCES club_schedule_vote_option(vote_option_id),
+    CONSTRAINT fk_club_schedule_vote_selection_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_schedule_vote_selection_vote
+    ON club_schedule_vote_selection (vote_id, vote_option_id);
 
 -- ============================================================
 -- Attendance feature
@@ -361,9 +415,95 @@ CREATE INDEX idx_club_dues_invoice_status
     ON club_dues_invoice (club_id, billing_year, billing_month, payment_status);
 
 -- ============================================================
--- Admin dashboard layout
--- Each club can customize widget visibility/order for admin view.
+-- Dashboard widget catalog / layout
+-- Widget catalog is global and activated/ordered per club.
+-- USER_HOME widgets can be edited by admin and exposed to all members.
 -- ============================================================
+CREATE TABLE IF NOT EXISTS dashboard_widget_catalog (
+    widget_key VARCHAR(50) PRIMARY KEY,
+    display_name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NULL,
+    icon_name VARCHAR(50) NOT NULL,
+    required_feature_key VARCHAR(50) NULL,
+    default_visibility_scope VARCHAR(20) NOT NULL DEFAULT 'USER_HOME',
+    default_column_span INT NOT NULL DEFAULT 1,
+    default_row_span INT NOT NULL DEFAULT 1,
+    default_sort_order INT NOT NULL DEFAULT 0,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_dashboard_widget_required_feature
+      FOREIGN KEY (required_feature_key) REFERENCES feature_catalog(feature_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'BOARD_NOTICE', 'Board Notice', 'Latest announcements from your board.', 'forum', NULL, 'USER_HOME', 2, 1, 10, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'BOARD_NOTICE');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'SCHEDULE_OVERVIEW', 'Schedule Overview', 'Upcoming schedules and next events.', 'calendar_month', NULL, 'USER_HOME', 1, 1, 20, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'SCHEDULE_OVERVIEW');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'PROFILE_SUMMARY', 'My Profile', 'Quick access to your club profile.', 'person', NULL, 'USER_HOME', 1, 1, 30, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'PROFILE_SUMMARY');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'ATTENDANCE_STATUS', 'Attendance Check', 'Check in and review attendance status.', 'fact_check', 'ATTENDANCE', 'USER_HOME', 1, 1, 40, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'ATTENDANCE_STATUS');
+
 CREATE TABLE IF NOT EXISTS club_dashboard_widget (
     club_dashboard_widget_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     club_id BIGINT NOT NULL,
@@ -373,11 +513,12 @@ CREATE TABLE IF NOT EXISTS club_dashboard_widget (
     row_span INT NOT NULL DEFAULT 1,
     sort_order INT NOT NULL DEFAULT 0,
     enabled TINYINT(1) NOT NULL DEFAULT 1,
-    visibility_scope VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
+    visibility_scope VARCHAR(20) NOT NULL DEFAULT 'USER_HOME',
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT uk_club_dashboard_widget_key UNIQUE (club_id, widget_key),
-    CONSTRAINT fk_club_dashboard_widget_club FOREIGN KEY (club_id) REFERENCES club(club_id)
+    CONSTRAINT fk_club_dashboard_widget_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_club_dashboard_widget_catalog FOREIGN KEY (widget_key) REFERENCES dashboard_widget_catalog(widget_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_club_dashboard_widget_sort

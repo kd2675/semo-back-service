@@ -13,6 +13,11 @@ import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
 import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
+import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
+import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
+import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
+import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
+import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.vo.ClubProfileResponse;
 import semo.back.service.feature.club.vo.ClubCreateResponse;
@@ -51,10 +56,30 @@ class ClubControllerTest {
     private ClubAttendanceSessionRepository clubAttendanceSessionRepository;
 
     @Autowired
+    private ClubEventParticipantRepository clubEventParticipantRepository;
+
+    @Autowired
+    private ClubScheduleEventRepository clubScheduleEventRepository;
+
+    @Autowired
+    private ClubScheduleVoteOptionRepository clubScheduleVoteOptionRepository;
+
+    @Autowired
+    private ClubScheduleVoteRepository clubScheduleVoteRepository;
+
+    @Autowired
+    private ClubScheduleVoteSelectionRepository clubScheduleVoteSelectionRepository;
+
+    @Autowired
     private ProfileUserRepository profileUserRepository;
 
     @BeforeEach
     void setUp() {
+        clubScheduleVoteSelectionRepository.deleteAll();
+        clubScheduleVoteOptionRepository.deleteAll();
+        clubScheduleVoteRepository.deleteAll();
+        clubEventParticipantRepository.deleteAll();
+        clubScheduleEventRepository.deleteAll();
         clubAttendanceCheckInRepository.deleteAll();
         clubAttendanceSessionRepository.deleteAll();
         clubFeatureRepository.deleteAll();

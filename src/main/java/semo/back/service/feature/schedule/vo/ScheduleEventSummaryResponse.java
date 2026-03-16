@@ -1,16 +1,11 @@
 package semo.back.service.feature.schedule.vo;
 
-public record ScheduleEventDetailResponse(
-        Long clubId,
-        String clubName,
-        boolean admin,
+public record ScheduleEventSummaryResponse(
         Long eventId,
         String title,
         String startDate,
         String endDate,
         String dateLabel,
-        String startTime,
-        String endTime,
         String timeLabel,
         Integer attendeeLimit,
         String locationLabel,
@@ -22,7 +17,6 @@ public record ScheduleEventDetailResponse(
         Long linkedNoticeId,
         String myParticipationStatus,
         int goingCount,
-        int notGoingCount,
-        boolean canManage
+        int notGoingCount
 ) {
 }

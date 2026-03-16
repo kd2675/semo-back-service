@@ -12,6 +12,8 @@ public record ClubNoticeSummaryResponse(
         String timeAgo,
         boolean pinned,
         String scheduleAtLabel,
-        String locationLabel
+        String locationLabel,
+        String linkedTargetType,
+        Long linkedTargetId
 ) {
 }

@@ -4,10 +4,10 @@ public record ScheduleEventUpsertResponse(
         Long eventId,
         Long linkedNoticeId,
         String title,
-        String startAt,
-        String startAtLabel,
-        String endAt,
-        String endAtLabel,
+        String startDate,
+        String endDate,
+        String dateLabel,
+        String timeLabel,
         boolean postedToBoard
 ) {
 }

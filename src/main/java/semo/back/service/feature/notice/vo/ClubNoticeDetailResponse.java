@@ -19,6 +19,8 @@ public record ClubNoticeDetailResponse(
         String scheduleAtLabel,
         String scheduleEndAt,
         String scheduleEndAtLabel,
-        boolean canManage
+        boolean canManage,
+        String linkedTargetType,
+        Long linkedTargetId
 ) {
 }

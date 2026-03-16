@@ -12,6 +12,7 @@ import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.vo.ClubFeatureResponse;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
+import semo.back.service.feature.dashboard.biz.ClubDashboardService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -39,6 +40,7 @@ public class ClubFeatureService {
     private final FeatureCatalogRepository featureCatalogRepository;
     private final ClubFeatureRepository clubFeatureRepository;
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubDashboardService clubDashboardService;
 
     @Transactional(transactionManager = "pubTransactionManager")
     public List<ClubFeatureResponse> getClubFeatures(Long clubId, String userKey) {
@@ -82,6 +84,7 @@ public class ClubFeatureService {
                     .enabledAt(enabled ? now : null)
                     .build());
         }
+        clubDashboardService.syncWidgetsForClub(clubId);
 
         return getClubFeatureResponses(clubId);
     }

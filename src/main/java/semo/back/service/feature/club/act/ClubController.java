@@ -15,7 +15,6 @@ import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.ClubCreateResponse;
 import semo.back.service.feature.club.vo.ClubBoardResponse;
 import semo.back.service.feature.club.vo.ClubProfileResponse;
-import semo.back.service.feature.club.vo.ClubScheduleResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
 import web.common.core.response.base.dto.ResponseDataDTO;
@@ -72,16 +71,6 @@ public class ClubController {
         requireUserRole(userContext);
         String userKey = requireUserKey(userContext);
         return ResponseDataDTO.of(clubService.getClubBoard(clubId, userKey), "클럽 게시판 조회 성공");
-    }
-
-    @GetMapping("/{clubId}/schedule")
-    public ResponseDataDTO<ClubScheduleResponse> getClubSchedule(
-            @PathVariable Long clubId,
-            UserContext userContext
-    ) {
-        requireUserRole(userContext);
-        String userKey = requireUserKey(userContext);
-        return ResponseDataDTO.of(clubService.getClubSchedule(clubId, userKey), "클럽 일정 조회 성공");
     }
 
     @GetMapping("/{clubId}/profile")

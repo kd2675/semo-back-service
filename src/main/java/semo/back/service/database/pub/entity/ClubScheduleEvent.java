@@ -48,6 +48,9 @@ public class ClubScheduleEvent extends CommonDateEntity {
     @Column(name = "location_label", length = 200)
     private String locationLabel;
 
+    @Column(name = "participation_condition_text", length = 1000)
+    private String participationConditionText;
+
     @Column(name = "start_at", nullable = false)
     private LocalDateTime startAt;
 
@@ -56,6 +59,15 @@ public class ClubScheduleEvent extends CommonDateEntity {
 
     @Column(name = "attendee_limit")
     private Integer attendeeLimit;
+
+    @Column(name = "participation_enabled", nullable = false)
+    private boolean participationEnabled;
+
+    @Column(name = "fee_required", nullable = false)
+    private boolean feeRequired;
+
+    @Column(name = "fee_n_way_split", nullable = false)
+    private boolean feeNWaySplit;
 
     @Column(name = "visibility_status", nullable = false, length = 20)
     private String visibilityStatus;
