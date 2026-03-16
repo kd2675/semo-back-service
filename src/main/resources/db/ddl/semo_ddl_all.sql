@@ -78,26 +78,6 @@ CREATE TABLE IF NOT EXISTS feature_activation (
 CREATE INDEX idx_feature_activation_enabled
     ON feature_activation (club_id, enabled, feature_key);
 
-INSERT INTO feature_catalog (
-    feature_key,
-    display_name,
-    description,
-    icon_name,
-    active,
-    sort_order,
-    create_date,
-    update_date
-) VALUES (
-    'ATTENDANCE',
-    'Attendance Check',
-    'Check in members and manage attendance sessions.',
-    'fact_check',
-    1,
-    10,
-    NOW(),
-    NOW()
-);
-
 -- ============================================================
 -- Club membership / role
 -- USER joins club through this table.
@@ -203,6 +183,33 @@ CREATE INDEX idx_club_notice_pinned
 
 CREATE INDEX idx_club_notice_schedule
     ON club_notice (club_id, schedule_at, deleted);
+
+CREATE TABLE IF NOT EXISTS notice_category_catalog (
+    category_key VARCHAR(30) PRIMARY KEY,
+    display_name VARCHAR(60) NOT NULL,
+    icon_name VARCHAR(50) NOT NULL,
+    accent_tone VARCHAR(30) NOT NULL,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    sort_order INT NOT NULL DEFAULT 0,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS club_notice_category_setting (
+    club_notice_category_setting_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    category_key VARCHAR(30) NOT NULL,
+    visible_in_timeline TINYINT(1) NOT NULL DEFAULT 1,
+    updated_by_club_profile_id BIGINT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_notice_category_setting UNIQUE (club_id, category_key),
+    CONSTRAINT fk_club_notice_category_setting_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_club_notice_category_setting_updated_by FOREIGN KEY (updated_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_notice_category_timeline
+    ON club_notice_category_setting (club_id, visible_in_timeline, category_key);
 
 -- ============================================================
 -- Schedule / events
@@ -435,74 +442,6 @@ CREATE TABLE IF NOT EXISTS dashboard_widget_catalog (
     CONSTRAINT fk_dashboard_widget_required_feature
       FOREIGN KEY (required_feature_key) REFERENCES feature_catalog(feature_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-INSERT INTO dashboard_widget_catalog (
-    widget_key,
-    display_name,
-    description,
-    icon_name,
-    required_feature_key,
-    default_visibility_scope,
-    default_column_span,
-    default_row_span,
-    default_sort_order,
-    active,
-    create_date,
-    update_date
-)
-SELECT 'BOARD_NOTICE', 'Board Notice', 'Latest announcements from your board.', 'forum', NULL, 'USER_HOME', 2, 1, 10, 1, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'BOARD_NOTICE');
-
-INSERT INTO dashboard_widget_catalog (
-    widget_key,
-    display_name,
-    description,
-    icon_name,
-    required_feature_key,
-    default_visibility_scope,
-    default_column_span,
-    default_row_span,
-    default_sort_order,
-    active,
-    create_date,
-    update_date
-)
-SELECT 'SCHEDULE_OVERVIEW', 'Schedule Overview', 'Upcoming schedules and next events.', 'calendar_month', NULL, 'USER_HOME', 1, 1, 20, 1, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'SCHEDULE_OVERVIEW');
-
-INSERT INTO dashboard_widget_catalog (
-    widget_key,
-    display_name,
-    description,
-    icon_name,
-    required_feature_key,
-    default_visibility_scope,
-    default_column_span,
-    default_row_span,
-    default_sort_order,
-    active,
-    create_date,
-    update_date
-)
-SELECT 'PROFILE_SUMMARY', 'My Profile', 'Quick access to your club profile.', 'person', NULL, 'USER_HOME', 1, 1, 30, 1, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'PROFILE_SUMMARY');
-
-INSERT INTO dashboard_widget_catalog (
-    widget_key,
-    display_name,
-    description,
-    icon_name,
-    required_feature_key,
-    default_visibility_scope,
-    default_column_span,
-    default_row_span,
-    default_sort_order,
-    active,
-    create_date,
-    update_date
-)
-SELECT 'ATTENDANCE_STATUS', 'Attendance Check', 'Check in and review attendance status.', 'fact_check', 'ATTENDANCE', 'USER_HOME', 1, 1, 40, 1, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'ATTENDANCE_STATUS');
 
 CREATE TABLE IF NOT EXISTS club_dashboard_widget (
     club_dashboard_widget_id BIGINT AUTO_INCREMENT PRIMARY KEY,
