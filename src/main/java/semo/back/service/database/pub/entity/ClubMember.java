@@ -50,4 +50,20 @@ public class ClubMember extends CommonDateEntity {
 
     @Column(name = "last_activity_at")
     private LocalDateTime lastActivityAt;
+
+    public void updateRoleCode(String roleCode) {
+        this.roleCode = roleCode;
+    }
+
+    public void updateMembershipStatus(String membershipStatus) {
+        this.membershipStatus = membershipStatus;
+    }
+
+    public void markApproved(LocalDateTime approvedAt) {
+        this.membershipStatus = "ACTIVE";
+        if (this.joinedAt == null) {
+            this.joinedAt = approvedAt;
+        }
+        this.lastActivityAt = approvedAt;
+    }
 }

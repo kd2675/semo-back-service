@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ClubMemberRepository extends JpaRepository<ClubMember, Long> {
     Optional<ClubMember> findByClubIdAndProfileId(Long clubId, Long profileId);
 
+    Optional<ClubMember> findByClubMemberIdAndClubId(Long clubMemberId, Long clubId);
+
     @Query("""
             select cm
             from ClubMember cm
@@ -23,4 +25,6 @@ public interface ClubMemberRepository extends JpaRepository<ClubMember, Long> {
     List<ClubMember> findActiveMemberships(Long profileId, String membershipStatus);
 
     List<ClubMember> findByClubIdAndMembershipStatusOrderByJoinedAtAscClubMemberIdAsc(Long clubId, String membershipStatus);
+
+    List<ClubMember> findByClubIdOrderByClubMemberIdAsc(Long clubId);
 }
