@@ -164,6 +164,8 @@ public class ClubScheduleService {
                 .attendeeLimit(draft.attendeeLimit())
                 .participationEnabled(draft.participationEnabled())
                 .feeRequired(draft.feeRequired())
+                .feeAmount(draft.feeAmount())
+                .feeAmountUndecided(draft.feeAmountUndecided())
                 .feeNWaySplit(draft.feeNWaySplit())
                 .visibilityStatus(VISIBILITY_STATUS)
                 .eventStatus(EVENT_STATUS)
@@ -215,6 +217,8 @@ public class ClubScheduleService {
                 .attendeeLimit(draft.attendeeLimit())
                 .participationEnabled(draft.participationEnabled())
                 .feeRequired(draft.feeRequired())
+                .feeAmount(draft.feeAmount())
+                .feeAmountUndecided(draft.feeAmountUndecided())
                 .feeNWaySplit(draft.feeNWaySplit())
                 .visibilityStatus(current.getVisibilityStatus())
                 .eventStatus(EVENT_STATUS)
@@ -495,6 +499,8 @@ public class ClubScheduleService {
                 event.getParticipationConditionText(),
                 event.isParticipationEnabled(),
                 event.isFeeRequired(),
+                event.getFeeAmount(),
+                event.isFeeAmountUndecided(),
                 event.isFeeNWaySplit(),
                 event.getLinkedNoticeId() != null,
                 event.getLinkedNoticeId(),
@@ -560,17 +566,25 @@ public class ClubScheduleService {
             throw new SemoException.ValidationException("종료 시간은 시작 시간보다 빠를 수 없습니다.");
         }
 
+        boolean participationEnabled = Boolean.TRUE.equals(request.participationEnabled());
         boolean feeRequired = Boolean.TRUE.equals(request.feeRequired());
+        boolean feeAmountUndecided = feeRequired && Boolean.TRUE.equals(request.feeAmountUndecided());
+        Integer feeAmount = feeRequired && !feeAmountUndecided ? request.feeAmount() : null;
+        if (feeRequired && !feeAmountUndecided && feeAmount == null) {
+            throw new SemoException.ValidationException("참가비를 입력하거나 금액 미정을 선택해야 합니다.");
+        }
         return new EventDraft(
                 trimRequired(request.title(), "일정 제목은 필수입니다."),
                 startAt,
                 endAt,
-                request.attendeeLimit(),
+                participationEnabled ? request.attendeeLimit() : null,
                 trimToNull(request.locationLabel()),
-                trimToNull(request.participationConditionText()),
-                Boolean.TRUE.equals(request.participationEnabled()),
+                participationEnabled ? trimToNull(request.participationConditionText()) : null,
+                participationEnabled,
                 feeRequired,
-                feeRequired && Boolean.TRUE.equals(request.feeNWaySplit())
+                feeAmount,
+                feeAmountUndecided,
+                feeRequired && participationEnabled && Boolean.TRUE.equals(request.feeNWaySplit())
         );
     }
 
@@ -645,6 +659,8 @@ public class ClubScheduleService {
                 event.getParticipationConditionText(),
                 event.isParticipationEnabled(),
                 event.isFeeRequired(),
+                event.getFeeAmount(),
+                event.isFeeAmountUndecided(),
                 event.isFeeNWaySplit(),
                 event.getLinkedNoticeId() != null,
                 event.getLinkedNoticeId(),
@@ -836,9 +852,19 @@ public class ClubScheduleService {
             lines.add("참여 조건: " + draft.participationConditionText());
         }
         if (draft.feeRequired()) {
-            lines.add(draft.feeNWaySplit() ? "비용: 비용 발생 · N분할 예정" : "비용: 비용 발생");
+            lines.add("비용: " + formatFeeSummary(draft.feeAmount(), draft.feeAmountUndecided(), draft.feeNWaySplit()));
         }
         return String.join("\n", lines);
+    }
+
+    private String formatFeeSummary(Integer feeAmount, boolean feeAmountUndecided, boolean feeNWaySplit) {
+        String feeText = feeAmountUndecided
+                ? "금액 미정"
+                : feeAmount == null ? "비용 발생" : String.format(Locale.KOREA, "%,d원", feeAmount);
+        if (feeNWaySplit) {
+            return feeText + " · 1/n 정산";
+        }
+        return feeText;
     }
 
     private String buildVoteNoticeContent(VoteDraft draft) {
@@ -1038,6 +1064,8 @@ public class ClubScheduleService {
             String participationConditionText,
             boolean participationEnabled,
             boolean feeRequired,
+            Integer feeAmount,
+            boolean feeAmountUndecided,
             boolean feeNWaySplit
     ) {
     }

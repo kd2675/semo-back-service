@@ -66,6 +66,12 @@ public class ClubScheduleEvent extends CommonDateEntity {
     @Column(name = "fee_required", nullable = false)
     private boolean feeRequired;
 
+    @Column(name = "fee_amount")
+    private Integer feeAmount;
+
+    @Column(name = "fee_amount_undecided", nullable = false)
+    private boolean feeAmountUndecided;
+
     @Column(name = "fee_n_way_split", nullable = false)
     private boolean feeNWaySplit;
 

@@ -21,6 +21,9 @@ public record UpsertScheduleEventRequest(
         String participationConditionText,
         Boolean participationEnabled,
         Boolean feeRequired,
+        @Positive(message = "참가비 금액은 1원 이상이어야 합니다.")
+        Integer feeAmount,
+        Boolean feeAmountUndecided,
         Boolean feeNWaySplit,
         Boolean postToBoard
 ) {

@@ -230,6 +230,8 @@ CREATE TABLE IF NOT EXISTS club_schedule_event (
     attendee_limit INT NULL,
     participation_enabled TINYINT(1) NOT NULL DEFAULT 0,
     fee_required TINYINT(1) NOT NULL DEFAULT 0,
+    fee_amount INT NULL,
+    fee_amount_undecided TINYINT(1) NOT NULL DEFAULT 0,
     fee_n_way_split TINYINT(1) NOT NULL DEFAULT 0,
     visibility_status VARCHAR(20) NOT NULL DEFAULT 'CLUB',
     event_status VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED',

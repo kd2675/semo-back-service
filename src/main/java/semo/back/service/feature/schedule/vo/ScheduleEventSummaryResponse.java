@@ -12,6 +12,8 @@ public record ScheduleEventSummaryResponse(
         String participationConditionText,
         boolean participationEnabled,
         boolean feeRequired,
+        Integer feeAmount,
+        boolean feeAmountUndecided,
         boolean feeNWaySplit,
         boolean postedToBoard,
         Long linkedNoticeId,

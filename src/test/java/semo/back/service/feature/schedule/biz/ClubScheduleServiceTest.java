@@ -127,6 +127,8 @@ class ClubScheduleServiceTest {
                         "신규 멤버도 참석 가능",
                         true,
                         true,
+                        15000,
+                        false,
                         true,
                         true
                 )
@@ -165,6 +167,8 @@ class ClubScheduleServiceTest {
         assertThat(eventDetail.participationConditionText()).isEqualTo("신규 멤버도 참석 가능");
         assertThat(eventDetail.participationEnabled()).isTrue();
         assertThat(eventDetail.feeRequired()).isTrue();
+        assertThat(eventDetail.feeAmount()).isEqualTo(15000);
+        assertThat(eventDetail.feeAmountUndecided()).isFalse();
         assertThat(eventDetail.feeNWaySplit()).isTrue();
         assertThat(eventDetail.postedToBoard()).isTrue();
         assertThat(eventDetail.linkedNoticeId()).isNotNull();
@@ -209,6 +213,8 @@ class ClubScheduleServiceTest {
                         "서울숲",
                         null,
                         true,
+                        false,
+                        null,
                         false,
                         false,
                         false
@@ -387,6 +393,8 @@ class ClubScheduleServiceTest {
                         null,
                         false,
                         false,
+                        null,
+                        false,
                         false,
                         false
                 )
@@ -426,6 +434,8 @@ class ClubScheduleServiceTest {
                         "잠실",
                         "작성자 수정 가능",
                         true,
+                        false,
+                        null,
                         false,
                         false,
                         false

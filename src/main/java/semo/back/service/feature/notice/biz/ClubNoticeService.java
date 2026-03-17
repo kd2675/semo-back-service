@@ -85,6 +85,7 @@ public class ClubNoticeService {
         Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
         List<ClubNoticeSummaryResponse> responses = pageItems.stream()
                 .map(notice -> toSummaryResponse(
+                        access,
                         notice,
                         profileById.get(notice.getAuthorClubProfileId()),
                         linkedTargetsByNoticeId.get(notice.getNoticeId()),
@@ -115,9 +116,6 @@ public class ClubNoticeService {
         NoticeCategoryCatalog category = noticeCategorySupport.getActiveCategoryMap()
                 .get(normalizeCategoryKey(notice.getCategoryKey()));
 
-        boolean canManage = isAdminRole(access.membership().getRoleCode())
-                || access.clubProfile().getClubProfileId().equals(notice.getAuthorClubProfileId());
-
         return new ClubNoticeDetailResponse(
                 club.getClubId(),
                 club.getName(),
@@ -139,7 +137,7 @@ public class ClubNoticeService {
                 formatDateTime(notice.getScheduleAt()),
                 formatDateTimeValue(notice.getScheduleEndAt()),
                 formatDateTime(notice.getScheduleEndAt()),
-                canManage,
+                canManage(access, notice.getAuthorClubProfileId()),
                 linkedTarget == null ? null : linkedTarget.type(),
                 linkedTarget == null ? null : linkedTarget.targetId()
         );
@@ -169,9 +167,10 @@ public class ClubNoticeService {
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ClubNoticeUpsertResponse updateNotice(Long clubId, Long noticeId, String userKey, UpsertClubNoticeRequest request) {
-        clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         validateRequest(request);
         ClubNotice current = getNotice(clubId, noticeId);
+        requireManagePermission(access, current.getAuthorClubProfileId());
         boolean postToSchedule = shouldPostToSchedule(request.postToSchedule());
         ClubNotice updated = clubNoticeRepository.save(ClubNotice.builder()
                 .noticeId(current.getNoticeId())
@@ -193,8 +192,9 @@ public class ClubNoticeService {
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public void deleteNotice(Long clubId, Long noticeId, String userKey) {
-        clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubNotice current = getNotice(clubId, noticeId);
+        requireManagePermission(access, current.getAuthorClubProfileId());
         deleteLinkedScheduleEvent(current.getNoticeId());
         clubNoticeRepository.save(ClubNotice.builder()
                 .noticeId(current.getNoticeId())
@@ -306,6 +306,7 @@ public class ClubNoticeService {
     }
 
     private ClubNoticeSummaryResponse toSummaryResponse(
+            ClubAccessResolver.ClubAccess access,
             ClubNotice notice,
             ClubProfile authorProfile,
             LinkedTarget linkedTarget,
@@ -327,6 +328,7 @@ public class ClubNoticeService {
                 notice.isPinned(),
                 formatDateTime(notice.getScheduleAt()),
                 notice.getLocationLabel(),
+                canManage(access, notice.getAuthorClubProfileId()),
                 linkedTarget == null ? null : linkedTarget.type(),
                 linkedTarget == null ? null : linkedTarget.targetId()
         );
@@ -447,5 +449,16 @@ public class ClubNoticeService {
 
     private boolean isAdminRole(String roleCode) {
         return "OWNER".equals(roleCode) || "ADMIN".equals(roleCode);
+    }
+
+    private boolean canManage(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        return isAdminRole(access.membership().getRoleCode())
+                || access.clubProfile().getClubProfileId().equals(authorClubProfileId);
+    }
+
+    private void requireManagePermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        if (!canManage(access, authorClubProfileId)) {
+            throw new SemoException.ForbiddenException("공지 수정 또는 삭제 권한이 없습니다.");
+        }
     }
 }
