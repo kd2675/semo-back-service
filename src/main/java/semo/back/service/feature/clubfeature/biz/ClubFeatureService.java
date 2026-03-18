@@ -42,6 +42,30 @@ public class ClubFeatureService {
                     .iconName("timeline")
                     .active(true)
                     .sortOrder(20)
+                    .build(),
+            FeatureCatalog.builder()
+                    .featureKey("NOTICE")
+                    .displayName("Notices")
+                    .description("Create, manage, and share club notices.")
+                    .iconName("campaign")
+                    .active(true)
+                    .sortOrder(30)
+                    .build(),
+            FeatureCatalog.builder()
+                    .featureKey("POLL")
+                    .displayName("Polls")
+                    .description("Create, share, and manage club polls.")
+                    .iconName("poll")
+                    .active(true)
+                    .sortOrder(40)
+                    .build(),
+            FeatureCatalog.builder()
+                    .featureKey("SCHEDULE_MANAGE")
+                    .displayName("Schedule Management")
+                    .description("Create and manage schedules and votes.")
+                    .iconName("edit_calendar")
+                    .active(true)
+                    .sortOrder(50)
                     .build()
     );
 
@@ -147,6 +171,9 @@ public class ClubFeatureService {
         return switch (normalizeFeatureKey(featureKey)) {
             case "ATTENDANCE" -> "/clubs/%d/more/attendance".formatted(clubId);
             case "TIMELINE" -> "/clubs/%d/more/timeline".formatted(clubId);
+            case "NOTICE" -> "/clubs/%d/more/notices".formatted(clubId);
+            case "POLL" -> "/clubs/%d/more/polls".formatted(clubId);
+            case "SCHEDULE_MANAGE" -> "/clubs/%d/more/schedules".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
     }
@@ -155,6 +182,9 @@ public class ClubFeatureService {
         return switch (normalizeFeatureKey(featureKey)) {
             case "ATTENDANCE" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
             case "TIMELINE" -> "/clubs/%d/admin/more/timeline".formatted(clubId);
+            case "NOTICE" -> "/clubs/%d/admin/more/notices".formatted(clubId);
+            case "POLL" -> "/clubs/%d/admin/more/polls".formatted(clubId);
+            case "SCHEDULE_MANAGE" -> "/clubs/%d/admin/more/schedules".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
     }

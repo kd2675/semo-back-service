@@ -14,6 +14,32 @@ INSERT INTO feature_catalog (
     update_date
 )
 SELECT
+    'NOTICE',
+    'Notices',
+    'Create, manage, and share club notices.',
+    'campaign',
+    1,
+    30,
+    NOW(),
+    NOW()
+FROM dual
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM feature_catalog
+    WHERE feature_key = 'NOTICE'
+);
+
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
     'ATTENDANCE',
     'Attendance Check',
     'Check in members and manage attendance sessions.',
@@ -55,6 +81,58 @@ WHERE NOT EXISTS (
     WHERE feature_key = 'TIMELINE'
 );
 
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'POLL',
+    'Polls',
+    'Create, share, and manage club polls.',
+    'poll',
+    1,
+    40,
+    NOW(),
+    NOW()
+FROM dual
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM feature_catalog
+    WHERE feature_key = 'POLL'
+);
+
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'SCHEDULE_MANAGE',
+    'Schedule Management',
+    'Create and manage schedules and votes.',
+    'edit_calendar',
+    1,
+    50,
+    NOW(),
+    NOW()
+FROM dual
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM feature_catalog
+    WHERE feature_key = 'SCHEDULE_MANAGE'
+);
+
 INSERT INTO notice_category_catalog (
     category_key,
     display_name,
@@ -67,7 +145,7 @@ INSERT INTO notice_category_catalog (
 )
 SELECT
     'ANNOUNCEMENT',
-    'Announcement',
+    '공지',
     'campaign',
     'blue',
     1,
@@ -93,7 +171,7 @@ INSERT INTO notice_category_catalog (
 )
 SELECT
     'TOURNAMENT',
-    'Tournament',
+    '대회',
     'emoji_events',
     'amber',
     1,
@@ -119,7 +197,7 @@ INSERT INTO notice_category_catalog (
 )
 SELECT
     'MATCH',
-    'Match',
+    '경기',
     'sports_tennis',
     'blue',
     1,
@@ -145,7 +223,7 @@ INSERT INTO notice_category_catalog (
 )
 SELECT
     'SOCIAL',
-    'Social',
+    '모임',
     'celebration',
     'purple',
     1,
@@ -171,7 +249,7 @@ INSERT INTO notice_category_catalog (
 )
 SELECT
     'GENERAL',
-    'General',
+    '기타',
     'description',
     'slate',
     1,

@@ -10,6 +10,7 @@ public record UpsertClubNoticeRequest(
         @NotBlank(message = "공지 내용은 필수입니다.")
         String content,
         String categoryKey,
+        String fileName,
         String locationLabel,
         String scheduleAt,
         String scheduleEndAt,

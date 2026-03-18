@@ -42,6 +42,9 @@ public class ClubNotice extends CommonDateEntity {
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "image_file_name", length = 255)
+    private String imageFileName;
+
     @Column(name = "location_label", length = 200)
     private String locationLabel;
 

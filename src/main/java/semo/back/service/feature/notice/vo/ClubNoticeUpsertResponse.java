@@ -4,6 +4,9 @@ public record ClubNoticeUpsertResponse(
         Long noticeId,
         String title,
         String categoryKey,
+        String fileName,
+        String imageUrl,
+        String thumbnailUrl,
         String scheduleAt,
         String scheduleAtLabel,
         String locationLabel

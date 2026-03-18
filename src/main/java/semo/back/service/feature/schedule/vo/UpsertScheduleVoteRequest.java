@@ -21,6 +21,7 @@ public record UpsertScheduleVoteRequest(
                 @Size(max = 120, message = "투표 항목은 120자 이하여야 합니다.")
                 String
                 > optionLabels,
-        Boolean postToBoard
+        Boolean postToBoard,
+        Boolean postToSchedule
 ) {
 }

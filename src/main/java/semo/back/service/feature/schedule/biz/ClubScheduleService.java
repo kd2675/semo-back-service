@@ -19,6 +19,7 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepositor
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.schedule.vo.ClubScheduleResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventDetailResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventSummaryResponse;
@@ -51,6 +52,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ClubScheduleService {
     private static final String NOTICE_CATEGORY_KEY = "GENERAL";
+    private static final String FEATURE_NOTICE = "NOTICE";
+    private static final String FEATURE_POLL = "POLL";
     private static final String VISIBILITY_STATUS = "CLUB";
     private static final String EVENT_STATUS = "SCHEDULED";
     private static final String PARTICIPATION_GOING = "GOING";
@@ -68,6 +71,7 @@ public class ClubScheduleService {
     private final ClubScheduleVoteSelectionRepository clubScheduleVoteSelectionRepository;
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubFeatureService clubFeatureService;
 
     public ClubScheduleResponse getClubSchedule(Long clubId, String userKey, Integer year, Integer month) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
@@ -78,7 +82,11 @@ public class ClubScheduleService {
         LocalDateTime monthStartAt = monthStartDate.atStartOfDay();
         LocalDateTime monthEndExclusive = monthEndDate.plusDays(1).atStartOfDay();
 
-        List<ClubScheduleEvent> events = clubScheduleEventRepository.findScheduledBetween(clubId, monthStartAt, monthEndExclusive);
+        boolean noticeFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_NOTICE);
+        List<ClubScheduleEvent> events = clubScheduleEventRepository.findScheduledBetween(clubId, monthStartAt, monthEndExclusive)
+                .stream()
+                .filter(event -> noticeFeatureEnabled || event.getLinkedNoticeId() == null)
+                .toList();
         Map<Long, List<ClubEventParticipant>> participantsByEventId = clubEventParticipantRepository.findByEventIdIn(
                         events.stream().map(ClubScheduleEvent::getEventId).toList()
                 ).stream()
@@ -100,7 +108,10 @@ public class ClubScheduleService {
                 .sorted(Comparator.comparing(ScheduleEventSummaryResponse::startDate).reversed())
                 .toList();
 
-        List<ScheduleVoteSummaryResponse> votes = getVoteSummaries(clubId, viewerClubProfileId, monthStartDate, monthEndDate);
+        boolean pollFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL);
+        List<ScheduleVoteSummaryResponse> votes = pollFeatureEnabled
+                ? getVoteSummaries(clubId, viewerClubProfileId, monthStartDate, monthEndDate)
+                : List.of();
 
         return new ClubScheduleResponse(
                 access.club().getClubId(),
@@ -132,6 +143,28 @@ public class ClubScheduleService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleEvent event = getEvent(clubId, eventId);
         return buildEventDetailResponse(access, event);
+    }
+
+    public List<ScheduleEventSummaryResponse> getEventSummariesForHome(
+            ClubAccessResolver.ClubAccess access,
+            List<ClubScheduleEvent> events
+    ) {
+        if (events.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, List<ClubEventParticipant>> participantsByEventId = clubEventParticipantRepository.findByEventIdIn(
+                        events.stream().map(ClubScheduleEvent::getEventId).toList()
+                ).stream()
+                .collect(Collectors.groupingBy(ClubEventParticipant::getEventId));
+
+        return events.stream()
+                .map(event -> toEventSummaryResponse(
+                        event,
+                        participantsByEventId.getOrDefault(event.getEventId(), List.of()),
+                        access.clubProfile().getClubProfileId()
+                ))
+                .toList();
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -245,6 +278,17 @@ public class ClubScheduleService {
         return buildVoteDetailResponse(access, vote);
     }
 
+    public List<ScheduleVoteSummaryResponse> getVoteSummariesForHome(
+            ClubAccessResolver.ClubAccess access,
+            List<ClubScheduleVote> votes
+    ) {
+        return toVoteSummaryResponses(votes, access.clubProfile().getClubProfileId());
+    }
+
+    public boolean isVoteCurrentlyOpen(ClubScheduleVote vote) {
+        return isVoteOpen(vote);
+    }
+
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ScheduleEventDetailResponse updateScheduleEventParticipation(
             Long clubId,
@@ -293,6 +337,7 @@ public class ClubScheduleService {
                 .clubId(clubId)
                 .authorClubProfileId(access.clubProfile().getClubProfileId())
                 .linkedNoticeId(linkedNoticeId)
+                .sharedToSchedule(shouldPostToSchedule(request.postToSchedule()))
                 .title(draft.title())
                 .voteStartDate(draft.voteStartDate())
                 .voteEndDate(draft.voteEndDate())
@@ -339,6 +384,7 @@ public class ClubScheduleService {
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
                 .linkedNoticeId(linkedNoticeId)
+                .sharedToSchedule(shouldPostToSchedule(request.postToSchedule()))
                 .title(draft.title())
                 .voteStartDate(draft.voteStartDate())
                 .voteEndDate(draft.voteEndDate())
@@ -382,6 +428,7 @@ public class ClubScheduleService {
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
                 .linkedNoticeId(current.getLinkedNoticeId())
+                .sharedToSchedule(current.isSharedToSchedule())
                 .title(current.getTitle())
                 .voteStartDate(current.getVoteStartDate())
                 .voteEndDate(current.getVoteEndDate())
@@ -431,6 +478,13 @@ public class ClubScheduleService {
             LocalDate monthEndDate
     ) {
         List<ClubScheduleVote> votes = clubScheduleVoteRepository.findAllByClubIdForMonth(clubId, monthStartDate, monthEndDate);
+        return toVoteSummaryResponses(votes, viewerClubProfileId);
+    }
+
+    private List<ScheduleVoteSummaryResponse> toVoteSummaryResponses(
+            List<ClubScheduleVote> votes,
+            Long viewerClubProfileId
+    ) {
         if (votes.isEmpty()) {
             return List.of();
         }
@@ -457,6 +511,7 @@ public class ClubScheduleService {
                     return new ScheduleVoteSummaryResponse(
                             vote.getVoteId(),
                             vote.getTitle(),
+                            resolveVoteStatus(vote),
                             formatDateValue(vote.getVoteStartDate()),
                             formatDateValue(vote.getVoteEndDate()),
                             formatDateRangeLabel(vote.getVoteStartDate(), vote.getVoteEndDate()),
@@ -464,6 +519,7 @@ public class ClubScheduleService {
                             selection.options().size(),
                             selection.totalResponses(),
                             vote.getLinkedNoticeId() != null,
+                            vote.isSharedToSchedule(),
                             vote.getLinkedNoticeId(),
                             selection.mySelectedOptionId(),
                             selection.options(),
@@ -528,6 +584,7 @@ public class ClubScheduleService {
                 access.isAdmin(),
                 vote.getVoteId(),
                 vote.getTitle(),
+                resolveVoteStatus(vote),
                 formatDateValue(vote.getVoteStartDate()),
                 formatDateValue(vote.getVoteEndDate()),
                 formatDateRangeLabel(vote.getVoteStartDate(), vote.getVoteEndDate()),
@@ -535,6 +592,7 @@ public class ClubScheduleService {
                 formatOptionalTimeValue(vote.getVoteEndTime()),
                 formatVoteTimeLabel(vote.getVoteStartTime(), vote.getVoteEndTime()),
                 vote.getLinkedNoticeId() != null,
+                vote.isSharedToSchedule(),
                 vote.getLinkedNoticeId(),
                 selection.mySelectedOptionId(),
                 selection.totalResponses(),
@@ -815,7 +873,8 @@ public class ClubScheduleService {
                 formatOptionalTimeValue(vote.getVoteEndTime()),
                 formatVoteTimeLabel(vote.getVoteStartTime(), vote.getVoteEndTime()),
                 optionCount,
-                vote.getLinkedNoticeId() != null
+                vote.getLinkedNoticeId() != null,
+                vote.isSharedToSchedule()
         );
     }
 
@@ -997,6 +1056,10 @@ public class ClubScheduleService {
         return Boolean.TRUE.equals(postToBoard);
     }
 
+    private boolean shouldPostToSchedule(Boolean postToSchedule) {
+        return Boolean.TRUE.equals(postToSchedule);
+    }
+
     private LocalDate resolveMonthStart(Integer year, Integer month) {
         LocalDate today = LocalDate.now();
         int resolvedYear = year == null ? today.getYear() : year;
@@ -1044,15 +1107,22 @@ public class ClubScheduleService {
     }
 
     private boolean isVoteOpen(ClubScheduleVote vote) {
+        return "ONGOING".equals(resolveVoteStatus(vote));
+    }
+
+    private String resolveVoteStatus(ClubScheduleVote vote) {
         if (vote.getClosedAt() != null) {
-            return false;
+            return "CLOSED";
         }
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime startAt = toVoteStartAt(vote.getVoteStartDate(), vote.getVoteStartTime());
         if (now.isBefore(startAt)) {
-            return false;
+            return "WAITING";
         }
-        return !now.isAfter(toVoteEffectiveEndAt(vote.getVoteEndDate(), vote.getVoteEndTime()));
+        if (now.isAfter(toVoteEffectiveEndAt(vote.getVoteEndDate(), vote.getVoteEndTime()))) {
+            return "CLOSED";
+        }
+        return "ONGOING";
     }
 
     private record EventDraft(

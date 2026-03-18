@@ -1,8 +1,10 @@
-package semo.back.service.feature.schedule.vo;
+package semo.back.service.feature.poll.vo;
+
+import semo.back.service.feature.schedule.vo.ScheduleVoteOptionSummaryResponse;
 
 import java.util.List;
 
-public record ScheduleVoteSummaryResponse(
+public record ClubPollSummaryResponse(
         Long voteId,
         String title,
         String voteStatus,
@@ -10,13 +12,13 @@ public record ScheduleVoteSummaryResponse(
         String voteEndDate,
         String votePeriodLabel,
         String voteTimeLabel,
-        int optionCount,
+        String voteWindowLabel,
         int totalResponses,
+        int optionCount,
         boolean postedToBoard,
         boolean sharedToSchedule,
-        Long linkedNoticeId,
+        boolean canManage,
         Long mySelectedOptionId,
-        List<ScheduleVoteOptionSummaryResponse> options,
-        boolean votingOpen
+        List<ScheduleVoteOptionSummaryResponse> options
 ) {
 }

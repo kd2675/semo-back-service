@@ -38,6 +38,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubTimelineService {
+    private static final String FEATURE_POLL = "POLL";
     private static final String FEATURE_TIMELINE = "TIMELINE";
     private static final int DEFAULT_PAGE_SIZE = 12;
     private static final int MAX_PAGE_SIZE = 30;
@@ -62,6 +63,7 @@ public class ClubTimelineService {
     ) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireTimelineFeature(clubId);
+        boolean pollFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL);
 
         List<NoticeCategoryOptionResponse> visibleCategories = noticeCategorySupport.getTimelineVisibleCategoryOptions(clubId);
         Set<String> visibleCategoryKeys = visibleCategories.stream()
@@ -89,6 +91,7 @@ public class ClubTimelineService {
 
         List<ClubNotice> notices = clubNoticeRepository.findTimelineFeed(
                 clubId,
+                pollFeatureEnabled,
                 visibleCategoryKeys,
                 normalizedCategoryKey,
                 cursorDateTime,
@@ -99,7 +102,7 @@ public class ClubTimelineService {
         boolean hasNext = notices.size() > pageSize;
         List<ClubNotice> pageItems = hasNext ? notices.subList(0, pageSize) : notices;
         Map<Long, ClubProfile> profileById = loadProfiles(pageItems);
-        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems);
+        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems, pollFeatureEnabled);
         Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
         List<TimelineEntryResponse> entries = pageItems.stream()
                 .map(notice -> toEntryResponse(
@@ -186,7 +189,7 @@ public class ClubTimelineService {
         return result;
     }
 
-    private Map<Long, LinkedTarget> loadLinkedTargets(List<ClubNotice> notices) {
+    private Map<Long, LinkedTarget> loadLinkedTargets(List<ClubNotice> notices, boolean pollFeatureEnabled) {
         if (notices.isEmpty()) {
             return Map.of();
         }
@@ -197,8 +200,10 @@ public class ClubTimelineService {
         Map<Long, LinkedTarget> result = new HashMap<>();
         clubScheduleEventRepository.findByLinkedNoticeIdIn(noticeIds)
                 .forEach(event -> result.put(event.getLinkedNoticeId(), new LinkedTarget("SCHEDULE_EVENT", event.getEventId())));
-        clubScheduleVoteRepository.findByLinkedNoticeIdIn(noticeIds)
-                .forEach(vote -> result.put(vote.getLinkedNoticeId(), new LinkedTarget("SCHEDULE_VOTE", vote.getVoteId())));
+        if (pollFeatureEnabled) {
+            clubScheduleVoteRepository.findByLinkedNoticeIdIn(noticeIds)
+                    .forEach(vote -> result.put(vote.getLinkedNoticeId(), new LinkedTarget("POLL", vote.getVoteId())));
+        }
         return result;
     }
 

@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
+import semo.back.service.common.util.ImageFileUrlResolver;
+import semo.back.service.common.util.ImageFinalizeClient;
 import semo.back.service.database.pub.entity.Club;
 import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
@@ -18,6 +20,7 @@ import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.notice.vo.ClubNoticeDetailResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
@@ -39,6 +42,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubNoticeService {
+    private static final String FEATURE_NOTICE = "NOTICE";
+    private static final String FEATURE_POLL = "POLL";
+    private static final String NOTICE_IMAGE_TARGET_DIR = "semo/notices";
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 30;
     private static final DateTimeFormatter DATE_TIME_REQUEST_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -50,7 +56,10 @@ public class ClubNoticeService {
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubFeatureService clubFeatureService;
     private final NoticeCategorySupport noticeCategorySupport;
+    private final ImageFinalizeClient imageFinalizeClient;
+    private final ImageFileUrlResolver imageFileUrlResolver;
 
     public ClubNoticeFeedResponse getNoticeFeed(
             Long clubId,
@@ -63,6 +72,19 @@ public class ClubNoticeService {
     ) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         Club club = getActiveClub(clubId);
+        boolean noticeFeatureEnabled = isNoticeFeatureEnabled(clubId);
+        if (!noticeFeatureEnabled) {
+            return new ClubNoticeFeedResponse(
+                    club.getClubId(),
+                    club.getName(),
+                    isAdminRole(access.membership().getRoleCode()),
+                    List.of(),
+                    null,
+                    null,
+                    false
+            );
+        }
+        boolean pollFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL);
 
         int pageSize = normalizePageSize(size);
         LocalDateTime cursorDateTime = parseCursorDateTime(cursorPublishedAt);
@@ -70,6 +92,7 @@ public class ClubNoticeService {
 
         List<ClubNotice> notices = clubNoticeRepository.findFeed(
                 clubId,
+                pollFeatureEnabled,
                 noticeCategorySupport.normalizeOptionalCategoryKey(categoryKey),
                 normalizeQuery(query),
                 cursorDateTime,
@@ -81,7 +104,7 @@ public class ClubNoticeService {
         List<ClubNotice> pageItems = hasNext ? notices.subList(0, pageSize) : notices;
 
         Map<Long, ClubProfile> profileById = loadProfiles(pageItems);
-        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems);
+        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems, pollFeatureEnabled);
         Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
         List<ClubNoticeSummaryResponse> responses = pageItems.stream()
                 .map(notice -> toSummaryResponse(
@@ -107,12 +130,14 @@ public class ClubNoticeService {
     }
 
     public ClubNoticeDetailResponse getNoticeDetail(Long clubId, Long noticeId, String userKey) {
+        requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         Club club = getActiveClub(clubId);
         ClubNotice notice = getNotice(clubId, noticeId);
         ClubProfile authorProfile = clubProfileRepository.findById(notice.getAuthorClubProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubProfile", "clubProfileId", notice.getAuthorClubProfileId()));
-        LinkedTarget linkedTarget = loadLinkedTarget(notice);
+        boolean pollFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL);
+        LinkedTarget linkedTarget = loadLinkedTarget(notice, pollFeatureEnabled);
         NoticeCategoryCatalog category = noticeCategorySupport.getActiveCategoryMap()
                 .get(normalizeCategoryKey(notice.getCategoryKey()));
 
@@ -123,6 +148,9 @@ public class ClubNoticeService {
                 notice.getNoticeId(),
                 notice.getTitle(),
                 notice.getContent(),
+                notice.getImageFileName(),
+                imageFileUrlResolver.resolveImageUrl(notice.getImageFileName()),
+                imageFileUrlResolver.resolveThumbnailUrl(notice.getImageFileName()),
                 notice.getCategoryKey(),
                 category == null ? "General" : category.getDisplayName(),
                 category == null ? "description" : category.getIconName(),
@@ -145,6 +173,7 @@ public class ClubNoticeService {
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ClubNoticeUpsertResponse createNotice(Long clubId, String userKey, UpsertClubNoticeRequest request) {
+        requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         validateRequest(request);
         boolean postToSchedule = shouldPostToSchedule(request.postToSchedule());
@@ -154,6 +183,7 @@ public class ClubNoticeService {
                 .categoryKey(noticeCategorySupport.normalizeRequiredCategoryKey(request.categoryKey()))
                 .title(request.title().trim())
                 .content(request.content().trim())
+                .imageFileName(finalizeNoticeImageFileName(request.fileName(), null))
                 .locationLabel(trimToNull(request.locationLabel()))
                 .scheduleAt(postToSchedule ? parseOptionalDateTime(request.scheduleAt()) : null)
                 .scheduleEndAt(postToSchedule ? parseOptionalDateTime(request.scheduleEndAt()) : null)
@@ -167,6 +197,7 @@ public class ClubNoticeService {
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ClubNoticeUpsertResponse updateNotice(Long clubId, Long noticeId, String userKey, UpsertClubNoticeRequest request) {
+        requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         validateRequest(request);
         ClubNotice current = getNotice(clubId, noticeId);
@@ -179,6 +210,7 @@ public class ClubNoticeService {
                 .categoryKey(noticeCategorySupport.normalizeRequiredCategoryKey(request.categoryKey()))
                 .title(request.title().trim())
                 .content(request.content().trim())
+                .imageFileName(finalizeNoticeImageFileName(request.fileName(), current.getImageFileName()))
                 .locationLabel(trimToNull(request.locationLabel()))
                 .scheduleAt(postToSchedule ? parseOptionalDateTime(request.scheduleAt()) : null)
                 .scheduleEndAt(postToSchedule ? parseOptionalDateTime(request.scheduleEndAt()) : null)
@@ -192,6 +224,7 @@ public class ClubNoticeService {
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public void deleteNotice(Long clubId, Long noticeId, String userKey) {
+        requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubNotice current = getNotice(clubId, noticeId);
         requireManagePermission(access, current.getAuthorClubProfileId());
@@ -203,6 +236,7 @@ public class ClubNoticeService {
                 .categoryKey(current.getCategoryKey())
                 .title(current.getTitle())
                 .content(current.getContent())
+                .imageFileName(current.getImageFileName())
                 .locationLabel(current.getLocationLabel())
                 .scheduleAt(current.getScheduleAt())
                 .scheduleEndAt(current.getScheduleEndAt())
@@ -213,12 +247,50 @@ public class ClubNoticeService {
     }
 
     public List<ClubNotice> getScheduledNotices(Long clubId, LocalDateTime from, LocalDateTime to) {
+        if (!isNoticeFeatureEnabled(clubId)) {
+            return List.of();
+        }
         return clubNoticeRepository.findScheduledBetween(clubId, from, to);
     }
 
     public List<NoticeCategoryOptionResponse> getCategoryOptions(Long clubId, String userKey) {
         clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireNoticeFeature(clubId);
         return noticeCategorySupport.getCategoryOptions();
+    }
+
+    public List<ClubNotice> getActiveNotices(Long clubId) {
+        requireNoticeFeature(clubId);
+        return clubNoticeRepository.findAllByClubIdAndDeletedFalseOrderByPublishedAtDescNoticeIdDesc(clubId);
+    }
+
+    public List<ClubNotice> getDirectNoticesByAuthor(Long clubId, Long authorClubProfileId) {
+        requireNoticeFeature(clubId);
+        return clubNoticeRepository.findDirectNoticesByClubIdAndAuthorClubProfileIdOrderByPublishedAtDescNoticeIdDesc(
+                clubId,
+                authorClubProfileId
+        );
+    }
+
+    public List<ClubNoticeSummaryResponse> toNoticeSummaries(
+            ClubAccessResolver.ClubAccess access,
+            List<ClubNotice> notices
+    ) {
+        Map<Long, ClubProfile> profileById = loadProfiles(notices);
+        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(
+                notices,
+                clubFeatureService.isFeatureEnabled(access.club().getClubId(), FEATURE_POLL)
+        );
+        Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
+        return notices.stream()
+                .map(notice -> toSummaryResponse(
+                        access,
+                        notice,
+                        profileById.get(notice.getAuthorClubProfileId()),
+                        linkedTargetsByNoticeId.get(notice.getNoticeId()),
+                        categoryByKey.get(normalizeCategoryKey(notice.getCategoryKey()))
+                ))
+                .toList();
     }
 
     private void upsertLinkedScheduleEvent(ClubNotice notice, Long authorClubProfileId) {
@@ -257,6 +329,9 @@ public class ClubNoticeService {
                 notice.getNoticeId(),
                 notice.getTitle(),
                 notice.getCategoryKey(),
+                notice.getImageFileName(),
+                imageFileUrlResolver.resolveImageUrl(notice.getImageFileName()),
+                imageFileUrlResolver.resolveThumbnailUrl(notice.getImageFileName()),
                 formatDateTimeValue(notice.getScheduleAt()),
                 formatDateTime(notice.getScheduleAt()),
                 notice.getLocationLabel()
@@ -284,7 +359,7 @@ public class ClubNoticeService {
         return result;
     }
 
-    private Map<Long, LinkedTarget> loadLinkedTargets(List<ClubNotice> notices) {
+    private Map<Long, LinkedTarget> loadLinkedTargets(List<ClubNotice> notices, boolean pollFeatureEnabled) {
         if (notices.isEmpty()) {
             return Map.of();
         }
@@ -296,13 +371,15 @@ public class ClubNoticeService {
         Map<Long, LinkedTarget> result = new HashMap<>();
         clubScheduleEventRepository.findByLinkedNoticeIdIn(noticeIds)
                 .forEach(event -> result.put(event.getLinkedNoticeId(), new LinkedTarget("SCHEDULE_EVENT", event.getEventId())));
-        clubScheduleVoteRepository.findByLinkedNoticeIdIn(noticeIds)
-                .forEach(vote -> result.put(vote.getLinkedNoticeId(), new LinkedTarget("SCHEDULE_VOTE", vote.getVoteId())));
+        if (pollFeatureEnabled) {
+            clubScheduleVoteRepository.findByLinkedNoticeIdIn(noticeIds)
+                    .forEach(vote -> result.put(vote.getLinkedNoticeId(), new LinkedTarget("POLL", vote.getVoteId())));
+        }
         return result;
     }
 
-    private LinkedTarget loadLinkedTarget(ClubNotice notice) {
-        return loadLinkedTargets(List.of(notice)).get(notice.getNoticeId());
+    private LinkedTarget loadLinkedTarget(ClubNotice notice, boolean pollFeatureEnabled) {
+        return loadLinkedTargets(List.of(notice), pollFeatureEnabled).get(notice.getNoticeId());
     }
 
     private ClubNoticeSummaryResponse toSummaryResponse(
@@ -317,6 +394,9 @@ public class ClubNoticeService {
                 notice.getNoticeId(),
                 notice.getTitle(),
                 summarizeContent(notice.getContent()),
+                notice.getImageFileName(),
+                imageFileUrlResolver.resolveImageUrl(notice.getImageFileName()),
+                imageFileUrlResolver.resolveThumbnailUrl(notice.getImageFileName()),
                 authorName,
                 null,
                 notice.getCategoryKey(),
@@ -389,6 +469,9 @@ public class ClubNoticeService {
     }
 
     private void validateRequest(UpsertClubNoticeRequest request) {
+        if (request == null) {
+            throw new SemoException.ValidationException("공지 요청이 비어 있습니다.");
+        }
         if (!shouldPostToSchedule(request.postToSchedule())) {
             return;
         }
@@ -449,6 +532,31 @@ public class ClubNoticeService {
 
     private boolean isAdminRole(String roleCode) {
         return "OWNER".equals(roleCode) || "ADMIN".equals(roleCode);
+    }
+
+    public boolean canManageNotice(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        return canManage(access, authorClubProfileId);
+    }
+
+    public void requireNoticeFeature(Long clubId) {
+        if (!isNoticeFeatureEnabled(clubId)) {
+            throw new SemoException.ValidationException("공지 기능이 활성화되지 않았습니다.");
+        }
+    }
+
+    private boolean isNoticeFeatureEnabled(Long clubId) {
+        return clubFeatureService.isFeatureEnabled(clubId, FEATURE_NOTICE);
+    }
+
+    private String finalizeNoticeImageFileName(String requestFileName, String currentFileName) {
+        String normalized = trimToNull(requestFileName);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.equals(trimToNull(currentFileName))) {
+            return currentFileName;
+        }
+        return imageFinalizeClient.finalizeImage(normalized, NOTICE_IMAGE_TARGET_DIR).fileName();
     }
 
     private boolean canManage(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {

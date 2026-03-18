@@ -21,6 +21,8 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionReposi
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
+import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleEventRequest;
 import semo.back.service.feature.schedule.vo.UpdateScheduleEventParticipationRequest;
 import semo.back.service.feature.schedule.vo.SubmitScheduleVoteSelectionRequest;
@@ -41,6 +43,9 @@ class ClubScheduleServiceTest {
 
     @Autowired
     private ClubService clubService;
+
+    @Autowired
+    private ClubFeatureService clubFeatureService;
 
     @Autowired
     private ClubAttendanceCheckInRepository clubAttendanceCheckInRepository;
@@ -144,9 +149,13 @@ class ClubScheduleServiceTest {
                         "18:30",
                         "22:00",
                         List.of("성수", "건대", "잠실"),
+                        true,
                         true
                 )
         );
+
+        enablePollFeature(clubId, "schedule-owner-001");
+        enableNoticeFeature(clubId, "schedule-owner-001");
 
         var schedule = clubScheduleService.getClubSchedule(clubId, "schedule-owner-001", 2030, 4);
         var eventDetail = clubScheduleService.getScheduleEventDetail(clubId, createdEvent.eventId(), "schedule-owner-001");
@@ -230,7 +239,8 @@ class ClubScheduleServiceTest {
                         "18:00",
                         "22:00",
                         List.of("성수", "건대"),
-                        false
+                        false,
+                        true
                 )
         );
 
@@ -261,6 +271,59 @@ class ClubScheduleServiceTest {
     }
 
     @Test
+    void scheduleReturnsOnlyVotesSharedToScheduleWhenPollFeatureEnabled() {
+        Long clubId = clubService.createClub(
+                "schedule-owner-006",
+                "Schedule Share Owner",
+                new CreateClubRequest(
+                        "Schedule Share Lab",
+                        "일정 공유 투표 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+
+        clubScheduleService.createScheduleVote(
+                clubId,
+                "schedule-owner-006",
+                new UpsertScheduleVoteRequest(
+                        "일정 공유 투표",
+                        "2030-08-10",
+                        "2030-08-12",
+                        null,
+                        null,
+                        List.of("찬성", "보류"),
+                        false,
+                        true
+                )
+        );
+
+        clubScheduleService.createScheduleVote(
+                clubId,
+                "schedule-owner-006",
+                new UpsertScheduleVoteRequest(
+                        "투표 홈 전용 투표",
+                        "2030-08-10",
+                        "2030-08-12",
+                        null,
+                        null,
+                        List.of("A", "B"),
+                        false,
+                        false
+                )
+        );
+
+        enablePollFeature(clubId, "schedule-owner-006");
+
+        var schedule = clubScheduleService.getClubSchedule(clubId, "schedule-owner-006", 2030, 8);
+
+        assertThat(schedule.votes()).hasSize(1);
+        assertThat(schedule.votes().getFirst().title()).isEqualTo("일정 공유 투표");
+    }
+
+    @Test
     void managerCanCloseVoteAndFurtherSelectionIsBlocked() {
         Long clubId = clubService.createClub(
                 "schedule-owner-005",
@@ -285,6 +348,7 @@ class ClubScheduleServiceTest {
                         "10:00",
                         "23:00",
                         List.of("1/N", "회비"),
+                        true,
                         true
                 )
         );
@@ -330,6 +394,7 @@ class ClubScheduleServiceTest {
                         null,
                         null,
                         List.of("A", "B"),
+                        false,
                         false
                 )
         );
@@ -345,6 +410,7 @@ class ClubScheduleServiceTest {
                         "19:00",
                         "21:30",
                         List.of("서울숲", "왕십리", "건대"),
+                        true,
                         true
                 )
         );
@@ -409,6 +475,7 @@ class ClubScheduleServiceTest {
                         null,
                         null,
                         List.of("찬성", "반대"),
+                        false,
                         false
                 )
         );
@@ -452,6 +519,7 @@ class ClubScheduleServiceTest {
                         "20:00",
                         "22:00",
                         List.of("점심", "저녁", "야식"),
+                        false,
                         false
                 )
         );
@@ -484,5 +552,21 @@ class ClubScheduleServiceTest {
                 .joinedAt(membership.getJoinedAt())
                 .lastActivityAt(membership.getLastActivityAt())
                 .build());
+    }
+
+    private void enablePollFeature(Long clubId, String userKey) {
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                userKey,
+                new UpdateClubFeaturesRequest(List.of("POLL"))
+        );
+    }
+
+    private void enableNoticeFeature(Long clubId, String userKey) {
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                userKey,
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "POLL"))
+        );
     }
 }

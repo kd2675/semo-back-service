@@ -106,12 +106,15 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("ATTENDANCE"))
         );
 
-        assertThat(responses).hasSize(2);
+        assertThat(responses).hasSize(5);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactly("ATTENDANCE:true", "TIMELINE:false");
+                .containsExactly("ATTENDANCE:true", "TIMELINE:false", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:false");
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "ATTENDANCE")).isTrue();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "TIMELINE")).isFalse();
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "NOTICE")).isFalse();
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "POLL")).isFalse();
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")).isFalse();
     }
 
     @Test
@@ -135,10 +138,94 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("TIMELINE"))
         );
 
-        assertThat(responses).hasSize(2);
+        assertThat(responses).hasSize(5);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactly("ATTENDANCE:false", "TIMELINE:true");
+                .containsExactly("ATTENDANCE:false", "TIMELINE:true", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:false");
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "TIMELINE")).isTrue();
+    }
+
+    @Test
+    void updateClubFeaturesEnablesNoticeFeature() {
+        Long clubId = clubService.createClub(
+                "feature-user-003",
+                "Feature Admin",
+                new CreateClubRequest(
+                        "Notice Feature Club",
+                        "공지 기능 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+
+        var responses = clubFeatureService.updateClubFeatures(
+                clubId,
+                "feature-user-003",
+                new UpdateClubFeaturesRequest(java.util.List.of("NOTICE"))
+        );
+
+        assertThat(responses).hasSize(5);
+        assertThat(responses)
+                .extracting(response -> response.featureKey() + ":" + response.enabled())
+                .containsExactly("ATTENDANCE:false", "TIMELINE:false", "NOTICE:true", "POLL:false", "SCHEDULE_MANAGE:false");
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "NOTICE")).isTrue();
+    }
+
+    @Test
+    void updateClubFeaturesEnablesPollFeature() {
+        Long clubId = clubService.createClub(
+                "feature-user-004",
+                "Feature Admin",
+                new CreateClubRequest(
+                        "Poll Feature Club",
+                        "투표 기능 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+
+        var responses = clubFeatureService.updateClubFeatures(
+                clubId,
+                "feature-user-004",
+                new UpdateClubFeaturesRequest(java.util.List.of("POLL"))
+        );
+
+        assertThat(responses).hasSize(5);
+        assertThat(responses)
+                .extracting(response -> response.featureKey() + ":" + response.enabled())
+                .containsExactly("ATTENDANCE:false", "TIMELINE:false", "NOTICE:false", "POLL:true", "SCHEDULE_MANAGE:false");
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "POLL")).isTrue();
+    }
+
+    @Test
+    void updateClubFeaturesEnablesScheduleManageFeature() {
+        Long clubId = clubService.createClub(
+                "feature-user-005",
+                "Feature Admin",
+                new CreateClubRequest(
+                        "Schedule Manage Feature Club",
+                        "일정 관리 기능 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+
+        var responses = clubFeatureService.updateClubFeatures(
+                clubId,
+                "feature-user-005",
+                new UpdateClubFeaturesRequest(java.util.List.of("SCHEDULE_MANAGE"))
+        );
+
+        assertThat(responses).hasSize(5);
+        assertThat(responses)
+                .extracting(response -> response.featureKey() + ":" + response.enabled())
+                .containsExactly("ATTENDANCE:false", "TIMELINE:false", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:true");
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")).isTrue();
     }
 }
