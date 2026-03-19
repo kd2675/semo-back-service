@@ -19,7 +19,8 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepositor
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
-import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
+import semo.back.service.feature.notice.biz.ClubNoticeService;
+import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.schedule.vo.ClubScheduleResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventDetailResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventSummaryResponse;
@@ -52,8 +53,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ClubScheduleService {
     private static final String NOTICE_CATEGORY_KEY = "GENERAL";
-    private static final String FEATURE_NOTICE = "NOTICE";
-    private static final String FEATURE_POLL = "POLL";
     private static final String VISIBILITY_STATUS = "CLUB";
     private static final String EVENT_STATUS = "SCHEDULED";
     private static final String PARTICIPATION_GOING = "GOING";
@@ -71,7 +70,7 @@ public class ClubScheduleService {
     private final ClubScheduleVoteSelectionRepository clubScheduleVoteSelectionRepository;
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubAccessResolver clubAccessResolver;
-    private final ClubFeatureService clubFeatureService;
+    private final ClubNoticeService clubNoticeService;
 
     public ClubScheduleResponse getClubSchedule(Long clubId, String userKey, Integer year, Integer month) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
@@ -82,11 +81,7 @@ public class ClubScheduleService {
         LocalDateTime monthStartAt = monthStartDate.atStartOfDay();
         LocalDateTime monthEndExclusive = monthEndDate.plusDays(1).atStartOfDay();
 
-        boolean noticeFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_NOTICE);
-        List<ClubScheduleEvent> events = clubScheduleEventRepository.findScheduledBetween(clubId, monthStartAt, monthEndExclusive)
-                .stream()
-                .filter(event -> noticeFeatureEnabled || event.getLinkedNoticeId() == null)
-                .toList();
+        List<ClubScheduleEvent> events = clubScheduleEventRepository.findScheduledBetween(clubId, monthStartAt, monthEndExclusive);
         Map<Long, List<ClubEventParticipant>> participantsByEventId = clubEventParticipantRepository.findByEventIdIn(
                         events.stream().map(ClubScheduleEvent::getEventId).toList()
                 ).stream()
@@ -108,10 +103,11 @@ public class ClubScheduleService {
                 .sorted(Comparator.comparing(ScheduleEventSummaryResponse::startDate).reversed())
                 .toList();
 
-        boolean pollFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL);
-        List<ScheduleVoteSummaryResponse> votes = pollFeatureEnabled
-                ? getVoteSummaries(clubId, viewerClubProfileId, monthStartDate, monthEndDate)
-                : List.of();
+        List<ScheduleVoteSummaryResponse> votes = getVoteSummaries(clubId, viewerClubProfileId, monthStartDate, monthEndDate);
+        List<ClubNoticeSummaryResponse> sharedNotices = clubNoticeService.toNoticeSummaries(
+                access,
+                clubNoticeRepository.findAllByClubIdAndSharedToScheduleTrueAndDeletedFalseOrderByPublishedAtDescNoticeIdDesc(clubId)
+        );
 
         return new ClubScheduleResponse(
                 access.club().getClubId(),
@@ -135,7 +131,8 @@ public class ClubScheduleService {
                                 .count()
                 ),
                 monthEvents,
-                votes
+                votes,
+                sharedNotices.stream().limit(20).toList()
         );
     }
 
@@ -187,6 +184,7 @@ public class ClubScheduleService {
                 .clubId(clubId)
                 .authorClubProfileId(access.clubProfile().getClubProfileId())
                 .linkedNoticeId(linkedNoticeId)
+                .sharedToNotice(shouldPostToBoard(request.postToBoard()))
                 .categoryKey(NOTICE_CATEGORY_KEY)
                 .title(draft.title())
                 .description(null)
@@ -240,6 +238,7 @@ public class ClubScheduleService {
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
                 .linkedNoticeId(linkedNoticeId)
+                .sharedToNotice(shouldPostToBoard(request.postToBoard()))
                 .categoryKey(current.getCategoryKey())
                 .title(draft.title())
                 .description(null)
@@ -337,6 +336,7 @@ public class ClubScheduleService {
                 .clubId(clubId)
                 .authorClubProfileId(access.clubProfile().getClubProfileId())
                 .linkedNoticeId(linkedNoticeId)
+                .sharedToNotice(shouldPostToBoard(request.postToBoard()))
                 .sharedToSchedule(shouldPostToSchedule(request.postToSchedule()))
                 .title(draft.title())
                 .voteStartDate(draft.voteStartDate())
@@ -384,6 +384,7 @@ public class ClubScheduleService {
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
                 .linkedNoticeId(linkedNoticeId)
+                .sharedToNotice(shouldPostToBoard(request.postToBoard()))
                 .sharedToSchedule(shouldPostToSchedule(request.postToSchedule()))
                 .title(draft.title())
                 .voteStartDate(draft.voteStartDate())
@@ -428,6 +429,7 @@ public class ClubScheduleService {
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
                 .linkedNoticeId(current.getLinkedNoticeId())
+                .sharedToNotice(current.isSharedToNotice())
                 .sharedToSchedule(current.isSharedToSchedule())
                 .title(current.getTitle())
                 .voteStartDate(current.getVoteStartDate())
@@ -814,6 +816,7 @@ public class ClubScheduleService {
                 .locationLabel(null)
                 .scheduleAt(scheduleAt)
                 .scheduleEndAt(scheduleEndAt)
+                .sharedToSchedule(false)
                 .pinned(current != null && current.isPinned())
                 .publishedAt(current == null ? LocalDateTime.now() : current.getPublishedAt())
                 .deleted(false)
@@ -832,6 +835,7 @@ public class ClubScheduleService {
                 .locationLabel(current.getLocationLabel())
                 .scheduleAt(current.getScheduleAt())
                 .scheduleEndAt(current.getScheduleEndAt())
+                .sharedToSchedule(current.isSharedToSchedule())
                 .pinned(current.isPinned())
                 .publishedAt(current.getPublishedAt())
                 .deleted(true)
@@ -1100,6 +1104,7 @@ public class ClubScheduleService {
                 .locationLabel(current.getLocationLabel())
                 .scheduleAt(current.getScheduleAt())
                 .scheduleEndAt(scheduleEndAt)
+                .sharedToSchedule(current.isSharedToSchedule())
                 .pinned(current.isPinned())
                 .publishedAt(current.getPublishedAt())
                 .deleted(current.isDeleted())

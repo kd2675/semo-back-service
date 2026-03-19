@@ -12,8 +12,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'SCHEDULE_MANAGE',
-    'Schedule Management',
-    'Create and manage schedules and votes.',
+    '일정 관리',
+    '일정과 투표를 작성하고 관리합니다.',
     'edit_calendar',
     1,
     50,

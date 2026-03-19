@@ -15,8 +15,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'NOTICE',
-    'Notices',
-    'Create, manage, and share club notices.',
+    '공지',
+    '모임 공지를 작성, 관리, 공유합니다.',
     'campaign',
     1,
     30,
@@ -41,8 +41,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'ATTENDANCE',
-    'Attendance Check',
-    'Check in members and manage attendance sessions.',
+    '출석 체크',
+    '멤버 출석을 체크하고 출석 세션을 관리합니다.',
     'fact_check',
     1,
     10,
@@ -67,8 +67,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'TIMELINE',
-    'Timeline',
-    'Browse club activity through notice-based timeline cards.',
+    '타임라인',
+    '공지 기반 타임라인 카드로 모임 활동을 확인합니다.',
     'timeline',
     1,
     20,
@@ -93,8 +93,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'POLL',
-    'Polls',
-    'Create, share, and manage club polls.',
+    '투표',
+    '모임 투표를 작성, 공유, 관리합니다.',
     'poll',
     1,
     40,
@@ -119,8 +119,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'SCHEDULE_MANAGE',
-    'Schedule Management',
-    'Create and manage schedules and votes.',
+    '일정 관리',
+    '일정과 투표를 작성하고 관리합니다.',
     'edit_calendar',
     1,
     50,

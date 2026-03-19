@@ -29,8 +29,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'POLL',
-    'Polls',
-    'Create, share, and manage club polls.',
+    '투표',
+    '모임 투표를 작성, 공유, 관리합니다.',
     'poll',
     1,
     30,

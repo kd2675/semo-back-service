@@ -36,6 +36,9 @@ public class ClubScheduleEvent extends CommonDateEntity {
     @Column(name = "linked_notice_id")
     private Long linkedNoticeId;
 
+    @Column(name = "shared_to_notice", nullable = false)
+    private boolean sharedToNotice;
+
     @Column(name = "category_key", nullable = false, length = 30)
     private String categoryKey;
 

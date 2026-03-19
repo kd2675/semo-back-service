@@ -50,7 +50,6 @@ public class ClubPollController {
             UserContext userContext
     ) {
         requireUserRole(userContext);
-        clubPollService.requirePollFeature(clubId);
         return ResponseDataDTO.of(
                 clubScheduleService.getScheduleVoteDetail(clubId, voteId, requireUserKey(userContext)),
                 "투표 상세 조회 성공"

@@ -1,5 +1,8 @@
 package semo.back.service.feature.notice.vo;
 
+import semo.back.service.feature.schedule.vo.ScheduleEventSummaryResponse;
+import semo.back.service.feature.schedule.vo.ScheduleVoteSummaryResponse;
+
 import java.util.List;
 
 public record ClubNoticeHomeResponse(
@@ -12,6 +15,8 @@ public record ClubNoticeHomeResponse(
         int scheduledNoticeCount,
         int publishedTodayCount,
         int manageableNoticeCount,
-        List<ClubNoticeSummaryResponse> notices
+        List<ClubNoticeSummaryResponse> notices,
+        List<ScheduleEventSummaryResponse> sharedEvents,
+        List<ScheduleVoteSummaryResponse> sharedVotes
 ) {
 }

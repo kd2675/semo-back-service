@@ -15,6 +15,8 @@ public interface ClubNoticeRepository extends JpaRepository<ClubNotice, Long> {
 
     List<ClubNotice> findAllByClubIdAndDeletedFalseOrderByPublishedAtDescNoticeIdDesc(Long clubId);
 
+    List<ClubNotice> findAllByClubIdAndSharedToScheduleTrueAndDeletedFalseOrderByPublishedAtDescNoticeIdDesc(Long clubId);
+
     @Query("""
             select n
             from ClubNotice n

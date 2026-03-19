@@ -43,7 +43,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ClubNoticeService {
     private static final String FEATURE_NOTICE = "NOTICE";
-    private static final String FEATURE_POLL = "POLL";
     private static final String NOTICE_IMAGE_TARGET_DIR = "semo/notices";
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 30;
@@ -72,19 +71,6 @@ public class ClubNoticeService {
     ) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         Club club = getActiveClub(clubId);
-        boolean noticeFeatureEnabled = isNoticeFeatureEnabled(clubId);
-        if (!noticeFeatureEnabled) {
-            return new ClubNoticeFeedResponse(
-                    club.getClubId(),
-                    club.getName(),
-                    isAdminRole(access.membership().getRoleCode()),
-                    List.of(),
-                    null,
-                    null,
-                    false
-            );
-        }
-        boolean pollFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL);
 
         int pageSize = normalizePageSize(size);
         LocalDateTime cursorDateTime = parseCursorDateTime(cursorPublishedAt);
@@ -92,7 +78,7 @@ public class ClubNoticeService {
 
         List<ClubNotice> notices = clubNoticeRepository.findFeed(
                 clubId,
-                pollFeatureEnabled,
+                true,
                 noticeCategorySupport.normalizeOptionalCategoryKey(categoryKey),
                 normalizeQuery(query),
                 cursorDateTime,
@@ -104,7 +90,7 @@ public class ClubNoticeService {
         List<ClubNotice> pageItems = hasNext ? notices.subList(0, pageSize) : notices;
 
         Map<Long, ClubProfile> profileById = loadProfiles(pageItems);
-        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems, pollFeatureEnabled);
+        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems);
         Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
         List<ClubNoticeSummaryResponse> responses = pageItems.stream()
                 .map(notice -> toSummaryResponse(
@@ -130,14 +116,12 @@ public class ClubNoticeService {
     }
 
     public ClubNoticeDetailResponse getNoticeDetail(Long clubId, Long noticeId, String userKey) {
-        requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         Club club = getActiveClub(clubId);
         ClubNotice notice = getNotice(clubId, noticeId);
         ClubProfile authorProfile = clubProfileRepository.findById(notice.getAuthorClubProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubProfile", "clubProfileId", notice.getAuthorClubProfileId()));
-        boolean pollFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL);
-        LinkedTarget linkedTarget = loadLinkedTarget(notice, pollFeatureEnabled);
+        LinkedTarget linkedTarget = loadLinkedTarget(notice);
         NoticeCategoryCatalog category = noticeCategorySupport.getActiveCategoryMap()
                 .get(normalizeCategoryKey(notice.getCategoryKey()));
 
@@ -187,6 +171,7 @@ public class ClubNoticeService {
                 .locationLabel(trimToNull(request.locationLabel()))
                 .scheduleAt(postToSchedule ? parseOptionalDateTime(request.scheduleAt()) : null)
                 .scheduleEndAt(postToSchedule ? parseOptionalDateTime(request.scheduleEndAt()) : null)
+                .sharedToSchedule(postToSchedule)
                 .pinned(Boolean.TRUE.equals(request.pinned()))
                 .publishedAt(LocalDateTime.now())
                 .deleted(false)
@@ -214,6 +199,7 @@ public class ClubNoticeService {
                 .locationLabel(trimToNull(request.locationLabel()))
                 .scheduleAt(postToSchedule ? parseOptionalDateTime(request.scheduleAt()) : null)
                 .scheduleEndAt(postToSchedule ? parseOptionalDateTime(request.scheduleEndAt()) : null)
+                .sharedToSchedule(postToSchedule)
                 .pinned(Boolean.TRUE.equals(request.pinned()))
                 .publishedAt(current.getPublishedAt())
                 .deleted(false)
@@ -240,6 +226,7 @@ public class ClubNoticeService {
                 .locationLabel(current.getLocationLabel())
                 .scheduleAt(current.getScheduleAt())
                 .scheduleEndAt(current.getScheduleEndAt())
+                .sharedToSchedule(current.isSharedToSchedule())
                 .pinned(current.isPinned())
                 .publishedAt(current.getPublishedAt())
                 .deleted(true)
@@ -247,25 +234,19 @@ public class ClubNoticeService {
     }
 
     public List<ClubNotice> getScheduledNotices(Long clubId, LocalDateTime from, LocalDateTime to) {
-        if (!isNoticeFeatureEnabled(clubId)) {
-            return List.of();
-        }
         return clubNoticeRepository.findScheduledBetween(clubId, from, to);
     }
 
     public List<NoticeCategoryOptionResponse> getCategoryOptions(Long clubId, String userKey) {
         clubAccessResolver.requireActiveMember(clubId, userKey);
-        requireNoticeFeature(clubId);
         return noticeCategorySupport.getCategoryOptions();
     }
 
     public List<ClubNotice> getActiveNotices(Long clubId) {
-        requireNoticeFeature(clubId);
         return clubNoticeRepository.findAllByClubIdAndDeletedFalseOrderByPublishedAtDescNoticeIdDesc(clubId);
     }
 
     public List<ClubNotice> getDirectNoticesByAuthor(Long clubId, Long authorClubProfileId) {
-        requireNoticeFeature(clubId);
         return clubNoticeRepository.findDirectNoticesByClubIdAndAuthorClubProfileIdOrderByPublishedAtDescNoticeIdDesc(
                 clubId,
                 authorClubProfileId
@@ -277,10 +258,7 @@ public class ClubNoticeService {
             List<ClubNotice> notices
     ) {
         Map<Long, ClubProfile> profileById = loadProfiles(notices);
-        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(
-                notices,
-                clubFeatureService.isFeatureEnabled(access.club().getClubId(), FEATURE_POLL)
-        );
+        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(notices);
         Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
         return notices.stream()
                 .map(notice -> toSummaryResponse(
@@ -313,6 +291,7 @@ public class ClubNoticeService {
                 .locationLabel(notice.getLocationLabel())
                 .startAt(notice.getScheduleAt())
                 .endAt(notice.getScheduleEndAt())
+                .sharedToNotice(current != null && current.isSharedToNotice())
                 .attendeeLimit(current == null ? null : current.getAttendeeLimit())
                 .visibilityStatus(current == null ? "CLUB" : current.getVisibilityStatus())
                 .eventStatus(current == null ? "SCHEDULED" : current.getEventStatus())
@@ -359,7 +338,7 @@ public class ClubNoticeService {
         return result;
     }
 
-    private Map<Long, LinkedTarget> loadLinkedTargets(List<ClubNotice> notices, boolean pollFeatureEnabled) {
+    private Map<Long, LinkedTarget> loadLinkedTargets(List<ClubNotice> notices) {
         if (notices.isEmpty()) {
             return Map.of();
         }
@@ -371,15 +350,13 @@ public class ClubNoticeService {
         Map<Long, LinkedTarget> result = new HashMap<>();
         clubScheduleEventRepository.findByLinkedNoticeIdIn(noticeIds)
                 .forEach(event -> result.put(event.getLinkedNoticeId(), new LinkedTarget("SCHEDULE_EVENT", event.getEventId())));
-        if (pollFeatureEnabled) {
-            clubScheduleVoteRepository.findByLinkedNoticeIdIn(noticeIds)
-                    .forEach(vote -> result.put(vote.getLinkedNoticeId(), new LinkedTarget("POLL", vote.getVoteId())));
-        }
+        clubScheduleVoteRepository.findByLinkedNoticeIdIn(noticeIds)
+                .forEach(vote -> result.put(vote.getLinkedNoticeId(), new LinkedTarget("POLL", vote.getVoteId())));
         return result;
     }
 
-    private LinkedTarget loadLinkedTarget(ClubNotice notice, boolean pollFeatureEnabled) {
-        return loadLinkedTargets(List.of(notice), pollFeatureEnabled).get(notice.getNoticeId());
+    private LinkedTarget loadLinkedTarget(ClubNotice notice) {
+        return loadLinkedTargets(List.of(notice)).get(notice.getNoticeId());
     }
 
     private ClubNoticeSummaryResponse toSummaryResponse(

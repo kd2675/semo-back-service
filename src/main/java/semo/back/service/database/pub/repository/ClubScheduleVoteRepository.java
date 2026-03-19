@@ -20,6 +20,24 @@ public interface ClubScheduleVoteRepository extends JpaRepository<ClubScheduleVo
             select v
             from ClubScheduleVote v
             where v.clubId = :clubId
+              and v.sharedToNotice = true
+            order by v.voteStartDate desc, v.voteStartTime desc, v.voteId desc
+            """)
+    List<ClubScheduleVote> findAllByClubIdAndSharedToNoticeTrue(Long clubId);
+
+    @Query("""
+            select v
+            from ClubScheduleVote v
+            where v.clubId = :clubId
+              and v.sharedToSchedule = true
+            order by v.voteStartDate desc, v.voteStartTime desc, v.voteId desc
+            """)
+    List<ClubScheduleVote> findAllByClubIdAndSharedToScheduleTrue(Long clubId);
+
+    @Query("""
+            select v
+            from ClubScheduleVote v
+            where v.clubId = :clubId
               and v.sharedToSchedule = true
               and v.voteStartDate <= :monthEnd
               and v.voteEndDate >= :monthStart

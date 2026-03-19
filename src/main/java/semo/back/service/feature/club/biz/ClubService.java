@@ -31,7 +31,6 @@ import semo.back.service.feature.club.vo.ClubScheduleMonthResponse;
 import semo.back.service.feature.club.vo.ClubScheduleResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
-import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.profile.biz.ProfileUserService;
 import semo.back.service.feature.profile.vo.ProfileSummaryResponse;
 
@@ -60,8 +59,6 @@ public class ClubService {
     private static final Set<String> ALLOWED_VISIBILITY_STATUSES = Set.of("PUBLIC", "PRIVATE");
     private static final Set<String> ALLOWED_MEMBERSHIP_POLICIES = Set.of("APPROVAL", "OPEN");
     private static final String ROLE_OWNER = "OWNER";
-    private static final String FEATURE_NOTICE = "NOTICE";
-    private static final String FEATURE_POLL = "POLL";
     private static final Set<String> ADMIN_ROLE_CODES = Set.of("OWNER", "ADMIN");
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String CLUB_IMAGE_TARGET_DIR = "semo/clubs";
@@ -75,7 +72,6 @@ public class ClubService {
     private final ClubProfileRepository clubProfileRepository;
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubScheduleEventRepository clubScheduleEventRepository;
-    private final ClubFeatureService clubFeatureService;
     private final ProfileUserService profileUserService;
     private final ImageFinalizeClient imageFinalizeClient;
     private final ImageFileUrlResolver imageFileUrlResolver;
@@ -155,19 +151,15 @@ public class ClubService {
 
     public ClubBoardResponse getClubBoard(Long clubId, String userKey) {
         MembershipClubPair pair = getMembershipClubPair(clubId, userKey);
-        boolean noticeFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_NOTICE);
-        boolean pollFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL);
-        List<ClubNotice> notices = noticeFeatureEnabled
-                ? clubNoticeRepository.findFeed(
-                        clubId,
-                        pollFeatureEnabled,
-                        null,
-                        null,
-                        null,
-                        null,
-                        PageRequest.of(0, 5)
-                )
-                : List.of();
+        List<ClubNotice> notices = clubNoticeRepository.findFeed(
+                clubId,
+                true,
+                null,
+                null,
+                null,
+                null,
+                PageRequest.of(0, 5)
+        );
         Map<Long, ClubProfile> profileById = clubProfileRepository.findAllById(
                 notices.stream().map(ClubNotice::getAuthorClubProfileId).distinct().toList()
         ).stream().collect(HashMap::new, (map, profile) -> map.put(profile.getClubProfileId(), profile), HashMap::putAll);

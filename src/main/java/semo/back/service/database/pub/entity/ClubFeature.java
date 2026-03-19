@@ -36,6 +36,9 @@ public class ClubFeature extends CommonDateEntity {
     @Column(name = "enabled", nullable = false)
     private boolean enabled;
 
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder;
+
     @Column(name = "enabled_by_club_profile_id")
     private Long enabledByClubProfileId;
 

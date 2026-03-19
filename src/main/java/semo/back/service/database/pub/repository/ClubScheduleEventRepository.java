@@ -20,6 +20,16 @@ public interface ClubScheduleEventRepository extends JpaRepository<ClubScheduleE
             select e
             from ClubScheduleEvent e
             where e.clubId = :clubId
+              and e.sharedToNotice = true
+              and e.eventStatus <> 'CANCELLED'
+            order by e.startAt desc, e.eventId desc
+            """)
+    List<ClubScheduleEvent> findAllByClubIdAndSharedToNoticeTrue(Long clubId);
+
+    @Query("""
+            select e
+            from ClubScheduleEvent e
+            where e.clubId = :clubId
               and e.eventStatus <> 'CANCELLED'
             order by e.startAt asc, e.eventId asc
             """)

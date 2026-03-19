@@ -15,6 +15,10 @@ import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 import semo.back.service.feature.dashboard.biz.ClubDashboardService;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -29,40 +33,40 @@ public class ClubFeatureService {
     private static final List<FeatureCatalog> DEFAULT_CATALOGS = List.of(
             FeatureCatalog.builder()
                     .featureKey("ATTENDANCE")
-                    .displayName("Attendance Check")
-                    .description("Check in members and manage attendance sessions.")
+                    .displayName("출석 체크")
+                    .description("멤버 출석을 체크하고 출석 세션을 관리합니다.")
                     .iconName("fact_check")
                     .active(true)
                     .sortOrder(10)
                     .build(),
             FeatureCatalog.builder()
                     .featureKey("TIMELINE")
-                    .displayName("Timeline")
-                    .description("Browse club activity through notice-based timeline cards.")
+                    .displayName("타임라인")
+                    .description("공지 기반 타임라인 카드로 모임 활동을 확인합니다.")
                     .iconName("timeline")
                     .active(true)
                     .sortOrder(20)
                     .build(),
             FeatureCatalog.builder()
                     .featureKey("NOTICE")
-                    .displayName("Notices")
-                    .description("Create, manage, and share club notices.")
+                    .displayName("공지")
+                    .description("모임 공지를 작성, 관리, 공유합니다.")
                     .iconName("campaign")
                     .active(true)
                     .sortOrder(30)
                     .build(),
             FeatureCatalog.builder()
                     .featureKey("POLL")
-                    .displayName("Polls")
-                    .description("Create, share, and manage club polls.")
+                    .displayName("투표")
+                    .description("모임 투표를 작성, 공유, 관리합니다.")
                     .iconName("poll")
                     .active(true)
                     .sortOrder(40)
                     .build(),
             FeatureCatalog.builder()
                     .featureKey("SCHEDULE_MANAGE")
-                    .displayName("Schedule Management")
-                    .description("Create and manage schedules and votes.")
+                    .displayName("일정 관리")
+                    .description("일정과 투표를 작성하고 관리합니다.")
                     .iconName("edit_calendar")
                     .active(true)
                     .sortOrder(50)
@@ -88,19 +92,23 @@ public class ClubFeatureService {
         Set<String> allowedFeatureKeys = catalogs.stream()
                 .map(FeatureCatalog::getFeatureKey)
                 .collect(Collectors.toSet());
-        Set<String> enabledFeatureKeys = normalizeEnabledFeatureKeys(request, allowedFeatureKeys);
+        List<String> enabledFeatureKeysInOrder = normalizeEnabledFeatureKeysInOrder(request, allowedFeatureKeys);
+        Set<String> enabledFeatureKeys = Set.copyOf(enabledFeatureKeysInOrder);
+        Map<String, Integer> enabledSortOrderByKey = toEnabledSortOrderByKey(enabledFeatureKeysInOrder);
         Map<String, ClubFeature> existingByKey = clubFeatureRepository.findByClubId(clubId).stream()
                 .collect(Collectors.toMap(ClubFeature::getFeatureKey, Function.identity()));
         LocalDateTime now = LocalDateTime.now();
 
         for (FeatureCatalog catalog : catalogs) {
             boolean enabled = enabledFeatureKeys.contains(catalog.getFeatureKey());
+            int sortOrder = resolveSortOrder(catalog, enabled, enabledSortOrderByKey);
             ClubFeature existing = existingByKey.get(catalog.getFeatureKey());
             if (existing == null) {
                 clubFeatureRepository.save(ClubFeature.builder()
                         .clubId(clubId)
                         .featureKey(catalog.getFeatureKey())
                         .enabled(enabled)
+                        .sortOrder(sortOrder)
                         .enabledByClubProfileId(enabled ? access.clubProfile().getClubProfileId() : null)
                         .enabledAt(enabled ? now : null)
                         .build());
@@ -112,6 +120,7 @@ public class ClubFeatureService {
                     .clubId(existing.getClubId())
                     .featureKey(existing.getFeatureKey())
                     .enabled(enabled)
+                    .sortOrder(sortOrder)
                     .enabledByClubProfileId(enabled ? access.clubProfile().getClubProfileId() : null)
                     .enabledAt(enabled ? now : null)
                     .build());
@@ -129,20 +138,56 @@ public class ClubFeatureService {
                 .orElse(false);
     }
 
-    private Set<String> normalizeEnabledFeatureKeys(UpdateClubFeaturesRequest request, Set<String> allowedFeatureKeys) {
+    private List<String> normalizeEnabledFeatureKeysInOrder(
+            UpdateClubFeaturesRequest request,
+            Set<String> allowedFeatureKeys
+    ) {
         if (request == null || request.enabledFeatureKeys() == null) {
-            return Set.of();
+            return List.of();
         }
 
-        Set<String> normalizedKeys = request.enabledFeatureKeys().stream()
+        List<String> normalizedKeys = request.enabledFeatureKeys().stream()
                 .map(this::normalizeFeatureKey)
-                .collect(Collectors.toSet());
+                .toList();
 
-        if (!allowedFeatureKeys.containsAll(normalizedKeys)) {
+        if (!allowedFeatureKeys.containsAll(Set.copyOf(normalizedKeys))) {
             throw new SemoException.ValidationException("지원하지 않는 기능 키가 포함되어 있습니다.");
         }
 
-        return normalizedKeys;
+        List<String> deduplicated = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (String featureKey : normalizedKeys) {
+            if (seen.add(featureKey)) {
+                deduplicated.add(featureKey);
+            }
+        }
+        return deduplicated;
+    }
+
+    private Map<String, Integer> toEnabledSortOrderByKey(List<String> enabledFeatureKeysInOrder) {
+        Map<String, Integer> sortOrderByKey = new HashMap<>();
+        for (int index = 0; index < enabledFeatureKeysInOrder.size(); index++) {
+            sortOrderByKey.put(enabledFeatureKeysInOrder.get(index), (index + 1) * 10);
+        }
+        return sortOrderByKey;
+    }
+
+    private int resolveSortOrder(
+            FeatureCatalog catalog,
+            boolean enabled,
+            Map<String, Integer> enabledSortOrderByKey
+    ) {
+        if (enabled) {
+            return enabledSortOrderByKey.getOrDefault(catalog.getFeatureKey(), 1000 + catalog.getSortOrder());
+        }
+        return 1000 + catalog.getSortOrder();
+    }
+
+    private int resolveResponseSortOrder(FeatureCatalog catalog, ClubFeature clubFeature) {
+        if (clubFeature == null || clubFeature.getSortOrder() == null || clubFeature.getSortOrder() <= 0) {
+            return 1000 + catalog.getSortOrder();
+        }
+        return clubFeature.getSortOrder();
     }
 
     private List<ClubFeatureResponse> getClubFeatureResponses(Long clubId) {
@@ -152,6 +197,14 @@ public class ClubFeatureService {
                 .collect(Collectors.toMap(ClubFeature::getFeatureKey, Function.identity()));
 
         return catalogs.stream()
+                .sorted(
+                        Comparator
+                                .comparingInt((FeatureCatalog catalog) ->
+                                        resolveResponseSortOrder(catalog, clubFeaturesByKey.get(catalog.getFeatureKey()))
+                                )
+                                .thenComparingInt(FeatureCatalog::getSortOrder)
+                                .thenComparing(FeatureCatalog::getFeatureKey)
+                )
                 .map(catalog -> {
                     ClubFeature clubFeature = clubFeaturesByKey.get(catalog.getFeatureKey());
                     return new ClubFeatureResponse(

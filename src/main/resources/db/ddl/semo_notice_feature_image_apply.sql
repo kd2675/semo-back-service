@@ -30,8 +30,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'NOTICE',
-    'Notices',
-    'Create, manage, and share club notices.',
+    '공지',
+    '모임 공지를 작성, 관리, 공유합니다.',
     'campaign',
     1,
     30,
