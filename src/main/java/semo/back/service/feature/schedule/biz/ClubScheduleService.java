@@ -52,7 +52,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubScheduleService {
-    private static final String NOTICE_CATEGORY_KEY = "GENERAL";
     private static final String VISIBILITY_STATUS = "CLUB";
     private static final String EVENT_STATUS = "SCHEDULED";
     private static final String PARTICIPATION_GOING = "GOING";
@@ -185,7 +184,7 @@ public class ClubScheduleService {
                 .authorClubProfileId(access.clubProfile().getClubProfileId())
                 .linkedNoticeId(linkedNoticeId)
                 .sharedToNotice(shouldPostToBoard(request.postToBoard()))
-                .categoryKey(NOTICE_CATEGORY_KEY)
+                .categoryKey("GENERAL")
                 .title(draft.title())
                 .description(null)
                 .locationLabel(draft.locationLabel())
@@ -810,7 +809,6 @@ public class ClubScheduleService {
                 .noticeId(current == null ? null : current.getNoticeId())
                 .clubId(clubId)
                 .authorClubProfileId(authorClubProfileId)
-                .categoryKey(NOTICE_CATEGORY_KEY)
                 .title(title)
                 .content(content)
                 .locationLabel(null)
@@ -829,7 +827,6 @@ public class ClubScheduleService {
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
-                .categoryKey(current.getCategoryKey())
                 .title(current.getTitle())
                 .content(current.getContent())
                 .locationLabel(current.getLocationLabel())
@@ -1098,7 +1095,6 @@ public class ClubScheduleService {
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
-                .categoryKey(current.getCategoryKey())
                 .title(current.getTitle())
                 .content(current.getContent())
                 .locationLabel(current.getLocationLabel())

@@ -6,7 +6,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,7 +13,6 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.timeline.biz.ClubTimelineService;
 import semo.back.service.feature.timeline.vo.ClubAdminTimelineResponse;
 import semo.back.service.feature.timeline.vo.ClubTimelineResponse;
-import semo.back.service.feature.timeline.vo.UpdateClubTimelineRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
 @RestController
@@ -26,7 +24,6 @@ public class ClubTimelineController {
     @GetMapping("/more/timeline")
     public ResponseDataDTO<ClubTimelineResponse> getTimeline(
             @PathVariable Long clubId,
-            @RequestParam(required = false) String category,
             @RequestParam(required = false) String cursorPublishedAt,
             @RequestParam(required = false) Long cursorNoticeId,
             @RequestParam(required = false) Integer size,
@@ -37,7 +34,6 @@ public class ClubTimelineController {
                 clubTimelineService.getTimeline(
                         clubId,
                         requireUserKey(userContext),
-                        category,
                         cursorPublishedAt,
                         cursorNoticeId,
                         size
@@ -61,12 +57,11 @@ public class ClubTimelineController {
     @PutMapping("/admin/more/timeline")
     public ResponseDataDTO<ClubAdminTimelineResponse> updateAdminTimeline(
             @PathVariable Long clubId,
-            @RequestBody(required = false) UpdateClubTimelineRequest request,
             UserContext userContext
     ) {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
-                clubTimelineService.updateAdminTimeline(clubId, requireUserKey(userContext), request),
+                clubTimelineService.updateAdminTimeline(clubId, requireUserKey(userContext)),
                 "타임라인 설정 저장 성공"
         );
     }

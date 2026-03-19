@@ -161,7 +161,6 @@ CREATE TABLE IF NOT EXISTS club_notice (
     notice_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     club_id BIGINT NOT NULL,
     author_club_profile_id BIGINT NOT NULL,
-    category_key VARCHAR(30) NOT NULL DEFAULT 'GENERAL',
     title VARCHAR(200) NOT NULL,
     content TEXT NOT NULL,
     image_file_name VARCHAR(255) NULL,
@@ -179,40 +178,13 @@ CREATE TABLE IF NOT EXISTS club_notice (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_club_notice_feed
-    ON club_notice (club_id, category_key, deleted, published_at);
+    ON club_notice (club_id, deleted, published_at);
 
 CREATE INDEX idx_club_notice_pinned
-    ON club_notice (club_id, pinned, published_at);
+    ON club_notice (club_id, deleted, pinned, published_at, notice_id);
 
 CREATE INDEX idx_club_notice_schedule
     ON club_notice (club_id, schedule_at, deleted);
-
-CREATE TABLE IF NOT EXISTS notice_category_catalog (
-    category_key VARCHAR(30) PRIMARY KEY,
-    display_name VARCHAR(60) NOT NULL,
-    icon_name VARCHAR(50) NOT NULL,
-    accent_tone VARCHAR(30) NOT NULL,
-    active TINYINT(1) NOT NULL DEFAULT 1,
-    sort_order INT NOT NULL DEFAULT 0,
-    create_date DATETIME NOT NULL,
-    update_date DATETIME NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS club_notice_category_setting (
-    club_notice_category_setting_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    club_id BIGINT NOT NULL,
-    category_key VARCHAR(30) NOT NULL,
-    visible_in_timeline TINYINT(1) NOT NULL DEFAULT 1,
-    updated_by_club_profile_id BIGINT NULL,
-    create_date DATETIME NOT NULL,
-    update_date DATETIME NOT NULL,
-    CONSTRAINT uk_club_notice_category_setting UNIQUE (club_id, category_key),
-    CONSTRAINT fk_club_notice_category_setting_club FOREIGN KEY (club_id) REFERENCES club(club_id),
-    CONSTRAINT fk_club_notice_category_setting_updated_by FOREIGN KEY (updated_by_club_profile_id) REFERENCES club_profile(club_profile_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE INDEX idx_club_notice_category_timeline
-    ON club_notice_category_setting (club_id, visible_in_timeline, category_key);
 
 -- ============================================================
 -- Schedule / events

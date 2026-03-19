@@ -13,7 +13,6 @@ import semo.back.service.database.pub.entity.Club;
 import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
-import semo.back.service.database.pub.entity.NoticeCategoryCatalog;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
@@ -25,7 +24,6 @@ import semo.back.service.feature.notice.vo.ClubNoticeDetailResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeUpsertResponse;
-import semo.back.service.feature.notice.vo.NoticeCategoryOptionResponse;
 import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
 
 import java.time.Duration;
@@ -33,7 +31,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -46,6 +43,7 @@ public class ClubNoticeService {
     private static final String NOTICE_IMAGE_TARGET_DIR = "semo/notices";
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 30;
+    private static final String DEFAULT_SCHEDULE_CATEGORY_KEY = "GENERAL";
     private static final DateTimeFormatter DATE_TIME_REQUEST_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm");
 
@@ -56,15 +54,14 @@ public class ClubNoticeService {
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
-    private final NoticeCategorySupport noticeCategorySupport;
     private final ImageFinalizeClient imageFinalizeClient;
     private final ImageFileUrlResolver imageFileUrlResolver;
 
     public ClubNoticeFeedResponse getNoticeFeed(
             Long clubId,
             String userKey,
-            String categoryKey,
             String query,
+            boolean pinnedOnly,
             String cursorPublishedAt,
             Long cursorNoticeId,
             Integer size
@@ -79,8 +76,8 @@ public class ClubNoticeService {
         List<ClubNotice> notices = clubNoticeRepository.findFeed(
                 clubId,
                 true,
-                noticeCategorySupport.normalizeOptionalCategoryKey(categoryKey),
                 normalizeQuery(query),
+                pinnedOnly,
                 cursorDateTime,
                 normalizedCursorNoticeId,
                 PageRequest.of(0, pageSize + 1)
@@ -91,14 +88,12 @@ public class ClubNoticeService {
 
         Map<Long, ClubProfile> profileById = loadProfiles(pageItems);
         Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems);
-        Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
         List<ClubNoticeSummaryResponse> responses = pageItems.stream()
                 .map(notice -> toSummaryResponse(
                         access,
                         notice,
                         profileById.get(notice.getAuthorClubProfileId()),
-                        linkedTargetsByNoticeId.get(notice.getNoticeId()),
-                        categoryByKey.get(normalizeCategoryKey(notice.getCategoryKey()))
+                        linkedTargetsByNoticeId.get(notice.getNoticeId())
                 ))
                 .toList();
 
@@ -122,8 +117,6 @@ public class ClubNoticeService {
         ClubProfile authorProfile = clubProfileRepository.findById(notice.getAuthorClubProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubProfile", "clubProfileId", notice.getAuthorClubProfileId()));
         LinkedTarget linkedTarget = loadLinkedTarget(notice);
-        NoticeCategoryCatalog category = noticeCategorySupport.getActiveCategoryMap()
-                .get(normalizeCategoryKey(notice.getCategoryKey()));
 
         return new ClubNoticeDetailResponse(
                 club.getClubId(),
@@ -135,10 +128,6 @@ public class ClubNoticeService {
                 notice.getImageFileName(),
                 imageFileUrlResolver.resolveImageUrl(notice.getImageFileName()),
                 imageFileUrlResolver.resolveThumbnailUrl(notice.getImageFileName()),
-                notice.getCategoryKey(),
-                category == null ? "General" : category.getDisplayName(),
-                category == null ? "description" : category.getIconName(),
-                category == null ? "slate" : category.getAccentTone(),
                 authorProfile.getDisplayName(),
                 access.membership().getRoleCode(),
                 formatDateTime(notice.getPublishedAt()),
@@ -164,7 +153,6 @@ public class ClubNoticeService {
         ClubNotice notice = clubNoticeRepository.save(ClubNotice.builder()
                 .clubId(clubId)
                 .authorClubProfileId(access.clubProfile().getClubProfileId())
-                .categoryKey(noticeCategorySupport.normalizeRequiredCategoryKey(request.categoryKey()))
                 .title(request.title().trim())
                 .content(request.content().trim())
                 .imageFileName(finalizeNoticeImageFileName(request.fileName(), null))
@@ -192,7 +180,6 @@ public class ClubNoticeService {
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
-                .categoryKey(noticeCategorySupport.normalizeRequiredCategoryKey(request.categoryKey()))
                 .title(request.title().trim())
                 .content(request.content().trim())
                 .imageFileName(finalizeNoticeImageFileName(request.fileName(), current.getImageFileName()))
@@ -219,7 +206,6 @@ public class ClubNoticeService {
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())
                 .authorClubProfileId(current.getAuthorClubProfileId())
-                .categoryKey(current.getCategoryKey())
                 .title(current.getTitle())
                 .content(current.getContent())
                 .imageFileName(current.getImageFileName())
@@ -237,17 +223,23 @@ public class ClubNoticeService {
         return clubNoticeRepository.findScheduledBetween(clubId, from, to);
     }
 
-    public List<NoticeCategoryOptionResponse> getCategoryOptions(Long clubId, String userKey) {
-        clubAccessResolver.requireActiveMember(clubId, userKey);
-        return noticeCategorySupport.getCategoryOptions();
-    }
-
     public List<ClubNotice> getActiveNotices(Long clubId) {
         return clubNoticeRepository.findAllByClubIdAndDeletedFalseOrderByPublishedAtDescNoticeIdDesc(clubId);
     }
 
+    public List<ClubNotice> getPinnedNotices(Long clubId) {
+        return clubNoticeRepository.findAllByClubIdAndDeletedFalseAndPinnedTrueOrderByPublishedAtDescNoticeIdDesc(clubId);
+    }
+
     public List<ClubNotice> getDirectNoticesByAuthor(Long clubId, Long authorClubProfileId) {
         return clubNoticeRepository.findDirectNoticesByClubIdAndAuthorClubProfileIdOrderByPublishedAtDescNoticeIdDesc(
+                clubId,
+                authorClubProfileId
+        );
+    }
+
+    public List<ClubNotice> getDirectPinnedNoticesByAuthor(Long clubId, Long authorClubProfileId) {
+        return clubNoticeRepository.findDirectPinnedNoticesByClubIdAndAuthorClubProfileIdOrderByPublishedAtDescNoticeIdDesc(
                 clubId,
                 authorClubProfileId
         );
@@ -259,14 +251,12 @@ public class ClubNoticeService {
     ) {
         Map<Long, ClubProfile> profileById = loadProfiles(notices);
         Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(notices);
-        Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
         return notices.stream()
                 .map(notice -> toSummaryResponse(
                         access,
                         notice,
                         profileById.get(notice.getAuthorClubProfileId()),
-                        linkedTargetsByNoticeId.get(notice.getNoticeId()),
-                        categoryByKey.get(normalizeCategoryKey(notice.getCategoryKey()))
+                        linkedTargetsByNoticeId.get(notice.getNoticeId())
                 ))
                 .toList();
     }
@@ -285,7 +275,7 @@ public class ClubNoticeService {
                 .clubId(notice.getClubId())
                 .authorClubProfileId(authorClubProfileId)
                 .linkedNoticeId(notice.getNoticeId())
-                .categoryKey(normalizeCategoryKey(notice.getCategoryKey()))
+                .categoryKey(current == null ? DEFAULT_SCHEDULE_CATEGORY_KEY : current.getCategoryKey())
                 .title(notice.getTitle())
                 .description(notice.getContent())
                 .locationLabel(notice.getLocationLabel())
@@ -307,7 +297,6 @@ public class ClubNoticeService {
         return new ClubNoticeUpsertResponse(
                 notice.getNoticeId(),
                 notice.getTitle(),
-                notice.getCategoryKey(),
                 notice.getImageFileName(),
                 imageFileUrlResolver.resolveImageUrl(notice.getImageFileName()),
                 imageFileUrlResolver.resolveThumbnailUrl(notice.getImageFileName()),
@@ -363,8 +352,7 @@ public class ClubNoticeService {
             ClubAccessResolver.ClubAccess access,
             ClubNotice notice,
             ClubProfile authorProfile,
-            LinkedTarget linkedTarget,
-            NoticeCategoryCatalog category
+            LinkedTarget linkedTarget
     ) {
         String authorName = authorProfile == null ? "Unknown Member" : authorProfile.getDisplayName();
         return new ClubNoticeSummaryResponse(
@@ -376,10 +364,6 @@ public class ClubNoticeService {
                 imageFileUrlResolver.resolveThumbnailUrl(notice.getImageFileName()),
                 authorName,
                 null,
-                notice.getCategoryKey(),
-                category == null ? "General" : category.getDisplayName(),
-                category == null ? "description" : category.getIconName(),
-                category == null ? "slate" : category.getAccentTone(),
                 formatDateTime(notice.getPublishedAt()),
                 toTimeAgo(notice.getPublishedAt()),
                 notice.isPinned(),
@@ -403,13 +387,6 @@ public class ClubNoticeService {
             return "";
         }
         return normalized.length() <= 140 ? normalized : normalized.substring(0, 140) + "...";
-    }
-
-    private String normalizeCategoryKey(String categoryKey) {
-        if (!StringUtils.hasText(categoryKey)) {
-            return "ANNOUNCEMENT";
-        }
-        return categoryKey.trim().toUpperCase(Locale.ROOT);
     }
 
     private String normalizeQuery(String query) {

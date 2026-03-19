@@ -3,33 +3,26 @@ package semo.back.service.feature.timeline.biz;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
-import semo.back.service.database.pub.entity.NoticeCategoryCatalog;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
-import semo.back.service.feature.notice.biz.NoticeCategorySupport;
-import semo.back.service.feature.notice.vo.NoticeCategoryOptionResponse;
-import semo.back.service.feature.notice.vo.NoticeCategorySettingResponse;
 import semo.back.service.feature.timeline.vo.ClubAdminTimelineResponse;
 import semo.back.service.feature.timeline.vo.ClubTimelineResponse;
 import semo.back.service.feature.timeline.vo.TimelineEntryResponse;
-import semo.back.service.feature.timeline.vo.UpdateClubTimelineRequest;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -51,12 +44,10 @@ public class ClubTimelineService {
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
-    private final NoticeCategorySupport noticeCategorySupport;
 
     public ClubTimelineResponse getTimeline(
             Long clubId,
             String userKey,
-            String categoryKey,
             String cursorPublishedAt,
             Long cursorNoticeId,
             Integer size
@@ -65,26 +56,6 @@ public class ClubTimelineService {
         requireTimelineFeature(clubId);
         boolean pollFeatureEnabled = clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL);
 
-        List<NoticeCategoryOptionResponse> visibleCategories = noticeCategorySupport.getTimelineVisibleCategoryOptions(clubId);
-        Set<String> visibleCategoryKeys = visibleCategories.stream()
-                .map(NoticeCategoryOptionResponse::categoryKey)
-                .collect(Collectors.toSet());
-        String normalizedCategoryKey = noticeCategorySupport.normalizeOptionalCategoryKey(categoryKey);
-
-        if (visibleCategoryKeys.isEmpty() || (normalizedCategoryKey != null && !visibleCategoryKeys.contains(normalizedCategoryKey))) {
-            return new ClubTimelineResponse(
-                    access.club().getClubId(),
-                    access.club().getName(),
-                    isAdminRole(access.membership().getRoleCode()),
-                    normalizedCategoryKey,
-                    visibleCategories,
-                    List.of(),
-                    null,
-                    null,
-                    false
-            );
-        }
-
         int pageSize = normalizePageSize(size);
         LocalDateTime cursorDateTime = parseCursorDateTime(cursorPublishedAt);
         Long normalizedCursorNoticeId = cursorDateTime == null ? null : (cursorNoticeId == null ? Long.MAX_VALUE : cursorNoticeId);
@@ -92,8 +63,6 @@ public class ClubTimelineService {
         List<ClubNotice> notices = clubNoticeRepository.findTimelineFeed(
                 clubId,
                 pollFeatureEnabled,
-                visibleCategoryKeys,
-                normalizedCategoryKey,
                 cursorDateTime,
                 normalizedCursorNoticeId,
                 PageRequest.of(0, pageSize + 1)
@@ -103,13 +72,11 @@ public class ClubTimelineService {
         List<ClubNotice> pageItems = hasNext ? notices.subList(0, pageSize) : notices;
         Map<Long, ClubProfile> profileById = loadProfiles(pageItems);
         Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems, pollFeatureEnabled);
-        Map<String, NoticeCategoryCatalog> categoryByKey = noticeCategorySupport.getActiveCategoryMap();
         List<TimelineEntryResponse> entries = pageItems.stream()
                 .map(notice -> toEntryResponse(
                         notice,
                         profileById.get(notice.getAuthorClubProfileId()),
-                        linkedTargetsByNoticeId.get(notice.getNoticeId()),
-                        categoryByKey.get(normalizeCategoryKey(notice.getCategoryKey()))
+                        linkedTargetsByNoticeId.get(notice.getNoticeId())
                 ))
                 .toList();
 
@@ -118,8 +85,6 @@ public class ClubTimelineService {
                 access.club().getClubId(),
                 access.club().getName(),
                 isAdminRole(access.membership().getRoleCode()),
-                normalizedCategoryKey,
-                visibleCategories,
                 entries,
                 lastItem == null ? null : formatDateTimeValue(lastItem.getPublishedAt()),
                 lastItem == null ? null : lastItem.getNoticeId(),
@@ -132,41 +97,28 @@ public class ClubTimelineService {
         requireTimelineFeature(clubId);
         return new ClubAdminTimelineResponse(
                 access.club().getClubId(),
-                access.club().getName(),
-                noticeCategorySupport.getTimelineSettingOptions(clubId)
+                access.club().getName()
         );
     }
 
-    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
-    public ClubAdminTimelineResponse updateAdminTimeline(Long clubId, String userKey, UpdateClubTimelineRequest request) {
+    public ClubAdminTimelineResponse updateAdminTimeline(Long clubId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         requireTimelineFeature(clubId);
-        List<NoticeCategorySettingResponse> categories = noticeCategorySupport.updateTimelineVisibleCategories(
-                clubId,
-                access.clubProfile().getClubProfileId(),
-                request == null ? List.of() : request.visibleCategoryKeys()
-        );
         return new ClubAdminTimelineResponse(
                 access.club().getClubId(),
-                access.club().getName(),
-                categories
+                access.club().getName()
         );
     }
 
     private TimelineEntryResponse toEntryResponse(
             ClubNotice notice,
             ClubProfile authorProfile,
-            LinkedTarget linkedTarget,
-            NoticeCategoryCatalog category
+            LinkedTarget linkedTarget
     ) {
         return new TimelineEntryResponse(
                 notice.getNoticeId(),
                 notice.getTitle(),
                 summarizeContent(notice.getContent()),
-                notice.getCategoryKey(),
-                category == null ? "General" : category.getDisplayName(),
-                category == null ? "description" : category.getIconName(),
-                category == null ? "slate" : category.getAccentTone(),
                 authorProfile == null ? "Unknown Member" : authorProfile.getDisplayName(),
                 formatDateTimeValue(notice.getPublishedAt()),
                 formatDateTime(notice.getPublishedAt()),
@@ -275,13 +227,6 @@ public class ClubTimelineService {
             return days + "d ago";
         }
         return formatDateTime(value);
-    }
-
-    private String normalizeCategoryKey(String categoryKey) {
-        if (!StringUtils.hasText(categoryKey)) {
-            return "ANNOUNCEMENT";
-        }
-        return categoryKey.trim().toUpperCase(Locale.ROOT);
     }
 
     private int normalizePageSize(Integer size) {

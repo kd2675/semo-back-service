@@ -33,9 +33,6 @@ public class ClubNotice extends CommonDateEntity {
     @Column(name = "author_club_profile_id", nullable = false)
     private Long authorClubProfileId;
 
-    @Column(name = "category_key", nullable = false, length = 30)
-    private String categoryKey;
-
     @Column(name = "title", nullable = false, length = 200)
     private String title;
 

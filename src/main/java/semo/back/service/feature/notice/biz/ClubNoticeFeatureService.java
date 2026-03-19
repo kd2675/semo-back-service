@@ -28,18 +28,23 @@ public class ClubNoticeFeatureService {
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
 
-    public ClubNoticeHomeResponse getNoticeHome(Long clubId, String userKey) {
+    public ClubNoticeHomeResponse getNoticeHome(Long clubId, String userKey, boolean pinnedOnly) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
 
-        List<ClubNotice> notices = access.isAdmin()
+        List<ClubNotice> allNotices = access.isAdmin()
                 ? clubNoticeService.getActiveNotices(clubId)
                 : clubNoticeService.getDirectNoticesByAuthor(clubId, access.clubProfile().getClubProfileId());
+        List<ClubNotice> listNotices = pinnedOnly
+                ? (access.isAdmin()
+                        ? clubNoticeService.getPinnedNotices(clubId)
+                        : clubNoticeService.getDirectPinnedNoticesByAuthor(clubId, access.clubProfile().getClubProfileId()))
+                : allNotices;
         List<ClubNotice> homeNotices = access.isAdmin()
-                ? notices.stream()
+                ? listNotices.stream()
                         .filter(notice -> clubNoticeService.canManageNotice(access, notice.getAuthorClubProfileId()))
                         .limit(20)
                         .toList()
-                : notices.stream().limit(20).toList();
+                : listNotices.stream().limit(20).toList();
         List<ClubNoticeSummaryResponse> manageableNotices = clubNoticeService.toNoticeSummaries(access, homeNotices);
         List<ClubScheduleEvent> sharedEvents = clubScheduleEventRepository.findAllByClubIdAndSharedToNoticeTrue(clubId);
         List<ScheduleEventSummaryResponse> sharedEventSummaries = clubScheduleService
@@ -60,13 +65,13 @@ public class ClubNoticeFeatureService {
                 access.club().getName(),
                 access.isAdmin(),
                 access.isAdmin(),
-                notices.size(),
-                (int) notices.stream().filter(ClubNotice::isPinned).count(),
-                (int) notices.stream().filter(notice -> notice.getScheduleAt() != null).count(),
-                (int) notices.stream()
+                allNotices.size(),
+                (int) allNotices.stream().filter(ClubNotice::isPinned).count(),
+                (int) allNotices.stream().filter(notice -> notice.getScheduleAt() != null).count(),
+                (int) allNotices.stream()
                         .filter(notice -> notice.getPublishedAt() != null && notice.getPublishedAt().toLocalDate().isEqual(today))
                         .count(),
-                notices.size(),
+                manageableNotices.size(),
                 manageableNotices,
                 sharedEventSummaries,
                 sharedVoteSummaries

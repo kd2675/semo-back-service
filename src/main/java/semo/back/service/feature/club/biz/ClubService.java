@@ -155,7 +155,7 @@ public class ClubService {
                 clubId,
                 true,
                 null,
-                null,
+                false,
                 null,
                 null,
                 PageRequest.of(0, 5)
@@ -170,14 +170,14 @@ public class ClubService {
                 notices.stream()
                         .map(notice -> new ClubBoardNoticeResponse(
                                 String.valueOf(notice.getNoticeId()),
-                                toBoardIcon(notice.getCategoryKey()),
+                                "campaign",
                                 notice.getTitle(),
                                 summarizeContent(notice.getContent()),
                                 profileById.get(notice.getAuthorClubProfileId()) == null
                                         ? "Unknown Member"
                                         : profileById.get(notice.getAuthorClubProfileId()).getDisplayName(),
                                 formatBoardTimeAgo(notice.getPublishedAt()),
-                                toBoardCategory(notice.getCategoryKey())
+                                "social"
                         ))
                         .toList()
         );
@@ -427,24 +427,6 @@ public class ClubService {
             return "";
         }
         return normalized.length() <= 140 ? normalized : normalized.substring(0, 140) + "...";
-    }
-
-    private String toBoardIcon(String categoryKey) {
-        return switch (categoryKey) {
-            case "TOURNAMENT" -> "sports_tennis";
-            case "MATCH" -> "emoji_events";
-            case "SOCIAL" -> "celebration";
-            default -> "campaign";
-        };
-    }
-
-    private String toBoardCategory(String categoryKey) {
-        return switch (categoryKey) {
-            case "TOURNAMENT" -> "tournaments";
-            case "MATCH" -> "matches";
-            case "SOCIAL" -> "social";
-            default -> "social";
-        };
     }
 
     private String toScheduleIcon(String categoryKey) {

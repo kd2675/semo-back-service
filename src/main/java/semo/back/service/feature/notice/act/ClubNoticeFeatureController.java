@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.notice.biz.ClubNoticeFeatureService;
@@ -18,11 +19,8 @@ import semo.back.service.feature.notice.biz.ClubNoticeService;
 import semo.back.service.feature.notice.vo.ClubNoticeDetailResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeHomeResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeUpsertResponse;
-import semo.back.service.feature.notice.vo.NoticeCategoryOptionResponse;
 import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}/more/notices")
@@ -34,24 +32,13 @@ public class ClubNoticeFeatureController {
     @GetMapping
     public ResponseDataDTO<ClubNoticeHomeResponse> getNoticeHome(
             @PathVariable Long clubId,
+            @RequestParam(required = false, defaultValue = "false") boolean pinnedOnly,
             UserContext userContext
     ) {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
-                clubNoticeFeatureService.getNoticeHome(clubId, requireUserKey(userContext)),
+                clubNoticeFeatureService.getNoticeHome(clubId, requireUserKey(userContext), pinnedOnly),
                 "공지 관리 홈 조회 성공"
-        );
-    }
-
-    @GetMapping("/categories")
-    public ResponseDataDTO<List<NoticeCategoryOptionResponse>> getNoticeCategories(
-            @PathVariable Long clubId,
-            UserContext userContext
-    ) {
-        requireUserRole(userContext);
-        return ResponseDataDTO.of(
-                clubNoticeService.getCategoryOptions(clubId, requireUserKey(userContext)),
-                "공지 카테고리 조회 성공"
         );
     }
 
