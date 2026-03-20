@@ -16,29 +16,31 @@ public interface ClubScheduleVoteRepository extends JpaRepository<ClubScheduleVo
 
     List<ClubScheduleVote> findByLinkedNoticeIdIn(Collection<Long> linkedNoticeIds);
 
-    @Query("""
-            select v
-            from ClubScheduleVote v
-            where v.clubId = :clubId
-              and v.sharedToNotice = true
-            order by v.voteStartDate desc, v.voteStartTime desc, v.voteId desc
-            """)
-    List<ClubScheduleVote> findAllByClubIdAndSharedToNoticeTrue(Long clubId);
+    List<ClubScheduleVote> findAllByVoteIdIn(Collection<Long> voteIds);
 
     @Query("""
             select v
             from ClubScheduleVote v
             where v.clubId = :clubId
-              and v.sharedToSchedule = true
+              and v.sharedToBoard = true
             order by v.voteStartDate desc, v.voteStartTime desc, v.voteId desc
             """)
-    List<ClubScheduleVote> findAllByClubIdAndSharedToScheduleTrue(Long clubId);
+    List<ClubScheduleVote> findAllByClubIdAndSharedToBoardTrue(Long clubId);
 
     @Query("""
             select v
             from ClubScheduleVote v
             where v.clubId = :clubId
-              and v.sharedToSchedule = true
+              and v.sharedToCalendar = true
+            order by v.voteStartDate desc, v.voteStartTime desc, v.voteId desc
+            """)
+    List<ClubScheduleVote> findAllByClubIdAndSharedToCalendarTrue(Long clubId);
+
+    @Query("""
+            select v
+            from ClubScheduleVote v
+            where v.clubId = :clubId
+              and v.sharedToCalendar = true
               and v.voteStartDate <= :monthEnd
               and v.voteEndDate >= :monthStart
             order by v.voteStartDate asc, v.voteStartTime asc, v.voteId desc

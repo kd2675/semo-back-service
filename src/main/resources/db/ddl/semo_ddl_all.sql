@@ -167,7 +167,8 @@ CREATE TABLE IF NOT EXISTS club_notice (
     location_label VARCHAR(200) NULL,
     schedule_at DATETIME NULL,
     schedule_end_at DATETIME NULL,
-    shared_to_schedule TINYINT(1) NOT NULL DEFAULT 0,
+    shared_to_board TINYINT(1) NOT NULL DEFAULT 1,
+    shared_to_calendar TINYINT(1) NOT NULL DEFAULT 0,
     pinned TINYINT(1) NOT NULL DEFAULT 0,
     published_at DATETIME NOT NULL,
     deleted TINYINT(1) NOT NULL DEFAULT 0,
@@ -186,6 +187,34 @@ CREATE INDEX idx_club_notice_pinned
 CREATE INDEX idx_club_notice_schedule
     ON club_notice (club_id, schedule_at, deleted);
 
+CREATE TABLE IF NOT EXISTS club_board_item (
+    board_item_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    content_type VARCHAR(30) NOT NULL,
+    content_id BIGINT NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_board_item UNIQUE (club_id, content_type, content_id),
+    CONSTRAINT fk_club_board_item_club FOREIGN KEY (club_id) REFERENCES club(club_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_board_item_feed
+    ON club_board_item (club_id, content_type, content_id);
+
+CREATE TABLE IF NOT EXISTS club_calendar_item (
+    calendar_item_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    content_type VARCHAR(30) NOT NULL,
+    content_id BIGINT NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_calendar_item UNIQUE (club_id, content_type, content_id),
+    CONSTRAINT fk_club_calendar_item_club FOREIGN KEY (club_id) REFERENCES club(club_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_calendar_item_feed
+    ON club_calendar_item (club_id, content_type, content_id);
+
 -- ============================================================
 -- Schedule / events
 -- Event authors and participants are also club-profile scoped.
@@ -195,7 +224,8 @@ CREATE TABLE IF NOT EXISTS club_schedule_event (
     club_id BIGINT NOT NULL,
     author_club_profile_id BIGINT NOT NULL,
     linked_notice_id BIGINT NULL,
-    shared_to_notice TINYINT(1) NOT NULL DEFAULT 0,
+    shared_to_board TINYINT(1) NOT NULL DEFAULT 0,
+    shared_to_calendar TINYINT(1) NOT NULL DEFAULT 1,
     category_key VARCHAR(30) NOT NULL DEFAULT 'GENERAL',
     title VARCHAR(200) NOT NULL,
     description VARCHAR(2000) NULL,
@@ -245,8 +275,8 @@ CREATE TABLE IF NOT EXISTS club_schedule_vote (
     club_id BIGINT NOT NULL,
     author_club_profile_id BIGINT NOT NULL,
     linked_notice_id BIGINT NULL,
-    shared_to_notice TINYINT(1) NOT NULL DEFAULT 0,
-    shared_to_schedule TINYINT(1) NOT NULL DEFAULT 0,
+    shared_to_board TINYINT(1) NOT NULL DEFAULT 0,
+    shared_to_calendar TINYINT(1) NOT NULL DEFAULT 0,
     title VARCHAR(200) NOT NULL,
     vote_start_date DATE NOT NULL,
     vote_end_date DATE NOT NULL,

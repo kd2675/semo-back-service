@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.common.exception.SemoException;
+import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
@@ -23,6 +24,7 @@ import semo.back.service.feature.club.vo.ClubProfileResponse;
 import semo.back.service.feature.club.vo.ClubCreateResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
+import semo.back.service.feature.club.vo.UpdateClubProfileRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
 import java.util.List;
@@ -191,5 +193,62 @@ class ClubControllerTest {
         assertThat(response.getData().appProfile().displayName()).isEqualTo("Club Profile User");
         assertThat(response.getData().clubProfile().displayName()).isEqualTo("Club Profile User");
         assertThat(response.getData().clubProfile().roleCode()).isEqualTo("OWNER");
+    }
+
+    @Test
+    void updateClubProfileRemovesAvatarForAuthenticatedUser() {
+        UserContext userContext = UserContext.builder()
+                .userKey("user-club-010")
+                .userName("Avatar User")
+                .role("USER")
+                .build();
+
+        ResponseDataDTO<ClubCreateResponse> created = clubController.createClub(
+                new CreateClubRequest("Semo Avatar Club", "프로필 사진 수정 테스트", "OTHER", "PUBLIC", "APPROVAL", null),
+                userContext
+        );
+
+        ClubProfile current = clubProfileRepository.findAll().getFirst();
+        clubProfileRepository.save(ClubProfile.builder()
+                .clubProfileId(current.getClubProfileId())
+                .clubMemberId(current.getClubMemberId())
+                .displayName(current.getDisplayName())
+                .tagline(current.getTagline())
+                .introText(current.getIntroText())
+                .avatarFileName("semo/club-profiles/existing-avatar.png")
+                .build());
+
+        ResponseDataDTO<ClubProfileResponse> response = clubController.updateClubProfile(
+                created.getData().clubId(),
+                new UpdateClubProfileRequest(null, null, true),
+                userContext
+        );
+
+        assertThat(response.getData()).isNotNull();
+        assertThat(response.getData().clubProfile().avatarFileName()).isNull();
+        assertThat(response.getData().clubProfile().avatarImageUrl()).isNull();
+    }
+
+    @Test
+    void updateClubProfileChangesNicknameForAuthenticatedUser() {
+        UserContext userContext = UserContext.builder()
+                .userKey("user-club-012")
+                .userName("Nickname User")
+                .role("USER")
+                .build();
+
+        ResponseDataDTO<ClubCreateResponse> created = clubController.createClub(
+                new CreateClubRequest("Semo Nickname Club", "닉네임 수정 테스트", "OTHER", "PUBLIC", "APPROVAL", null),
+                userContext
+        );
+
+        ResponseDataDTO<ClubProfileResponse> response = clubController.updateClubProfile(
+                created.getData().clubId(),
+                new UpdateClubProfileRequest("러닝캡틴", null, false),
+                userContext
+        );
+
+        assertThat(response.getData()).isNotNull();
+        assertThat(response.getData().clubProfile().displayName()).isEqualTo("러닝캡틴");
     }
 }

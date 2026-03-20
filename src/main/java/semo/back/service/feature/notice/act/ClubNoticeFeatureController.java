@@ -38,7 +38,7 @@ public class ClubNoticeFeatureController {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeFeatureService.getNoticeHome(clubId, requireUserKey(userContext), pinnedOnly),
-                "공지 관리 홈 조회 성공"
+                "게시판 관리 홈 조회 성공"
         );
     }
 
@@ -51,7 +51,7 @@ public class ClubNoticeFeatureController {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeService.getNoticeDetail(clubId, noticeId, requireUserKey(userContext)),
-                "공지 상세 조회 성공"
+                "게시글 상세 조회 성공"
         );
     }
 
@@ -64,7 +64,7 @@ public class ClubNoticeFeatureController {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeService.createNotice(clubId, requireUserKey(userContext), request),
-                "공지 작성 성공"
+                "게시글 작성 성공"
         );
     }
 
@@ -78,7 +78,7 @@ public class ClubNoticeFeatureController {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeService.updateNotice(clubId, noticeId, requireUserKey(userContext), request),
-                "공지 수정 성공"
+                "게시글 수정 성공"
         );
     }
 
@@ -90,7 +90,7 @@ public class ClubNoticeFeatureController {
     ) {
         requireUserRole(userContext);
         clubNoticeService.deleteNotice(clubId, noticeId, requireUserKey(userContext));
-        return ResponseDataDTO.of(null, "공지 삭제 성공");
+        return ResponseDataDTO.of(null, "게시글 삭제 성공");
     }
 
     private String requireUserKey(UserContext userContext) {

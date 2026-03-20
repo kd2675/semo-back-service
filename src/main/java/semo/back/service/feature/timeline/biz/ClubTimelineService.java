@@ -10,8 +10,6 @@ import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
-import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
-import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.timeline.vo.ClubAdminTimelineResponse;
@@ -24,8 +22,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,8 +36,6 @@ public class ClubTimelineService {
 
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubProfileRepository clubProfileRepository;
-    private final ClubScheduleEventRepository clubScheduleEventRepository;
-    private final ClubScheduleVoteRepository clubScheduleVoteRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
 
@@ -71,12 +65,10 @@ public class ClubTimelineService {
         boolean hasNext = notices.size() > pageSize;
         List<ClubNotice> pageItems = hasNext ? notices.subList(0, pageSize) : notices;
         Map<Long, ClubProfile> profileById = loadProfiles(pageItems);
-        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems, pollFeatureEnabled);
         List<TimelineEntryResponse> entries = pageItems.stream()
                 .map(notice -> toEntryResponse(
                         notice,
-                        profileById.get(notice.getAuthorClubProfileId()),
-                        linkedTargetsByNoticeId.get(notice.getNoticeId())
+                        profileById.get(notice.getAuthorClubProfileId())
                 ))
                 .toList();
 
@@ -112,8 +104,7 @@ public class ClubTimelineService {
 
     private TimelineEntryResponse toEntryResponse(
             ClubNotice notice,
-            ClubProfile authorProfile,
-            LinkedTarget linkedTarget
+            ClubProfile authorProfile
     ) {
         return new TimelineEntryResponse(
                 notice.getNoticeId(),
@@ -126,8 +117,8 @@ public class ClubTimelineService {
                 notice.isPinned(),
                 formatDateTime(notice.getScheduleAt()),
                 notice.getLocationLabel(),
-                linkedTarget == null ? null : linkedTarget.type(),
-                linkedTarget == null ? null : linkedTarget.targetId()
+                null,
+                null
         );
     }
 
@@ -138,24 +129,6 @@ public class ClubTimelineService {
         Map<Long, ClubProfile> result = new HashMap<>();
         clubProfileRepository.findAllById(notices.stream().map(ClubNotice::getAuthorClubProfileId).distinct().toList())
                 .forEach(profile -> result.put(profile.getClubProfileId(), profile));
-        return result;
-    }
-
-    private Map<Long, LinkedTarget> loadLinkedTargets(List<ClubNotice> notices, boolean pollFeatureEnabled) {
-        if (notices.isEmpty()) {
-            return Map.of();
-        }
-
-        Set<Long> noticeIds = notices.stream()
-                .map(ClubNotice::getNoticeId)
-                .collect(Collectors.toSet());
-        Map<Long, LinkedTarget> result = new HashMap<>();
-        clubScheduleEventRepository.findByLinkedNoticeIdIn(noticeIds)
-                .forEach(event -> result.put(event.getLinkedNoticeId(), new LinkedTarget("SCHEDULE_EVENT", event.getEventId())));
-        if (pollFeatureEnabled) {
-            clubScheduleVoteRepository.findByLinkedNoticeIdIn(noticeIds)
-                    .forEach(vote -> result.put(vote.getLinkedNoticeId(), new LinkedTarget("POLL", vote.getVoteId())));
-        }
         return result;
     }
 
@@ -240,9 +213,4 @@ public class ClubTimelineService {
         return "OWNER".equals(roleCode) || "ADMIN".equals(roleCode);
     }
 
-    private record LinkedTarget(
-            String type,
-            Long targetId
-    ) {
-    }
 }

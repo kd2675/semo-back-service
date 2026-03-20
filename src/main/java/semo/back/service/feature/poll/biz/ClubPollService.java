@@ -5,9 +5,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
+import semo.back.service.common.util.ImageFileUrlResolver;
+import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleVote;
 import semo.back.service.database.pub.entity.ClubScheduleVoteOption;
 import semo.back.service.database.pub.entity.ClubScheduleVoteSelection;
+import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
@@ -24,8 +27,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,8 +44,10 @@ public class ClubPollService {
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
     private final ClubScheduleVoteOptionRepository clubScheduleVoteOptionRepository;
     private final ClubScheduleVoteSelectionRepository clubScheduleVoteSelectionRepository;
+    private final ClubProfileRepository clubProfileRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
+    private final ImageFileUrlResolver imageFileUrlResolver;
 
     public ClubPollHomeResponse getPollHome(Long clubId, String userKey, String query) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
@@ -73,6 +78,9 @@ public class ClubPollService {
                         votes.stream().map(ClubScheduleVote::getVoteId).toList()
                 ).stream()
                 .collect(Collectors.groupingBy(ClubScheduleVoteSelection::getVoteId));
+        Map<Long, ClubProfile> authorProfileById = loadAuthorProfiles(
+                votes.stream().map(ClubScheduleVote::getAuthorClubProfileId).distinct().toList()
+        );
 
         List<ClubPollSummaryResponse> polls = votes.stream()
                 .map(vote -> {
@@ -84,6 +92,9 @@ public class ClubPollService {
                     return new ClubPollSummaryResponse(
                             vote.getVoteId(),
                             vote.getTitle(),
+                            resolveAuthorDisplayName(authorProfileById.get(vote.getAuthorClubProfileId())),
+                            resolveAuthorAvatarImageUrl(authorProfileById.get(vote.getAuthorClubProfileId())),
+                            resolveAuthorAvatarThumbnailUrl(authorProfileById.get(vote.getAuthorClubProfileId())),
                             resolveVoteStatus(vote),
                             formatDateValue(vote.getVoteStartDate()),
                             formatDateValue(vote.getVoteEndDate()),
@@ -92,8 +103,9 @@ public class ClubPollService {
                             formatVoteWindowLabel(vote),
                             selection.totalResponses(),
                             selection.options().size(),
-                            vote.getLinkedNoticeId() != null,
-                            vote.isSharedToSchedule(),
+                            vote.isSharedToBoard(),
+                            vote.isSharedToCalendar(),
+                            vote.isSharedToCalendar(),
                             canManage(access, vote.getAuthorClubProfileId()),
                             selection.mySelectedOptionId(),
                             selection.options()
@@ -144,6 +156,35 @@ public class ClubPollService {
                     default -> poll.voteEndDate();
                 }, Comparator.nullsLast(String::compareTo))
                 .thenComparing(ClubPollSummaryResponse::voteId, Comparator.reverseOrder());
+    }
+
+    private Map<Long, ClubProfile> loadAuthorProfiles(List<Long> clubProfileIds) {
+        if (clubProfileIds.isEmpty()) {
+            return Map.of();
+        }
+        return clubProfileRepository.findAllById(clubProfileIds).stream()
+                .collect(Collectors.toMap(ClubProfile::getClubProfileId, profile -> profile));
+    }
+
+    private String resolveAuthorDisplayName(ClubProfile authorProfile) {
+        if (authorProfile == null || !StringUtils.hasText(authorProfile.getDisplayName())) {
+            return "멤버";
+        }
+        return authorProfile.getDisplayName();
+    }
+
+    private String resolveAuthorAvatarImageUrl(ClubProfile authorProfile) {
+        if (authorProfile == null || !StringUtils.hasText(authorProfile.getAvatarFileName())) {
+            return null;
+        }
+        return imageFileUrlResolver.resolveImageUrl(authorProfile.getAvatarFileName());
+    }
+
+    private String resolveAuthorAvatarThumbnailUrl(ClubProfile authorProfile) {
+        if (authorProfile == null || !StringUtils.hasText(authorProfile.getAvatarFileName())) {
+            return null;
+        }
+        return imageFileUrlResolver.resolveThumbnailUrl(authorProfile.getAvatarFileName());
     }
 
     private VoteSelectionSnapshot toVoteSelectionSnapshot(

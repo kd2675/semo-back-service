@@ -1,7 +1,6 @@
 package semo.back.service.feature.notice.biz;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,19 +11,16 @@ import semo.back.service.common.util.ImageFinalizeClient;
 import semo.back.service.database.pub.entity.Club;
 import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
-import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
-import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
-import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.notice.vo.ClubNoticeDetailResponse;
-import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeUpsertResponse;
 import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
+import semo.back.service.feature.share.biz.ClubContentShareService;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -32,8 +28,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -43,72 +37,17 @@ public class ClubNoticeService {
     private static final String NOTICE_IMAGE_TARGET_DIR = "semo/notices";
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 30;
-    private static final String DEFAULT_SCHEDULE_CATEGORY_KEY = "GENERAL";
     private static final DateTimeFormatter DATE_TIME_REQUEST_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm");
 
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubRepository clubRepository;
     private final ClubProfileRepository clubProfileRepository;
-    private final ClubScheduleEventRepository clubScheduleEventRepository;
-    private final ClubScheduleVoteRepository clubScheduleVoteRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
     private final ImageFinalizeClient imageFinalizeClient;
     private final ImageFileUrlResolver imageFileUrlResolver;
-
-    public ClubNoticeFeedResponse getNoticeFeed(
-            Long clubId,
-            String userKey,
-            String query,
-            boolean pinnedOnly,
-            String cursorPublishedAt,
-            Long cursorNoticeId,
-            Integer size
-    ) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        Club club = getActiveClub(clubId);
-
-        int pageSize = normalizePageSize(size);
-        LocalDateTime cursorDateTime = parseCursorDateTime(cursorPublishedAt);
-        Long normalizedCursorNoticeId = cursorDateTime == null ? null : (cursorNoticeId == null ? Long.MAX_VALUE : cursorNoticeId);
-
-        List<ClubNotice> notices = clubNoticeRepository.findFeed(
-                clubId,
-                true,
-                normalizeQuery(query),
-                pinnedOnly,
-                cursorDateTime,
-                normalizedCursorNoticeId,
-                PageRequest.of(0, pageSize + 1)
-        );
-
-        boolean hasNext = notices.size() > pageSize;
-        List<ClubNotice> pageItems = hasNext ? notices.subList(0, pageSize) : notices;
-
-        Map<Long, ClubProfile> profileById = loadProfiles(pageItems);
-        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(pageItems);
-        List<ClubNoticeSummaryResponse> responses = pageItems.stream()
-                .map(notice -> toSummaryResponse(
-                        access,
-                        notice,
-                        profileById.get(notice.getAuthorClubProfileId()),
-                        linkedTargetsByNoticeId.get(notice.getNoticeId())
-                ))
-                .toList();
-
-        ClubNotice lastItem = hasNext ? pageItems.get(pageItems.size() - 1) : null;
-
-        return new ClubNoticeFeedResponse(
-                club.getClubId(),
-                club.getName(),
-                isAdminRole(access.membership().getRoleCode()),
-                responses,
-                lastItem == null ? null : lastItem.getPublishedAt().format(DATE_TIME_REQUEST_FORMATTER),
-                lastItem == null ? null : lastItem.getNoticeId(),
-                hasNext
-        );
-    }
+    private final ClubContentShareService clubContentShareService;
 
     public ClubNoticeDetailResponse getNoticeDetail(Long clubId, Long noticeId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
@@ -116,7 +55,6 @@ public class ClubNoticeService {
         ClubNotice notice = getNotice(clubId, noticeId);
         ClubProfile authorProfile = clubProfileRepository.findById(notice.getAuthorClubProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubProfile", "clubProfileId", notice.getAuthorClubProfileId()));
-        LinkedTarget linkedTarget = loadLinkedTarget(notice);
 
         return new ClubNoticeDetailResponse(
                 club.getClubId(),
@@ -138,9 +76,11 @@ public class ClubNoticeService {
                 formatDateTime(notice.getScheduleAt()),
                 formatDateTimeValue(notice.getScheduleEndAt()),
                 formatDateTime(notice.getScheduleEndAt()),
+                notice.isSharedToBoard(),
+                notice.isSharedToCalendar(),
                 canManage(access, notice.getAuthorClubProfileId()),
-                linkedTarget == null ? null : linkedTarget.type(),
-                linkedTarget == null ? null : linkedTarget.targetId()
+                null,
+                null
         );
     }
 
@@ -149,7 +89,8 @@ public class ClubNoticeService {
         requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         validateRequest(request);
-        boolean postToSchedule = shouldPostToSchedule(request.postToSchedule());
+        boolean postToBoard = resolvePostToBoard(request.postToBoard());
+        boolean postToCalendar = resolvePostToCalendar(request.postToCalendar(), request.postToSchedule());
         ClubNotice notice = clubNoticeRepository.save(ClubNotice.builder()
                 .clubId(clubId)
                 .authorClubProfileId(access.clubProfile().getClubProfileId())
@@ -157,14 +98,15 @@ public class ClubNoticeService {
                 .content(request.content().trim())
                 .imageFileName(finalizeNoticeImageFileName(request.fileName(), null))
                 .locationLabel(trimToNull(request.locationLabel()))
-                .scheduleAt(postToSchedule ? parseOptionalDateTime(request.scheduleAt()) : null)
-                .scheduleEndAt(postToSchedule ? parseOptionalDateTime(request.scheduleEndAt()) : null)
-                .sharedToSchedule(postToSchedule)
+                .scheduleAt(postToCalendar ? parseOptionalDateTime(request.scheduleAt()) : null)
+                .scheduleEndAt(postToCalendar ? parseOptionalDateTime(request.scheduleEndAt()) : null)
+                .sharedToBoard(postToBoard)
+                .sharedToCalendar(postToCalendar)
                 .pinned(Boolean.TRUE.equals(request.pinned()))
                 .publishedAt(LocalDateTime.now())
                 .deleted(false)
                 .build());
-        upsertLinkedScheduleEvent(notice, access.clubProfile().getClubProfileId());
+        syncNoticeShares(notice);
         return toUpsertResponse(notice);
     }
 
@@ -175,7 +117,8 @@ public class ClubNoticeService {
         validateRequest(request);
         ClubNotice current = getNotice(clubId, noticeId);
         requireManagePermission(access, current.getAuthorClubProfileId());
-        boolean postToSchedule = shouldPostToSchedule(request.postToSchedule());
+        boolean postToBoard = resolvePostToBoard(request.postToBoard());
+        boolean postToCalendar = resolvePostToCalendar(request.postToCalendar(), request.postToSchedule());
         ClubNotice updated = clubNoticeRepository.save(ClubNotice.builder()
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())
@@ -184,14 +127,15 @@ public class ClubNoticeService {
                 .content(request.content().trim())
                 .imageFileName(finalizeNoticeImageFileName(request.fileName(), current.getImageFileName()))
                 .locationLabel(trimToNull(request.locationLabel()))
-                .scheduleAt(postToSchedule ? parseOptionalDateTime(request.scheduleAt()) : null)
-                .scheduleEndAt(postToSchedule ? parseOptionalDateTime(request.scheduleEndAt()) : null)
-                .sharedToSchedule(postToSchedule)
+                .scheduleAt(postToCalendar ? parseOptionalDateTime(request.scheduleAt()) : null)
+                .scheduleEndAt(postToCalendar ? parseOptionalDateTime(request.scheduleEndAt()) : null)
+                .sharedToBoard(postToBoard)
+                .sharedToCalendar(postToCalendar)
                 .pinned(Boolean.TRUE.equals(request.pinned()))
                 .publishedAt(current.getPublishedAt())
                 .deleted(false)
                 .build());
-        upsertLinkedScheduleEvent(updated, current.getAuthorClubProfileId());
+        syncNoticeShares(updated);
         return toUpsertResponse(updated);
     }
 
@@ -201,7 +145,6 @@ public class ClubNoticeService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubNotice current = getNotice(clubId, noticeId);
         requireManagePermission(access, current.getAuthorClubProfileId());
-        deleteLinkedScheduleEvent(current.getNoticeId());
         clubNoticeRepository.save(ClubNotice.builder()
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())
@@ -212,11 +155,13 @@ public class ClubNoticeService {
                 .locationLabel(current.getLocationLabel())
                 .scheduleAt(current.getScheduleAt())
                 .scheduleEndAt(current.getScheduleEndAt())
-                .sharedToSchedule(current.isSharedToSchedule())
+                .sharedToBoard(current.isSharedToBoard())
+                .sharedToCalendar(current.isSharedToCalendar())
                 .pinned(current.isPinned())
                 .publishedAt(current.getPublishedAt())
                 .deleted(true)
                 .build());
+        clubContentShareService.removeAllShares(clubId, ClubContentShareService.CONTENT_NOTICE, noticeId);
     }
 
     public List<ClubNotice> getScheduledNotices(Long clubId, LocalDateTime from, LocalDateTime to) {
@@ -250,47 +195,13 @@ public class ClubNoticeService {
             List<ClubNotice> notices
     ) {
         Map<Long, ClubProfile> profileById = loadProfiles(notices);
-        Map<Long, LinkedTarget> linkedTargetsByNoticeId = loadLinkedTargets(notices);
         return notices.stream()
                 .map(notice -> toSummaryResponse(
                         access,
                         notice,
-                        profileById.get(notice.getAuthorClubProfileId()),
-                        linkedTargetsByNoticeId.get(notice.getNoticeId())
+                        profileById.get(notice.getAuthorClubProfileId())
                 ))
                 .toList();
-    }
-
-    private void upsertLinkedScheduleEvent(ClubNotice notice, Long authorClubProfileId) {
-        if (notice.getScheduleAt() == null) {
-            deleteLinkedScheduleEvent(notice.getNoticeId());
-            return;
-        }
-
-        ClubScheduleEvent current = clubScheduleEventRepository.findByLinkedNoticeId(notice.getNoticeId())
-                .orElse(null);
-
-        clubScheduleEventRepository.save(ClubScheduleEvent.builder()
-                .eventId(current == null ? null : current.getEventId())
-                .clubId(notice.getClubId())
-                .authorClubProfileId(authorClubProfileId)
-                .linkedNoticeId(notice.getNoticeId())
-                .categoryKey(current == null ? DEFAULT_SCHEDULE_CATEGORY_KEY : current.getCategoryKey())
-                .title(notice.getTitle())
-                .description(notice.getContent())
-                .locationLabel(notice.getLocationLabel())
-                .startAt(notice.getScheduleAt())
-                .endAt(notice.getScheduleEndAt())
-                .sharedToNotice(current != null && current.isSharedToNotice())
-                .attendeeLimit(current == null ? null : current.getAttendeeLimit())
-                .visibilityStatus(current == null ? "CLUB" : current.getVisibilityStatus())
-                .eventStatus(current == null ? "SCHEDULED" : current.getEventStatus())
-                .build());
-    }
-
-    private void deleteLinkedScheduleEvent(Long noticeId) {
-        clubScheduleEventRepository.findByLinkedNoticeId(noticeId)
-                .ifPresent(clubScheduleEventRepository::delete);
     }
 
     private ClubNoticeUpsertResponse toUpsertResponse(ClubNotice notice) {
@@ -327,32 +238,10 @@ public class ClubNoticeService {
         return result;
     }
 
-    private Map<Long, LinkedTarget> loadLinkedTargets(List<ClubNotice> notices) {
-        if (notices.isEmpty()) {
-            return Map.of();
-        }
-
-        Set<Long> noticeIds = notices.stream()
-                .map(ClubNotice::getNoticeId)
-                .collect(Collectors.toSet());
-
-        Map<Long, LinkedTarget> result = new HashMap<>();
-        clubScheduleEventRepository.findByLinkedNoticeIdIn(noticeIds)
-                .forEach(event -> result.put(event.getLinkedNoticeId(), new LinkedTarget("SCHEDULE_EVENT", event.getEventId())));
-        clubScheduleVoteRepository.findByLinkedNoticeIdIn(noticeIds)
-                .forEach(vote -> result.put(vote.getLinkedNoticeId(), new LinkedTarget("POLL", vote.getVoteId())));
-        return result;
-    }
-
-    private LinkedTarget loadLinkedTarget(ClubNotice notice) {
-        return loadLinkedTargets(List.of(notice)).get(notice.getNoticeId());
-    }
-
     private ClubNoticeSummaryResponse toSummaryResponse(
             ClubAccessResolver.ClubAccess access,
             ClubNotice notice,
-            ClubProfile authorProfile,
-            LinkedTarget linkedTarget
+            ClubProfile authorProfile
     ) {
         String authorName = authorProfile == null ? "Unknown Member" : authorProfile.getDisplayName();
         return new ClubNoticeSummaryResponse(
@@ -364,21 +253,21 @@ public class ClubNoticeService {
                 imageFileUrlResolver.resolveThumbnailUrl(notice.getImageFileName()),
                 authorName,
                 null,
+                authorProfile == null ? null : imageFileUrlResolver.resolveImageUrl(authorProfile.getAvatarFileName()),
+                authorProfile == null ? null : imageFileUrlResolver.resolveThumbnailUrl(authorProfile.getAvatarFileName()),
                 formatDateTime(notice.getPublishedAt()),
                 toTimeAgo(notice.getPublishedAt()),
                 notice.isPinned(),
+                formatDateTimeValue(notice.getScheduleAt()),
+                formatDateTimeValue(notice.getScheduleEndAt()),
                 formatDateTime(notice.getScheduleAt()),
                 notice.getLocationLabel(),
+                notice.isSharedToBoard(),
+                notice.isSharedToCalendar(),
                 canManage(access, notice.getAuthorClubProfileId()),
-                linkedTarget == null ? null : linkedTarget.type(),
-                linkedTarget == null ? null : linkedTarget.targetId()
+                null,
+                null
         );
-    }
-
-    private record LinkedTarget(
-            String type,
-            Long targetId
-    ) {
     }
 
     private String summarizeContent(String content) {
@@ -389,26 +278,11 @@ public class ClubNoticeService {
         return normalized.length() <= 140 ? normalized : normalized.substring(0, 140) + "...";
     }
 
-    private String normalizeQuery(String query) {
-        return trimToNull(query);
-    }
-
     private String trimToNull(String value) {
         if (!StringUtils.hasText(value)) {
             return null;
         }
         return value.trim();
-    }
-
-    private LocalDateTime parseCursorDateTime(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        try {
-            return LocalDateTime.parse(value, DATE_TIME_REQUEST_FORMATTER);
-        } catch (RuntimeException exception) {
-            throw new SemoException.ValidationException("잘못된 커서 형식입니다.");
-        }
     }
 
     private LocalDateTime parseOptionalDateTime(String value) {
@@ -426,7 +300,7 @@ public class ClubNoticeService {
         if (request == null) {
             throw new SemoException.ValidationException("공지 요청이 비어 있습니다.");
         }
-        if (!shouldPostToSchedule(request.postToSchedule())) {
+        if (!resolvePostToCalendar(request.postToCalendar(), request.postToSchedule())) {
             return;
         }
         LocalDateTime startAt = parseOptionalDateTime(request.scheduleAt());
@@ -436,8 +310,18 @@ public class ClubNoticeService {
         }
     }
 
-    private boolean shouldPostToSchedule(Boolean postToSchedule) {
-        return postToSchedule == null || postToSchedule;
+    private boolean resolvePostToBoard(Boolean postToBoard) {
+        return postToBoard == null || postToBoard;
+    }
+
+    private boolean resolvePostToCalendar(Boolean postToCalendar, Boolean postToSchedule) {
+        if (postToCalendar != null) {
+            return postToCalendar;
+        }
+        if (postToSchedule != null) {
+            return postToSchedule;
+        }
+        return false;
     }
 
     private String formatDateTime(LocalDateTime value) {
@@ -477,13 +361,6 @@ public class ClubNoticeService {
         return formatDateTime(value);
     }
 
-    private int normalizePageSize(Integer size) {
-        if (size == null || size < 1) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(size, MAX_PAGE_SIZE);
-    }
-
     private boolean isAdminRole(String roleCode) {
         return "OWNER".equals(roleCode) || "ADMIN".equals(roleCode);
     }
@@ -516,6 +393,21 @@ public class ClubNoticeService {
     private boolean canManage(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
         return isAdminRole(access.membership().getRoleCode())
                 || access.clubProfile().getClubProfileId().equals(authorClubProfileId);
+    }
+
+    private void syncNoticeShares(ClubNotice notice) {
+        clubContentShareService.syncBoardShare(
+                notice.getClubId(),
+                ClubContentShareService.CONTENT_NOTICE,
+                notice.getNoticeId(),
+                notice.isSharedToBoard() && !notice.isDeleted()
+        );
+        clubContentShareService.syncCalendarShare(
+                notice.getClubId(),
+                ClubContentShareService.CONTENT_NOTICE,
+                notice.getNoticeId(),
+                notice.isSharedToCalendar() && !notice.isDeleted()
+        );
     }
 
     private void requireManagePermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {

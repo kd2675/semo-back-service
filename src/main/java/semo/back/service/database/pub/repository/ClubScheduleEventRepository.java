@@ -5,8 +5,8 @@ import org.springframework.data.jpa.repository.Query;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface ClubScheduleEventRepository extends JpaRepository<ClubScheduleEvent, Long> {
@@ -16,15 +16,17 @@ public interface ClubScheduleEventRepository extends JpaRepository<ClubScheduleE
 
     List<ClubScheduleEvent> findByLinkedNoticeIdIn(Collection<Long> linkedNoticeIds);
 
+    List<ClubScheduleEvent> findAllByEventIdIn(Collection<Long> eventIds);
+
     @Query("""
             select e
             from ClubScheduleEvent e
             where e.clubId = :clubId
-              and e.sharedToNotice = true
+              and e.sharedToBoard = true
               and e.eventStatus <> 'CANCELLED'
             order by e.startAt desc, e.eventId desc
             """)
-    List<ClubScheduleEvent> findAllByClubIdAndSharedToNoticeTrue(Long clubId);
+    List<ClubScheduleEvent> findAllByClubIdAndSharedToBoardTrue(Long clubId);
 
     @Query("""
             select e

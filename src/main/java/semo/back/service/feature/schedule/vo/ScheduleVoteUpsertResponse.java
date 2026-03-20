@@ -12,6 +12,7 @@ public record ScheduleVoteUpsertResponse(
         String voteTimeLabel,
         int optionCount,
         boolean postedToBoard,
+        boolean postedToCalendar,
         boolean sharedToSchedule
 ) {
 }

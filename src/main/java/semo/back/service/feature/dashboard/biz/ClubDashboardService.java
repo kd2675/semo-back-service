@@ -36,57 +36,6 @@ public class ClubDashboardService {
     private static final int MAX_SPAN = 3;
     private static final int TITLE_MAX_LENGTH = 100;
 
-    private static final List<DashboardWidgetCatalog> DEFAULT_WIDGET_CATALOGS = List.of(
-            DashboardWidgetCatalog.builder()
-                    .widgetKey("BOARD_NOTICE")
-                    .displayName("Board Notice")
-                    .description("Latest announcements from your board.")
-                    .iconName("forum")
-                    .requiredFeatureKey(null)
-                    .defaultVisibilityScope(SCOPE_USER_HOME)
-                    .defaultColumnSpan(2)
-                    .defaultRowSpan(1)
-                    .defaultSortOrder(10)
-                    .active(true)
-                    .build(),
-            DashboardWidgetCatalog.builder()
-                    .widgetKey("SCHEDULE_OVERVIEW")
-                    .displayName("Schedule Overview")
-                    .description("Upcoming schedules and next events.")
-                    .iconName("calendar_month")
-                    .requiredFeatureKey(null)
-                    .defaultVisibilityScope(SCOPE_USER_HOME)
-                    .defaultColumnSpan(1)
-                    .defaultRowSpan(1)
-                    .defaultSortOrder(20)
-                    .active(true)
-                    .build(),
-            DashboardWidgetCatalog.builder()
-                    .widgetKey("PROFILE_SUMMARY")
-                    .displayName("My Profile")
-                    .description("Quick access to your club profile.")
-                    .iconName("person")
-                    .requiredFeatureKey(null)
-                    .defaultVisibilityScope(SCOPE_USER_HOME)
-                    .defaultColumnSpan(1)
-                    .defaultRowSpan(1)
-                    .defaultSortOrder(30)
-                    .active(true)
-                    .build(),
-            DashboardWidgetCatalog.builder()
-                    .widgetKey("ATTENDANCE_STATUS")
-                    .displayName("Attendance Check")
-                    .description("Check in and review attendance status.")
-                    .iconName("fact_check")
-                    .requiredFeatureKey(FEATURE_ATTENDANCE)
-                    .defaultVisibilityScope(SCOPE_USER_HOME)
-                    .defaultColumnSpan(1)
-                    .defaultRowSpan(1)
-                    .defaultSortOrder(40)
-                    .active(true)
-                    .build()
-    );
-
     private final DashboardWidgetCatalogRepository dashboardWidgetCatalogRepository;
     private final ClubDashboardWidgetRepository clubDashboardWidgetRepository;
     private final ClubFeatureRepository clubFeatureRepository;
@@ -124,7 +73,6 @@ public class ClubDashboardService {
         }
 
         String normalizedScope = normalizeScope(request.scope());
-        ensureDefaultWidgetCatalog();
         List<DashboardWidgetCatalog> catalogs = getCatalogsByScope(normalizedScope);
         Map<String, DashboardWidgetCatalog> catalogByKey = catalogs.stream()
                 .collect(Collectors.toMap(
@@ -156,7 +104,6 @@ public class ClubDashboardService {
 
     @Transactional(transactionManager = "pubTransactionManager")
     public void syncWidgetsForClub(Long clubId) {
-        ensureDefaultWidgetCatalog();
         List<DashboardWidgetCatalog> userScopeCatalogs = getCatalogsByScope(SCOPE_USER_HOME);
         ensureWidgetRows(clubId, SCOPE_USER_HOME, userScopeCatalogs);
         disableUnavailableWidgets(clubId, SCOPE_USER_HOME, userScopeCatalogs);
@@ -213,7 +160,6 @@ public class ClubDashboardService {
     }
 
     private List<ClubDashboardWidgetResponse> getEditorWidgetsInternal(Long clubId, String scope) {
-        ensureDefaultWidgetCatalog();
         List<DashboardWidgetCatalog> catalogs = getCatalogsByScope(scope);
         ensureWidgetRows(clubId, scope, catalogs);
 
@@ -445,15 +391,5 @@ public class ClubDashboardService {
         } catch (SemoException.ValidationException ignored) {
             return false;
         }
-    }
-
-    private void ensureDefaultWidgetCatalog() {
-        Set<String> existingWidgetKeys = dashboardWidgetCatalogRepository.findAll().stream()
-                .map(DashboardWidgetCatalog::getWidgetKey)
-                .collect(Collectors.toSet());
-
-        DEFAULT_WIDGET_CATALOGS.stream()
-                .filter(catalog -> !existingWidgetKeys.contains(catalog.getWidgetKey()))
-                .forEach(dashboardWidgetCatalogRepository::save);
     }
 }

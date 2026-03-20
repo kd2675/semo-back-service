@@ -38,11 +38,11 @@ public class ClubScheduleVote extends CommonDateEntity {
     @Column(name = "linked_notice_id")
     private Long linkedNoticeId;
 
-    @Column(name = "shared_to_notice", nullable = false)
-    private boolean sharedToNotice;
+    @Column(name = "shared_to_board", nullable = false)
+    private boolean sharedToBoard;
 
-    @Column(name = "shared_to_schedule", nullable = false)
-    private boolean sharedToSchedule;
+    @Column(name = "shared_to_calendar", nullable = false)
+    private boolean sharedToCalendar;
 
     @Column(name = "title", nullable = false, length = 200)
     private String title;

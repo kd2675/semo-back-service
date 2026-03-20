@@ -16,6 +16,7 @@ public record ScheduleVoteDetailResponse(
         String voteEndTime,
         String voteTimeLabel,
         boolean postedToBoard,
+        boolean postedToCalendar,
         boolean sharedToSchedule,
         Long linkedNoticeId,
         Long mySelectedOptionId,

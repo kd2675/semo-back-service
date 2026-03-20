@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
+import semo.back.service.feature.notice.biz.ClubBoardFeedService;
 import semo.back.service.feature.notice.biz.ClubNoticeService;
 import semo.back.service.feature.notice.vo.ClubNoticeDetailResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
@@ -25,6 +26,7 @@ import web.common.core.response.base.dto.ResponseDataDTO;
 @RequestMapping("/api/semo/v1/clubs/{clubId}/board/notices")
 @RequiredArgsConstructor
 public class ClubNoticeController {
+    private final ClubBoardFeedService clubBoardFeedService;
     private final ClubNoticeService clubNoticeService;
 
     @GetMapping
@@ -32,16 +34,21 @@ public class ClubNoticeController {
             @PathVariable Long clubId,
             @RequestParam(required = false) String query,
             @RequestParam(required = false, defaultValue = "false") boolean pinnedOnly,
-            @RequestParam(required = false) String cursorPublishedAt,
-            @RequestParam(required = false) Long cursorNoticeId,
+            @RequestParam(required = false) Long cursorBoardItemId,
             @RequestParam(required = false) Integer size,
             UserContext userContext
     ) {
         requireUserRole(userContext);
-        return ResponseDataDTO.of(
-                clubNoticeService.getNoticeFeed(clubId, requireUserKey(userContext), query, pinnedOnly, cursorPublishedAt, cursorNoticeId, size),
-                "공지 피드 조회 성공"
+        String userKey = requireUserKey(userContext);
+        ClubNoticeFeedResponse feed = clubBoardFeedService.getBoardFeed(
+                clubId,
+                userKey,
+                query,
+                pinnedOnly,
+                cursorBoardItemId,
+                size
         );
+        return ResponseDataDTO.of(feed, "게시판 피드 조회 성공");
     }
 
     @GetMapping("/{noticeId}")
@@ -53,7 +60,7 @@ public class ClubNoticeController {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeService.getNoticeDetail(clubId, noticeId, requireUserKey(userContext)),
-                "공지 상세 조회 성공"
+                "게시글 상세 조회 성공"
         );
     }
 
@@ -66,7 +73,7 @@ public class ClubNoticeController {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeService.createNotice(clubId, requireUserKey(userContext), request),
-                "공지 작성 성공"
+                "게시글 작성 성공"
         );
     }
 
@@ -80,7 +87,7 @@ public class ClubNoticeController {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeService.updateNotice(clubId, noticeId, requireUserKey(userContext), request),
-                "공지 수정 성공"
+                "게시글 수정 성공"
         );
     }
 
@@ -92,7 +99,7 @@ public class ClubNoticeController {
     ) {
         requireUserRole(userContext);
         clubNoticeService.deleteNotice(clubId, noticeId, requireUserKey(userContext));
-        return ResponseDataDTO.of(null, "공지 삭제 성공");
+        return ResponseDataDTO.of(null, "게시글 삭제 성공");
     }
 
     private String requireUserKey(UserContext userContext) {

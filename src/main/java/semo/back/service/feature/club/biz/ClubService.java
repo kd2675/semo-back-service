@@ -14,6 +14,7 @@ import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
+import semo.back.service.database.pub.repository.ClubNoticeBoardFeedRow;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
@@ -31,6 +32,7 @@ import semo.back.service.feature.club.vo.ClubScheduleMonthResponse;
 import semo.back.service.feature.club.vo.ClubScheduleResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
+import semo.back.service.feature.club.vo.UpdateClubProfileRequest;
 import semo.back.service.feature.profile.biz.ProfileUserService;
 import semo.back.service.feature.profile.vo.ProfileSummaryResponse;
 
@@ -62,6 +64,7 @@ public class ClubService {
     private static final Set<String> ADMIN_ROLE_CODES = Set.of("OWNER", "ADMIN");
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String CLUB_IMAGE_TARGET_DIR = "semo/clubs";
+    private static final String CLUB_PROFILE_IMAGE_TARGET_DIR = "semo/club-profiles";
     private static final DateTimeFormatter JOINED_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter SCHEDULE_MONTH_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter SCHEDULE_MONTH_SHORT_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH);
@@ -151,15 +154,16 @@ public class ClubService {
 
     public ClubBoardResponse getClubBoard(Long clubId, String userKey) {
         MembershipClubPair pair = getMembershipClubPair(clubId, userKey);
-        List<ClubNotice> notices = clubNoticeRepository.findFeed(
+        List<ClubNoticeBoardFeedRow> rows = clubNoticeRepository.findBoardFeed(
                 clubId,
-                true,
                 null,
                 false,
                 null,
-                null,
                 PageRequest.of(0, 5)
         );
+        List<ClubNotice> notices = rows.stream()
+                .map(ClubNoticeBoardFeedRow::notice)
+                .toList();
         Map<Long, ClubProfile> profileById = clubProfileRepository.findAllById(
                 notices.stream().map(ClubNotice::getAuthorClubProfileId).distinct().toList()
         ).stream().collect(HashMap::new, (map, profile) -> map.put(profile.getClubProfileId(), profile), HashMap::putAll);
@@ -237,6 +241,32 @@ public class ClubService {
         );
     }
 
+    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    public ClubProfileResponse updateClubProfile(Long clubId, String userKey, UpdateClubProfileRequest request) {
+        MembershipClubPair pair = getMembershipClubPair(clubId, userKey);
+        ProfileSummaryResponse appProfile = profileUserService.getProfileSummary(userKey);
+        ClubMember membership = pair.membership();
+        ClubProfile current = ensureClubProfile(
+                membership,
+                appProfile.displayName(),
+                appProfile.tagline(),
+                null
+        );
+
+        String displayName = resolveClubProfileDisplayName(current.getDisplayName(), request);
+        String avatarFileName = resolveClubProfileAvatarFileName(current.getAvatarFileName(), request);
+        clubProfileRepository.save(ClubProfile.builder()
+                .clubProfileId(current.getClubProfileId())
+                .clubMemberId(current.getClubMemberId())
+                .displayName(displayName)
+                .tagline(current.getTagline())
+                .introText(current.getIntroText())
+                .avatarFileName(avatarFileName)
+                .build());
+
+        return getClubProfile(clubId, userKey);
+    }
+
     private void validateRequest(CreateClubRequest request) {
         if (request == null) {
             throw new SemoException.ValidationException("클럽 생성 요청이 비어 있습니다.");
@@ -297,6 +327,38 @@ public class ClubService {
             return null;
         }
         return imageFinalizeClient.finalizeImage(normalized, CLUB_IMAGE_TARGET_DIR).fileName();
+    }
+
+    private String resolveClubProfileAvatarFileName(String currentFileName, UpdateClubProfileRequest request) {
+        if (request == null) {
+            return currentFileName;
+        }
+        if (Boolean.TRUE.equals(request.removeAvatar())) {
+            return null;
+        }
+        String normalized = trimToNull(request.avatarFileName());
+        if (normalized == null) {
+            return currentFileName;
+        }
+        return imageFinalizeClient.finalizeImage(normalized, CLUB_PROFILE_IMAGE_TARGET_DIR).fileName();
+    }
+
+    private String resolveClubProfileDisplayName(String currentDisplayName, UpdateClubProfileRequest request) {
+        if (request == null) {
+            return currentDisplayName;
+        }
+        if (request.displayName() == null) {
+            return currentDisplayName;
+        }
+
+        String normalized = trimToNull(request.displayName());
+        if (normalized == null) {
+            throw new SemoException.ValidationException("닉네임은 비워둘 수 없습니다.");
+        }
+        if (normalized.length() > 100) {
+            throw new SemoException.ValidationException("닉네임은 100자 이하여야 합니다.");
+        }
+        return normalized;
     }
 
     private ClubProfile ensureClubProfile(

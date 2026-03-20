@@ -8,6 +8,7 @@ public record ScheduleEventUpsertResponse(
         String endDate,
         String dateLabel,
         String timeLabel,
-        boolean postedToBoard
+        boolean postedToBoard,
+        boolean postedToCalendar
 ) {
 }

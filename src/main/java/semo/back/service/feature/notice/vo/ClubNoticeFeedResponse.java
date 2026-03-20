@@ -6,9 +6,8 @@ public record ClubNoticeFeedResponse(
         Long clubId,
         String clubName,
         boolean admin,
-        List<ClubNoticeSummaryResponse> notices,
-        String nextCursorPublishedAt,
-        Long nextCursorNoticeId,
+        List<ClubBoardFeedItemResponse> items,
+        Long nextCursorBoardItemId,
         boolean hasNext
 ) {
 }

@@ -30,49 +30,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubFeatureService {
-    private static final List<FeatureCatalog> DEFAULT_CATALOGS = List.of(
-            FeatureCatalog.builder()
-                    .featureKey("ATTENDANCE")
-                    .displayName("출석 체크")
-                    .description("멤버 출석을 체크하고 출석 세션을 관리합니다.")
-                    .iconName("fact_check")
-                    .active(true)
-                    .sortOrder(10)
-                    .build(),
-            FeatureCatalog.builder()
-                    .featureKey("TIMELINE")
-                    .displayName("타임라인")
-                    .description("공지 기반 타임라인 카드로 모임 활동을 확인합니다.")
-                    .iconName("timeline")
-                    .active(true)
-                    .sortOrder(20)
-                    .build(),
-            FeatureCatalog.builder()
-                    .featureKey("NOTICE")
-                    .displayName("공지")
-                    .description("모임 공지를 작성, 관리, 공유합니다.")
-                    .iconName("campaign")
-                    .active(true)
-                    .sortOrder(30)
-                    .build(),
-            FeatureCatalog.builder()
-                    .featureKey("POLL")
-                    .displayName("투표")
-                    .description("모임 투표를 작성, 공유, 관리합니다.")
-                    .iconName("poll")
-                    .active(true)
-                    .sortOrder(40)
-                    .build(),
-            FeatureCatalog.builder()
-                    .featureKey("SCHEDULE_MANAGE")
-                    .displayName("일정 관리")
-                    .description("일정과 투표를 작성하고 관리합니다.")
-                    .iconName("edit_calendar")
-                    .active(true)
-                    .sortOrder(50)
-                    .build()
-    );
-
     private final FeatureCatalogRepository featureCatalogRepository;
     private final ClubFeatureRepository clubFeatureRepository;
     private final ClubAccessResolver clubAccessResolver;
@@ -87,7 +44,6 @@ public class ClubFeatureService {
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public List<ClubFeatureResponse> updateClubFeatures(Long clubId, String userKey, UpdateClubFeaturesRequest request) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        ensureDefaultCatalog();
         List<FeatureCatalog> catalogs = featureCatalogRepository.findByActiveTrueOrderBySortOrderAscFeatureKeyAsc();
         Set<String> allowedFeatureKeys = catalogs.stream()
                 .map(FeatureCatalog::getFeatureKey)
@@ -131,7 +87,6 @@ public class ClubFeatureService {
     }
 
     public boolean isFeatureEnabled(Long clubId, String featureKey) {
-        ensureDefaultCatalog();
         String normalizedFeatureKey = normalizeFeatureKey(featureKey);
         return clubFeatureRepository.findByClubIdAndFeatureKey(clubId, normalizedFeatureKey)
                 .map(ClubFeature::isEnabled)
@@ -191,7 +146,6 @@ public class ClubFeatureService {
     }
 
     private List<ClubFeatureResponse> getClubFeatureResponses(Long clubId) {
-        ensureDefaultCatalog();
         List<FeatureCatalog> catalogs = featureCatalogRepository.findByActiveTrueOrderBySortOrderAscFeatureKeyAsc();
         Map<String, ClubFeature> clubFeaturesByKey = clubFeatureRepository.findByClubId(clubId).stream()
                 .collect(Collectors.toMap(ClubFeature::getFeatureKey, Function.identity()));
@@ -247,15 +201,5 @@ public class ClubFeatureService {
             return "";
         }
         return featureKey.trim().toUpperCase(Locale.ROOT);
-    }
-
-    private void ensureDefaultCatalog() {
-        Set<String> existingKeys = featureCatalogRepository.findAll().stream()
-                .map(FeatureCatalog::getFeatureKey)
-                .collect(Collectors.toSet());
-
-        DEFAULT_CATALOGS.stream()
-                .filter(catalog -> !existingKeys.contains(catalog.getFeatureKey()))
-                .forEach(featureCatalogRepository::save);
     }
 }

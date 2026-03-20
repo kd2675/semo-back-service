@@ -25,6 +25,7 @@ public record UpsertScheduleEventRequest(
         Integer feeAmount,
         Boolean feeAmountUndecided,
         Boolean feeNWaySplit,
-        Boolean postToBoard
+        Boolean postToBoard,
+        Boolean postToCalendar
 ) {
 }

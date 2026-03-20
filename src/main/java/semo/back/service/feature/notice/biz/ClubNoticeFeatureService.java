@@ -14,9 +14,13 @@ import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.schedule.biz.ClubScheduleService;
 import semo.back.service.feature.schedule.vo.ScheduleEventSummaryResponse;
 import semo.back.service.feature.schedule.vo.ScheduleVoteSummaryResponse;
+import semo.back.service.feature.share.biz.ClubContentShareService;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +31,24 @@ public class ClubNoticeFeatureService {
     private final ClubScheduleService clubScheduleService;
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
+    private final ClubContentShareService clubContentShareService;
+
+    public NoticeSharedContent getSharedContent(Long clubId, String userKey) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        List<ClubScheduleEvent> sharedEvents = loadBoardSharedEvents(clubId);
+        List<ScheduleEventSummaryResponse> sharedEventSummaries = clubScheduleService
+                .getEventSummariesForHome(access, sharedEvents)
+                .stream()
+                .limit(20)
+                .toList();
+        List<ClubScheduleVote> sharedVotes = loadBoardSharedVotes(clubId);
+        List<ScheduleVoteSummaryResponse> sharedVoteSummaries = clubScheduleService
+                .getVoteSummariesForHome(access, sharedVotes)
+                .stream()
+                .limit(20)
+                .toList();
+        return new NoticeSharedContent(sharedEventSummaries, sharedVoteSummaries);
+    }
 
     public ClubNoticeHomeResponse getNoticeHome(Long clubId, String userKey, boolean pinnedOnly) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
@@ -46,13 +68,13 @@ public class ClubNoticeFeatureService {
                         .toList()
                 : listNotices.stream().limit(20).toList();
         List<ClubNoticeSummaryResponse> manageableNotices = clubNoticeService.toNoticeSummaries(access, homeNotices);
-        List<ClubScheduleEvent> sharedEvents = clubScheduleEventRepository.findAllByClubIdAndSharedToNoticeTrue(clubId);
+        List<ClubScheduleEvent> sharedEvents = loadBoardSharedEvents(clubId);
         List<ScheduleEventSummaryResponse> sharedEventSummaries = clubScheduleService
                 .getEventSummariesForHome(access, sharedEvents)
                 .stream()
                 .limit(20)
                 .toList();
-        List<ClubScheduleVote> sharedVotes = clubScheduleVoteRepository.findAllByClubIdAndSharedToNoticeTrue(clubId);
+        List<ClubScheduleVote> sharedVotes = loadBoardSharedVotes(clubId);
         List<ScheduleVoteSummaryResponse> sharedVoteSummaries = clubScheduleService
                 .getVoteSummariesForHome(access, sharedVotes)
                 .stream()
@@ -67,7 +89,7 @@ public class ClubNoticeFeatureService {
                 access.isAdmin(),
                 allNotices.size(),
                 (int) allNotices.stream().filter(ClubNotice::isPinned).count(),
-                (int) allNotices.stream().filter(notice -> notice.getScheduleAt() != null).count(),
+                (int) allNotices.stream().filter(ClubNotice::isSharedToCalendar).count(),
                 (int) allNotices.stream()
                         .filter(notice -> notice.getPublishedAt() != null && notice.getPublishedAt().toLocalDate().isEqual(today))
                         .count(),
@@ -76,5 +98,37 @@ public class ClubNoticeFeatureService {
                 sharedEventSummaries,
                 sharedVoteSummaries
         );
+    }
+
+    private List<ClubScheduleEvent> loadBoardSharedEvents(Long clubId) {
+        List<Long> eventIds = clubContentShareService.getBoardContentIds(clubId, ClubContentShareService.CONTENT_SCHEDULE_EVENT);
+        if (eventIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, ClubScheduleEvent> eventById = clubScheduleEventRepository.findAllByEventIdIn(eventIds).stream()
+                .collect(Collectors.toMap(ClubScheduleEvent::getEventId, Function.identity()));
+        return eventIds.stream()
+                .map(eventById::get)
+                .filter(event -> event != null && !"CANCELLED".equals(event.getEventStatus()))
+                .toList();
+    }
+
+    private List<ClubScheduleVote> loadBoardSharedVotes(Long clubId) {
+        List<Long> voteIds = clubContentShareService.getBoardContentIds(clubId, ClubContentShareService.CONTENT_SCHEDULE_VOTE);
+        if (voteIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, ClubScheduleVote> voteById = clubScheduleVoteRepository.findAllByVoteIdIn(voteIds).stream()
+                .collect(Collectors.toMap(ClubScheduleVote::getVoteId, Function.identity()));
+        return voteIds.stream()
+                .map(voteById::get)
+                .filter(vote -> vote != null)
+                .toList();
+    }
+
+    public record NoticeSharedContent(
+            List<ScheduleEventSummaryResponse> sharedEvents,
+            List<ScheduleVoteSummaryResponse> sharedVotes
+    ) {
     }
 }

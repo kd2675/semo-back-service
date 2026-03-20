@@ -3,6 +3,9 @@ package semo.back.service.feature.schedule.vo;
 public record ScheduleEventSummaryResponse(
         Long eventId,
         String title,
+        String authorDisplayName,
+        String authorAvatarImageUrl,
+        String authorAvatarThumbnailUrl,
         String startDate,
         String endDate,
         String dateLabel,
@@ -16,9 +19,11 @@ public record ScheduleEventSummaryResponse(
         boolean feeAmountUndecided,
         boolean feeNWaySplit,
         boolean postedToBoard,
+        boolean postedToCalendar,
         Long linkedNoticeId,
         String myParticipationStatus,
         int goingCount,
-        int notGoingCount
+        int notGoingCount,
+        boolean canManage
 ) {
 }

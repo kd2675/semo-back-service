@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
@@ -21,6 +22,7 @@ import semo.back.service.feature.club.vo.ClubCreateResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
 import semo.back.service.feature.club.vo.ClubProfileResponse;
+import semo.back.service.feature.club.vo.UpdateClubProfileRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -178,5 +180,66 @@ class ClubServiceTest {
         assertThat(response.clubProfile().displayName()).isEqualTo("Profile Owner");
         assertThat(response.clubProfile().roleCode()).isEqualTo("OWNER");
         assertThat(response.clubProfile().joinedLabel()).isNotBlank();
+    }
+
+    @Test
+    void updateClubProfileCanRemoveAvatar() {
+        ClubCreateResponse created = clubService.createClub(
+                "user-club-009",
+                "Avatar Owner",
+                new CreateClubRequest(
+                        "Semo Avatar Club",
+                        "아바타 제거 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        );
+
+        ClubProfile current = clubProfileRepository.findAll().getFirst();
+        clubProfileRepository.save(ClubProfile.builder()
+                .clubProfileId(current.getClubProfileId())
+                .clubMemberId(current.getClubMemberId())
+                .displayName(current.getDisplayName())
+                .tagline(current.getTagline())
+                .introText(current.getIntroText())
+                .avatarFileName("semo/club-profiles/existing-avatar.png")
+                .build());
+
+        ClubProfileResponse response = clubService.updateClubProfile(
+                created.clubId(),
+                "user-club-009",
+                new UpdateClubProfileRequest(null, null, true)
+        );
+
+        assertThat(response.clubProfile().avatarFileName()).isNull();
+        assertThat(response.clubProfile().avatarImageUrl()).isNull();
+        assertThat(clubProfileRepository.findAll().getFirst().getAvatarFileName()).isNull();
+    }
+
+    @Test
+    void updateClubProfileCanChangeDisplayName() {
+        ClubCreateResponse created = clubService.createClub(
+                "user-club-011",
+                "Nickname Owner",
+                new CreateClubRequest(
+                        "Semo Nickname Club",
+                        "닉네임 변경 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        );
+
+        ClubProfileResponse response = clubService.updateClubProfile(
+                created.clubId(),
+                "user-club-011",
+                new UpdateClubProfileRequest("테니스왕", null, false)
+        );
+
+        assertThat(response.clubProfile().displayName()).isEqualTo("테니스왕");
+        assertThat(clubProfileRepository.findAll().getFirst().getDisplayName()).isEqualTo("테니스왕");
     }
 }

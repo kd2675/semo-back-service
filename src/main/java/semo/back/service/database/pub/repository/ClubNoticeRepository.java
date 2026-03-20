@@ -16,7 +16,9 @@ public interface ClubNoticeRepository extends JpaRepository<ClubNotice, Long> {
 
     List<ClubNotice> findAllByClubIdAndDeletedFalseAndPinnedTrueOrderByPublishedAtDescNoticeIdDesc(Long clubId);
 
-    List<ClubNotice> findAllByClubIdAndSharedToScheduleTrueAndDeletedFalseOrderByPublishedAtDescNoticeIdDesc(Long clubId);
+    List<ClubNotice> findAllByClubIdAndSharedToCalendarTrueAndDeletedFalseOrderByPublishedAtDescNoticeIdDesc(Long clubId);
+
+    List<ClubNotice> findAllByNoticeIdIn(List<Long> noticeIds);
 
     @Query("""
             select n
@@ -66,18 +68,16 @@ public interface ClubNoticeRepository extends JpaRepository<ClubNotice, Long> {
     );
 
     @Query("""
-            select n
-            from ClubNotice n
-            where n.clubId = :clubId
+            select new semo.back.service.database.pub.repository.ClubNoticeBoardFeedRow(
+                bi.boardItemId,
+                n
+            )
+            from ClubBoardItem bi, ClubNotice n
+            where bi.clubId = :clubId
+              and bi.contentType = 'NOTICE'
+              and n.noticeId = bi.contentId
+              and n.clubId = bi.clubId
               and n.deleted = false
-              and (
-                    :includePollLinkedNotices = true
-                    or n.noticeId not in (
-                        select v.linkedNoticeId
-                        from ClubScheduleVote v
-                        where v.linkedNoticeId is not null
-                    )
-                  )
               and (
                     :queryText is null
                     or lower(n.title) like lower(concat('%', :queryText, '%'))
@@ -88,19 +88,16 @@ public interface ClubNoticeRepository extends JpaRepository<ClubNotice, Long> {
                     or n.pinned = true
                   )
               and (
-                    :cursorPublishedAt is null
-                    or n.publishedAt < :cursorPublishedAt
-                    or (n.publishedAt = :cursorPublishedAt and n.noticeId < :cursorNoticeId)
+                    :cursorBoardItemId is null
+                    or bi.boardItemId < :cursorBoardItemId
                   )
-            order by n.publishedAt desc, n.noticeId desc
+            order by bi.boardItemId desc
             """)
-    List<ClubNotice> findFeed(
+    List<ClubNoticeBoardFeedRow> findBoardFeed(
             Long clubId,
-            boolean includePollLinkedNotices,
             String queryText,
             boolean pinnedOnly,
-            LocalDateTime cursorPublishedAt,
-            Long cursorNoticeId,
+            Long cursorBoardItemId,
             Pageable pageable
     );
 
@@ -109,6 +106,13 @@ public interface ClubNoticeRepository extends JpaRepository<ClubNotice, Long> {
             from ClubNotice n
             where n.clubId = :clubId
               and n.deleted = false
+              and exists (
+                    select 1
+                    from ClubBoardItem bi
+                    where bi.clubId = n.clubId
+                      and bi.contentType = 'NOTICE'
+                      and bi.contentId = n.noticeId
+                  )
               and (
                     :includePollLinkedNotices = true
                     or n.noticeId not in (

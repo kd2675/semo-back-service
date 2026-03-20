@@ -42,7 +42,7 @@ public class ClubScheduleController {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.getClubSchedule(clubId, requireUserKey(userContext), year, month),
-                "일정 관리 조회 성공"
+                "캘린더 조회 성공"
         );
     }
 

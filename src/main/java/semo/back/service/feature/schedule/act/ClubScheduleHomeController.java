@@ -26,7 +26,7 @@ public class ClubScheduleHomeController {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleHomeService.getScheduleHome(clubId, requireUserKey(userContext)),
-                "일정 관리 홈 조회 성공"
+                "캘린더 관리 홈 조회 성공"
         );
     }
 

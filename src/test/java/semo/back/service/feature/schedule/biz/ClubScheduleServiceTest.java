@@ -18,11 +18,14 @@ import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
+import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
+import semo.back.service.feature.notice.biz.ClubNoticeService;
+import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleEventRequest;
 import semo.back.service.feature.schedule.vo.UpdateScheduleEventParticipationRequest;
 import semo.back.service.feature.schedule.vo.SubmitScheduleVoteSelectionRequest;
@@ -33,6 +36,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static semo.back.service.support.TestCatalogSeeder.seedFeatureCatalogs;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -40,6 +44,9 @@ class ClubScheduleServiceTest {
 
     @Autowired
     private ClubScheduleService clubScheduleService;
+
+    @Autowired
+    private ClubNoticeService clubNoticeService;
 
     @Autowired
     private ClubService clubService;
@@ -86,6 +93,9 @@ class ClubScheduleServiceTest {
     @Autowired
     private ProfileUserRepository profileUserRepository;
 
+    @Autowired
+    private FeatureCatalogRepository featureCatalogRepository;
+
     @BeforeEach
     void setUp() {
         clubScheduleVoteSelectionRepository.deleteAll();
@@ -101,6 +111,7 @@ class ClubScheduleServiceTest {
         clubMemberRepository.deleteAll();
         clubRepository.deleteAll();
         profileUserRepository.deleteAll();
+        seedFeatureCatalogs(featureCatalogRepository);
     }
 
     @Test
@@ -135,6 +146,7 @@ class ClubScheduleServiceTest {
                         15000,
                         false,
                         true,
+                        true,
                         true
                 )
         );
@@ -150,23 +162,61 @@ class ClubScheduleServiceTest {
                         "22:00",
                         List.of("성수", "건대", "잠실"),
                         true,
+                        true,
                         true
                 )
         );
 
-        enablePollFeature(clubId, "schedule-owner-001");
         enableNoticeFeature(clubId, "schedule-owner-001");
+
+        clubNoticeService.createNotice(
+                clubId,
+                "schedule-owner-001",
+                new UpsertClubNoticeRequest(
+                        "달력 공지",
+                        "달력에서 함께 보여야 하는 공지",
+                        null,
+                        "성수동",
+                        "2030-04-05T09:00",
+                        "2030-04-05T11:00",
+                        false,
+                        true,
+                        true,
+                        false
+                )
+        );
+        clubNoticeService.createNotice(
+                clubId,
+                "schedule-owner-001",
+                new UpsertClubNoticeRequest(
+                        "비공유 공지",
+                        "calendar item 에 없어야 하는 공지",
+                        null,
+                        null,
+                        "2030-04-06T09:00",
+                        null,
+                        false,
+                        false,
+                        false,
+                        false
+                )
+        );
 
         var schedule = clubScheduleService.getClubSchedule(clubId, "schedule-owner-001", 2030, 4);
         var eventDetail = clubScheduleService.getScheduleEventDetail(clubId, createdEvent.eventId(), "schedule-owner-001");
         var voteDetail = clubScheduleService.getScheduleVoteDetail(clubId, createdVote.voteId(), "schedule-owner-001");
 
-        assertThat(schedule.monthEvents()).hasSize(1);
-        assertThat(schedule.votes()).hasSize(1);
+        assertThat(schedule.items()).hasSize(3);
+        assertThat(schedule.items().get(0).contentType()).isEqualTo("NOTICE");
+        assertThat(schedule.items().get(0).notice()).isNotNull();
+        assertThat(schedule.items().get(0).notice().title()).isEqualTo("달력 공지");
+        assertThat(schedule.items().get(1).contentType()).isEqualTo("SCHEDULE_VOTE");
+        assertThat(schedule.items().get(2).contentType()).isEqualTo("SCHEDULE_EVENT");
         assertThat(schedule.calendarYear()).isEqualTo(2030);
         assertThat(schedule.calendarMonth()).isEqualTo(4);
         assertThat(schedule.overview().pendingAttendanceCount()).isEqualTo(1);
         assertThat(schedule.overview().pendingVoteCount()).isZero();
+        assertThat(schedule.overview().voteCount()).isEqualTo(1);
 
         assertThat(eventDetail.startDate()).isEqualTo("2030-04-20");
         assertThat(eventDetail.endDate()).isNull();
@@ -180,7 +230,7 @@ class ClubScheduleServiceTest {
         assertThat(eventDetail.feeAmountUndecided()).isFalse();
         assertThat(eventDetail.feeNWaySplit()).isTrue();
         assertThat(eventDetail.postedToBoard()).isTrue();
-        assertThat(eventDetail.linkedNoticeId()).isNotNull();
+        assertThat(eventDetail.linkedNoticeId()).isNull();
 
         assertThat(voteDetail.options()).hasSize(3);
         assertThat(voteDetail.voteStartDate()).isEqualTo("2030-04-20");
@@ -190,7 +240,7 @@ class ClubScheduleServiceTest {
         assertThat(voteDetail.voteTimeLabel()).isEqualTo("18:30 - 22:00");
         assertThat(voteDetail.votingOpen()).isFalse();
         assertThat(voteDetail.postedToBoard()).isTrue();
-        assertThat(voteDetail.linkedNoticeId()).isNotNull();
+        assertThat(voteDetail.linkedNoticeId()).isNull();
         assertThat(clubNoticeRepository.count()).isEqualTo(2);
     }
 
@@ -226,7 +276,8 @@ class ClubScheduleServiceTest {
                         null,
                         false,
                         false,
-                        false
+                        false,
+                        true
                 )
         );
         var createdVote = clubScheduleService.createScheduleVote(
@@ -240,6 +291,7 @@ class ClubScheduleServiceTest {
                         "22:00",
                         List.of("성수", "건대"),
                         false,
+                        true,
                         true
                 )
         );
@@ -296,6 +348,7 @@ class ClubScheduleServiceTest {
                         null,
                         List.of("찬성", "보류"),
                         false,
+                        true,
                         true
                 )
         );
@@ -311,6 +364,7 @@ class ClubScheduleServiceTest {
                         null,
                         List.of("A", "B"),
                         false,
+                        false,
                         false
                 )
         );
@@ -319,8 +373,13 @@ class ClubScheduleServiceTest {
 
         var schedule = clubScheduleService.getClubSchedule(clubId, "schedule-owner-006", 2030, 8);
 
-        assertThat(schedule.votes()).hasSize(1);
-        assertThat(schedule.votes().getFirst().title()).isEqualTo("일정 공유 투표");
+        assertThat(schedule.items())
+                .filteredOn(item -> item.vote() != null)
+                .hasSize(1);
+        assertThat(schedule.items().stream()
+                .map(item -> item.vote() == null ? null : item.vote().title())
+                .filter(title -> title != null)
+                .toList()).containsExactly("일정 공유 투표");
     }
 
     @Test
@@ -348,6 +407,7 @@ class ClubScheduleServiceTest {
                         "10:00",
                         "23:00",
                         List.of("1/N", "회비"),
+                        true,
                         true,
                         true
                 )
@@ -395,6 +455,7 @@ class ClubScheduleServiceTest {
                         null,
                         List.of("A", "B"),
                         false,
+                        false,
                         false
                 )
         );
@@ -410,6 +471,7 @@ class ClubScheduleServiceTest {
                         "19:00",
                         "21:30",
                         List.of("서울숲", "왕십리", "건대"),
+                        true,
                         true,
                         true
                 )
@@ -462,7 +524,8 @@ class ClubScheduleServiceTest {
                         null,
                         false,
                         false,
-                        false
+                        false,
+                        true
                 )
         );
         var createdVote = clubScheduleService.createScheduleVote(
@@ -475,6 +538,7 @@ class ClubScheduleServiceTest {
                         null,
                         null,
                         List.of("찬성", "반대"),
+                        false,
                         false,
                         false
                 )
@@ -505,7 +569,8 @@ class ClubScheduleServiceTest {
                         null,
                         false,
                         false,
-                        false
+                        false,
+                        true
                 )
         );
         var updatedVote = clubScheduleService.updateScheduleVote(
@@ -519,6 +584,7 @@ class ClubScheduleServiceTest {
                         "20:00",
                         "22:00",
                         List.of("점심", "저녁", "야식"),
+                        false,
                         false,
                         false
                 )

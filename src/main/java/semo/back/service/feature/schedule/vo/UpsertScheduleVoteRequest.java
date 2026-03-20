@@ -22,6 +22,7 @@ public record UpsertScheduleVoteRequest(
                 String
                 > optionLabels,
         Boolean postToBoard,
+        Boolean postToCalendar,
         Boolean postToSchedule
 ) {
 }

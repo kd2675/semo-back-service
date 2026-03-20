@@ -19,6 +19,7 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepositor
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
 import semo.back.service.database.pub.repository.DashboardWidgetCatalogRepository;
+import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
@@ -31,6 +32,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static semo.back.service.support.TestCatalogSeeder.seedDashboardWidgetCatalogs;
+import static semo.back.service.support.TestCatalogSeeder.seedFeatureCatalogs;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -87,6 +90,9 @@ class ClubDashboardServiceTest {
     @Autowired
     private ProfileUserRepository profileUserRepository;
 
+    @Autowired
+    private FeatureCatalogRepository featureCatalogRepository;
+
     @BeforeEach
     void setUp() {
         clubScheduleVoteSelectionRepository.deleteAll();
@@ -103,6 +109,8 @@ class ClubDashboardServiceTest {
         clubMemberRepository.deleteAll();
         clubRepository.deleteAll();
         profileUserRepository.deleteAll();
+        seedFeatureCatalogs(featureCatalogRepository);
+        seedDashboardWidgetCatalogs(dashboardWidgetCatalogRepository);
     }
 
     @Test

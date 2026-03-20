@@ -21,6 +21,7 @@ public record ScheduleEventDetailResponse(
         boolean feeAmountUndecided,
         boolean feeNWaySplit,
         boolean postedToBoard,
+        boolean postedToCalendar,
         Long linkedNoticeId,
         String myParticipationStatus,
         int goingCount,

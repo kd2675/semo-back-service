@@ -7,6 +7,9 @@ import java.util.List;
 public record ClubPollSummaryResponse(
         Long voteId,
         String title,
+        String authorDisplayName,
+        String authorAvatarImageUrl,
+        String authorAvatarThumbnailUrl,
         String voteStatus,
         String voteStartDate,
         String voteEndDate,
@@ -16,6 +19,7 @@ public record ClubPollSummaryResponse(
         int totalResponses,
         int optionCount,
         boolean postedToBoard,
+        boolean postedToCalendar,
         boolean sharedToSchedule,
         boolean canManage,
         Long mySelectedOptionId,

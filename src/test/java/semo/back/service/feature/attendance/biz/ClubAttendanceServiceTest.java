@@ -17,6 +17,7 @@ import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
+import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.attendance.vo.AttendanceCheckInRequest;
 import semo.back.service.feature.attendance.vo.CreateAttendanceSessionRequest;
@@ -30,6 +31,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static semo.back.service.support.TestCatalogSeeder.seedFeatureCatalogs;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -83,6 +85,9 @@ class ClubAttendanceServiceTest {
     @Autowired
     private ProfileUserRepository profileUserRepository;
 
+    @Autowired
+    private FeatureCatalogRepository featureCatalogRepository;
+
     @BeforeEach
     void setUp() {
         clubScheduleVoteSelectionRepository.deleteAll();
@@ -97,6 +102,7 @@ class ClubAttendanceServiceTest {
         clubMemberRepository.deleteAll();
         clubRepository.deleteAll();
         profileUserRepository.deleteAll();
+        seedFeatureCatalogs(featureCatalogRepository);
     }
 
     @Test

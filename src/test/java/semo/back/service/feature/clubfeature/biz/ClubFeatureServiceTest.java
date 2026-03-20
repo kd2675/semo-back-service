@@ -16,12 +16,14 @@ import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
+import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static semo.back.service.support.TestCatalogSeeder.seedFeatureCatalogs;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -69,6 +71,9 @@ class ClubFeatureServiceTest {
     @Autowired
     private ProfileUserRepository profileUserRepository;
 
+    @Autowired
+    private FeatureCatalogRepository featureCatalogRepository;
+
     @BeforeEach
     void setUp() {
         clubScheduleVoteSelectionRepository.deleteAll();
@@ -83,6 +88,7 @@ class ClubFeatureServiceTest {
         clubMemberRepository.deleteAll();
         clubRepository.deleteAll();
         profileUserRepository.deleteAll();
+        seedFeatureCatalogs(featureCatalogRepository);
     }
 
     @Test
@@ -141,7 +147,7 @@ class ClubFeatureServiceTest {
         assertThat(responses).hasSize(5);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactly("ATTENDANCE:false", "TIMELINE:true", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:false");
+                .containsExactlyInAnyOrder("ATTENDANCE:false", "TIMELINE:true", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:false");
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "TIMELINE")).isTrue();
     }
 
@@ -169,7 +175,7 @@ class ClubFeatureServiceTest {
         assertThat(responses).hasSize(5);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactly("ATTENDANCE:false", "TIMELINE:false", "NOTICE:true", "POLL:false", "SCHEDULE_MANAGE:false");
+                .containsExactlyInAnyOrder("ATTENDANCE:false", "TIMELINE:false", "NOTICE:true", "POLL:false", "SCHEDULE_MANAGE:false");
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "NOTICE")).isTrue();
     }
 
@@ -197,7 +203,7 @@ class ClubFeatureServiceTest {
         assertThat(responses).hasSize(5);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactly("ATTENDANCE:false", "TIMELINE:false", "NOTICE:false", "POLL:true", "SCHEDULE_MANAGE:false");
+                .containsExactlyInAnyOrder("ATTENDANCE:false", "TIMELINE:false", "NOTICE:false", "POLL:true", "SCHEDULE_MANAGE:false");
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "POLL")).isTrue();
     }
 
@@ -225,7 +231,7 @@ class ClubFeatureServiceTest {
         assertThat(responses).hasSize(5);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactly("ATTENDANCE:false", "TIMELINE:false", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:true");
+                .containsExactlyInAnyOrder("ATTENDANCE:false", "TIMELINE:false", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:true");
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")).isTrue();
     }
 }

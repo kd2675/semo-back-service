@@ -11,8 +11,6 @@ public record ClubScheduleResponse(
         int calendarYear,
         int calendarMonth,
         ScheduleOverviewResponse overview,
-        List<ScheduleEventSummaryResponse> monthEvents,
-        List<ScheduleVoteSummaryResponse> votes,
-        List<ClubNoticeSummaryResponse> sharedNotices
+        List<ClubCalendarFeedItemResponse> items
 ) {
 }

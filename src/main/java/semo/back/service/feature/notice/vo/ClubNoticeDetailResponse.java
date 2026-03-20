@@ -20,6 +20,8 @@ public record ClubNoticeDetailResponse(
         String scheduleAtLabel,
         String scheduleEndAt,
         String scheduleEndAtLabel,
+        boolean postedToBoard,
+        boolean postedToCalendar,
         boolean canManage,
         String linkedTargetType,
         Long linkedTargetId

@@ -15,8 +15,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'NOTICE',
-    '공지',
-    '모임 공지를 작성, 관리, 공유합니다.',
+    '공지관리',
+    '공지 콘텐츠를 작성하고 게시판/캘린더에 공유합니다.',
     'campaign',
     1,
     30,
@@ -119,8 +119,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'SCHEDULE_MANAGE',
-    '일정 관리',
-    '일정과 투표를 작성하고 관리합니다.',
+    '일정관리',
+    '일정 콘텐츠를 작성하고 게시판/캘린더에 공유합니다.',
     'edit_calendar',
     1,
     50,
