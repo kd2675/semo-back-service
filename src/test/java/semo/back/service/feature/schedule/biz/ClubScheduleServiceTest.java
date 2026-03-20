@@ -548,8 +548,10 @@ class ClubScheduleServiceTest {
 
         var eventDetail = clubScheduleService.getScheduleEventDetail(clubId, createdEvent.eventId(), "schedule-owner-004");
         var voteDetail = clubScheduleService.getScheduleVoteDetail(clubId, createdVote.voteId(), "schedule-owner-004");
-        assertThat(eventDetail.canManage()).isTrue();
-        assertThat(voteDetail.canManage()).isTrue();
+        assertThat(eventDetail.canEdit()).isTrue();
+        assertThat(eventDetail.canDelete()).isTrue();
+        assertThat(voteDetail.canEdit()).isTrue();
+        assertThat(voteDetail.canDelete()).isTrue();
 
         var updatedEvent = clubScheduleService.updateScheduleEvent(
                 clubId,

@@ -47,6 +47,7 @@ public class ClubPollService {
     private final ClubProfileRepository clubProfileRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
+    private final ClubPollPermissionService clubPollPermissionService;
     private final ImageFileUrlResolver imageFileUrlResolver;
 
     public ClubPollHomeResponse getPollHome(Long clubId, String userKey, String query) {
@@ -59,7 +60,7 @@ public class ClubPollService {
                     access.club().getClubId(),
                     access.club().getName(),
                     access.isAdmin(),
-                    access.isAdmin(),
+                    clubPollPermissionService.canCreatePoll(access),
                     0,
                     0,
                     0,
@@ -89,6 +90,8 @@ public class ClubPollService {
                             selectionsByVoteId.getOrDefault(vote.getVoteId(), List.of()),
                             access.clubProfile().getClubProfileId()
                     );
+                    ClubPollPermissionService.PollActionPermission actionPermission =
+                            clubPollPermissionService.getActionPermission(access, vote.getAuthorClubProfileId());
                     return new ClubPollSummaryResponse(
                             vote.getVoteId(),
                             vote.getTitle(),
@@ -106,7 +109,8 @@ public class ClubPollService {
                             vote.isSharedToBoard(),
                             vote.isSharedToCalendar(),
                             vote.isSharedToCalendar(),
-                            canManage(access, vote.getAuthorClubProfileId()),
+                            actionPermission.canEdit(),
+                            actionPermission.canDelete(),
                             selection.mySelectedOptionId(),
                             selection.options()
                     );
@@ -122,7 +126,7 @@ public class ClubPollService {
                 access.club().getClubId(),
                 access.club().getName(),
                 access.isAdmin(),
-                access.isAdmin(),
+                clubPollPermissionService.canCreatePoll(access),
                 waitingCount,
                 ongoingCount,
                 closedCount,
@@ -215,10 +219,6 @@ public class ClubPollService {
                 .toList();
 
         return new VoteSelectionSnapshot(mySelectedOptionId, selections.size(), optionResponses);
-    }
-
-    private boolean canManage(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
-        return access.isAdmin() || access.clubProfile().getClubProfileId().equals(authorClubProfileId);
     }
 
     private String resolveVoteStatus(ClubScheduleVote vote) {

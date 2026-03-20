@@ -45,6 +45,7 @@ public class ClubNoticeService {
     private final ClubProfileRepository clubProfileRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
+    private final ClubNoticePermissionService clubNoticePermissionService;
     private final ImageFinalizeClient imageFinalizeClient;
     private final ImageFileUrlResolver imageFileUrlResolver;
     private final ClubContentShareService clubContentShareService;
@@ -55,6 +56,8 @@ public class ClubNoticeService {
         ClubNotice notice = getNotice(clubId, noticeId);
         ClubProfile authorProfile = clubProfileRepository.findById(notice.getAuthorClubProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubProfile", "clubProfileId", notice.getAuthorClubProfileId()));
+        ClubNoticePermissionService.NoticeActionPermission actionPermission = clubNoticePermissionService
+                .getActionPermission(access, notice.getAuthorClubProfileId());
 
         return new ClubNoticeDetailResponse(
                 club.getClubId(),
@@ -78,7 +81,9 @@ public class ClubNoticeService {
                 formatDateTime(notice.getScheduleEndAt()),
                 notice.isSharedToBoard(),
                 notice.isSharedToCalendar(),
-                canManage(access, notice.getAuthorClubProfileId()),
+                actionPermission.canManage(),
+                actionPermission.canEdit(),
+                actionPermission.canDelete(),
                 null,
                 null
         );
@@ -87,7 +92,8 @@ public class ClubNoticeService {
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ClubNoticeUpsertResponse createNotice(Long clubId, String userKey, UpsertClubNoticeRequest request) {
         requireNoticeFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireCreatePermission(access);
         validateRequest(request);
         boolean postToBoard = resolvePostToBoard(request.postToBoard());
         boolean postToCalendar = resolvePostToCalendar(request.postToCalendar(), request.postToSchedule());
@@ -116,7 +122,7 @@ public class ClubNoticeService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         validateRequest(request);
         ClubNotice current = getNotice(clubId, noticeId);
-        requireManagePermission(access, current.getAuthorClubProfileId());
+        requireUpdatePermission(access, current.getAuthorClubProfileId());
         boolean postToBoard = resolvePostToBoard(request.postToBoard());
         boolean postToCalendar = resolvePostToCalendar(request.postToCalendar(), request.postToSchedule());
         ClubNotice updated = clubNoticeRepository.save(ClubNotice.builder()
@@ -144,7 +150,7 @@ public class ClubNoticeService {
         requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubNotice current = getNotice(clubId, noticeId);
-        requireManagePermission(access, current.getAuthorClubProfileId());
+        requireDeletePermission(access, current.getAuthorClubProfileId());
         clubNoticeRepository.save(ClubNotice.builder()
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())
@@ -244,6 +250,8 @@ public class ClubNoticeService {
             ClubProfile authorProfile
     ) {
         String authorName = authorProfile == null ? "Unknown Member" : authorProfile.getDisplayName();
+        ClubNoticePermissionService.NoticeActionPermission actionPermission = clubNoticePermissionService
+                .getActionPermission(access, notice.getAuthorClubProfileId());
         return new ClubNoticeSummaryResponse(
                 notice.getNoticeId(),
                 notice.getTitle(),
@@ -264,7 +272,9 @@ public class ClubNoticeService {
                 notice.getLocationLabel(),
                 notice.isSharedToBoard(),
                 notice.isSharedToCalendar(),
-                canManage(access, notice.getAuthorClubProfileId()),
+                actionPermission.canManage(),
+                actionPermission.canEdit(),
+                actionPermission.canDelete(),
                 null,
                 null
         );
@@ -366,7 +376,7 @@ public class ClubNoticeService {
     }
 
     public boolean canManageNotice(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
-        return canManage(access, authorClubProfileId);
+        return clubNoticePermissionService.canManageNotice(access, authorClubProfileId);
     }
 
     public void requireNoticeFeature(Long clubId) {
@@ -390,11 +400,6 @@ public class ClubNoticeService {
         return imageFinalizeClient.finalizeImage(normalized, NOTICE_IMAGE_TARGET_DIR).fileName();
     }
 
-    private boolean canManage(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
-        return isAdminRole(access.membership().getRoleCode())
-                || access.clubProfile().getClubProfileId().equals(authorClubProfileId);
-    }
-
     private void syncNoticeShares(ClubNotice notice) {
         clubContentShareService.syncBoardShare(
                 notice.getClubId(),
@@ -410,8 +415,20 @@ public class ClubNoticeService {
         );
     }
 
-    private void requireManagePermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
-        if (!canManage(access, authorClubProfileId)) {
+    private void requireCreatePermission(ClubAccessResolver.ClubAccess access) {
+        if (!clubNoticePermissionService.canCreateNotice(access)) {
+            throw new SemoException.ForbiddenException("공지 작성 권한이 없습니다.");
+        }
+    }
+
+    private void requireUpdatePermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        if (!clubNoticePermissionService.getActionPermission(access, authorClubProfileId).canEdit()) {
+            throw new SemoException.ForbiddenException("공지 수정 또는 삭제 권한이 없습니다.");
+        }
+    }
+
+    private void requireDeletePermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        if (!clubNoticePermissionService.getActionPermission(access, authorClubProfileId).canDelete()) {
             throw new SemoException.ForbiddenException("공지 수정 또는 삭제 권한이 없습니다.");
         }
     }

@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 public class ClubScheduleHomeService {
     private final ClubAccessResolver clubAccessResolver;
     private final ClubScheduleService clubScheduleService;
+    private final ClubSchedulePermissionService clubSchedulePermissionService;
     private final ClubNoticeService clubNoticeService;
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubScheduleEventRepository clubScheduleEventRepository;
@@ -59,7 +60,7 @@ public class ClubScheduleHomeService {
                 access.club().getClubId(),
                 access.club().getName(),
                 access.isAdmin(),
-                access.isAdmin(),
+                clubSchedulePermissionService.canCreateSchedule(access),
                 events.size(),
                 (int) events.stream()
                         .filter(event -> {
@@ -78,7 +79,8 @@ public class ClubScheduleHomeService {
 
     private List<ClubScheduleEvent> loadHomeEvents(ClubAccessResolver.ClubAccess access, Long clubId) {
         return clubScheduleEventRepository.findAllActiveEvents(clubId).stream()
-                .filter(event -> access.isAdmin() || event.getAuthorClubProfileId().equals(access.clubProfile().getClubProfileId()))
+                .filter(event -> access.isAdmin()
+                        || clubSchedulePermissionService.canManageSchedule(access, event.getAuthorClubProfileId()))
                 .sorted(Comparator.comparing(ClubScheduleEvent::getStartAt).reversed().thenComparing(ClubScheduleEvent::getEventId).reversed())
                 .toList();
     }

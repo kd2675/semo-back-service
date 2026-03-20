@@ -21,7 +21,8 @@ public record ClubPollSummaryResponse(
         boolean postedToBoard,
         boolean postedToCalendar,
         boolean sharedToSchedule,
-        boolean canManage,
+        boolean canEdit,
+        boolean canDelete,
         Long mySelectedOptionId,
         List<ScheduleVoteOptionSummaryResponse> options
 ) {

@@ -22,7 +22,8 @@ public record ScheduleVoteDetailResponse(
         Long mySelectedOptionId,
         int totalResponses,
         List<ScheduleVoteOptionSummaryResponse> options,
-        boolean canManage,
+        boolean canEdit,
+        boolean canDelete,
         boolean votingOpen
 ) {
 }

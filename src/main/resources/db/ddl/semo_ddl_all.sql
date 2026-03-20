@@ -187,6 +187,42 @@ CREATE INDEX idx_club_notice_pinned
 CREATE INDEX idx_club_notice_schedule
     ON club_notice (club_id, schedule_at, deleted);
 
+CREATE TABLE IF NOT EXISTS notice_permission_policy (
+    notice_permission_policy_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    allow_member_create TINYINT(1) NOT NULL DEFAULT 0,
+    allow_member_update TINYINT(1) NOT NULL DEFAULT 1,
+    allow_member_delete TINYINT(1) NOT NULL DEFAULT 1,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_notice_permission_policy_club UNIQUE (club_id),
+    CONSTRAINT fk_notice_permission_policy_club FOREIGN KEY (club_id) REFERENCES club(club_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS schedule_permission_policy (
+    schedule_permission_policy_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    allow_member_create TINYINT(1) NOT NULL DEFAULT 0,
+    allow_member_update TINYINT(1) NOT NULL DEFAULT 1,
+    allow_member_delete TINYINT(1) NOT NULL DEFAULT 1,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_schedule_permission_policy_club UNIQUE (club_id),
+    CONSTRAINT fk_schedule_permission_policy_club FOREIGN KEY (club_id) REFERENCES club(club_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS poll_permission_policy (
+    poll_permission_policy_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    allow_member_create TINYINT(1) NOT NULL DEFAULT 0,
+    allow_member_update TINYINT(1) NOT NULL DEFAULT 1,
+    allow_member_delete TINYINT(1) NOT NULL DEFAULT 1,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_poll_permission_policy_club UNIQUE (club_id),
+    CONSTRAINT fk_poll_permission_policy_club FOREIGN KEY (club_id) REFERENCES club(club_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS club_board_item (
     board_item_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     club_id BIGINT NOT NULL,

@@ -23,6 +23,8 @@ public record ClubNoticeDetailResponse(
         boolean postedToBoard,
         boolean postedToCalendar,
         boolean canManage,
+        boolean canEdit,
+        boolean canDelete,
         String linkedTargetType,
         Long linkedTargetId
 ) {

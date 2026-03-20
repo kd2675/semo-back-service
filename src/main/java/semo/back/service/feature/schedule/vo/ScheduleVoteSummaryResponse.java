@@ -22,6 +22,7 @@ public record ScheduleVoteSummaryResponse(
         Long mySelectedOptionId,
         List<ScheduleVoteOptionSummaryResponse> options,
         boolean votingOpen,
-        boolean canManage
+        boolean canEdit,
+        boolean canDelete
 ) {
 }

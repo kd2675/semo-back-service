@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 public class ClubNoticeFeatureService {
     private final ClubAccessResolver clubAccessResolver;
     private final ClubNoticeService clubNoticeService;
+    private final ClubNoticePermissionService clubNoticePermissionService;
     private final ClubScheduleService clubScheduleService;
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
@@ -61,12 +62,11 @@ public class ClubNoticeFeatureService {
                         ? clubNoticeService.getPinnedNotices(clubId)
                         : clubNoticeService.getDirectPinnedNoticesByAuthor(clubId, access.clubProfile().getClubProfileId()))
                 : allNotices;
-        List<ClubNotice> homeNotices = access.isAdmin()
-                ? listNotices.stream()
-                        .filter(notice -> clubNoticeService.canManageNotice(access, notice.getAuthorClubProfileId()))
-                        .limit(20)
-                        .toList()
-                : listNotices.stream().limit(20).toList();
+        List<ClubNotice> homeNotices = listNotices.stream()
+                .filter(notice -> access.isAdmin()
+                        || clubNoticeService.canManageNotice(access, notice.getAuthorClubProfileId()))
+                .limit(20)
+                .toList();
         List<ClubNoticeSummaryResponse> manageableNotices = clubNoticeService.toNoticeSummaries(access, homeNotices);
         List<ClubScheduleEvent> sharedEvents = loadBoardSharedEvents(clubId);
         List<ScheduleEventSummaryResponse> sharedEventSummaries = clubScheduleService
@@ -86,7 +86,7 @@ public class ClubNoticeFeatureService {
                 access.club().getClubId(),
                 access.club().getName(),
                 access.isAdmin(),
-                access.isAdmin(),
+                clubNoticePermissionService.canCreateNotice(access),
                 allNotices.size(),
                 (int) allNotices.stream().filter(ClubNotice::isPinned).count(),
                 (int) allNotices.stream().filter(ClubNotice::isSharedToCalendar).count(),

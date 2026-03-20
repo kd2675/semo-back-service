@@ -24,6 +24,7 @@ public record ScheduleEventSummaryResponse(
         String myParticipationStatus,
         int goingCount,
         int notGoingCount,
-        boolean canManage
+        boolean canEdit,
+        boolean canDelete
 ) {
 }

@@ -25,6 +25,7 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.notice.biz.ClubNoticeService;
+import semo.back.service.feature.poll.biz.ClubPollPermissionService;
 import semo.back.service.feature.schedule.vo.ClubCalendarFeedItemResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.share.biz.ClubContentShareService;
@@ -82,6 +83,8 @@ public class ClubScheduleService {
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubSchedulePermissionService clubSchedulePermissionService;
+    private final ClubPollPermissionService clubPollPermissionService;
     private final ClubNoticeService clubNoticeService;
     private final ClubContentShareService clubContentShareService;
     private final ImageFileUrlResolver imageFileUrlResolver;
@@ -187,7 +190,8 @@ public class ClubScheduleService {
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ScheduleEventUpsertResponse createScheduleEvent(Long clubId, String userKey, UpsertScheduleEventRequest request) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireEventCreatePermission(access);
         EventDraft draft = toEventDraft(request);
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostToCalendar(request.postToCalendar());
@@ -228,7 +232,7 @@ public class ClubScheduleService {
     ) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleEvent current = getEvent(clubId, eventId);
-        requireManagePermission(access, current.getAuthorClubProfileId());
+        requireEventEditPermission(access, current.getAuthorClubProfileId());
         EventDraft draft = toEventDraft(request);
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostToCalendar(request.postToCalendar());
@@ -265,7 +269,7 @@ public class ClubScheduleService {
     public void deleteScheduleEvent(Long clubId, Long eventId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleEvent current = getEvent(clubId, eventId);
-        requireManagePermission(access, current.getAuthorClubProfileId());
+        requireEventDeletePermission(access, current.getAuthorClubProfileId());
         clubEventParticipantRepository.deleteByEventId(current.getEventId());
         clubContentShareService.removeAllShares(clubId, ClubContentShareService.CONTENT_SCHEDULE_EVENT, eventId);
         clubScheduleEventRepository.delete(current);
@@ -318,7 +322,8 @@ public class ClubScheduleService {
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ScheduleVoteUpsertResponse createScheduleVote(Long clubId, String userKey, UpsertScheduleVoteRequest request) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireVoteCreatePermission(access);
         VoteDraft draft = toVoteDraft(request);
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
@@ -350,7 +355,7 @@ public class ClubScheduleService {
     ) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote current = getVote(clubId, voteId);
-        requireManagePermission(access, current.getAuthorClubProfileId());
+        requireVoteEditPermission(access, current.getAuthorClubProfileId());
         VoteDraft draft = toVoteDraft(request);
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
@@ -382,7 +387,7 @@ public class ClubScheduleService {
     public void deleteScheduleVote(Long clubId, Long voteId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote current = getVote(clubId, voteId);
-        requireManagePermission(access, current.getAuthorClubProfileId());
+        requireVoteDeletePermission(access, current.getAuthorClubProfileId());
         clubScheduleVoteSelectionRepository.deleteByVoteId(voteId);
         clubScheduleVoteOptionRepository.deleteByVoteId(voteId);
         clubContentShareService.removeAllShares(clubId, ClubContentShareService.CONTENT_SCHEDULE_VOTE, voteId);
@@ -393,7 +398,7 @@ public class ClubScheduleService {
     public ScheduleVoteDetailResponse closeScheduleVote(Long clubId, Long voteId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote current = getVote(clubId, voteId);
-        requireManagePermission(access, current.getAuthorClubProfileId());
+        requireVoteClosePermission(access, current.getAuthorClubProfileId());
         if (current.getClosedAt() != null) {
             return buildVoteDetailResponse(access, current);
         }
@@ -478,6 +483,8 @@ public class ClubScheduleService {
                             selectionsByVoteId.getOrDefault(vote.getVoteId(), List.of()),
                             access.clubProfile().getClubProfileId()
                     );
+                    ClubPollPermissionService.PollActionPermission actionPermission =
+                            clubPollPermissionService.getActionPermission(access, vote.getAuthorClubProfileId());
                     return new ScheduleVoteSummaryResponse(
                             vote.getVoteId(),
                             vote.getTitle(),
@@ -498,7 +505,8 @@ public class ClubScheduleService {
                             selection.mySelectedOptionId(),
                             selection.options(),
                             isVoteOpen(vote),
-                            canManage(access, vote.getAuthorClubProfileId())
+                            actionPermission.canEdit(),
+                            actionPermission.canDelete()
                     );
                 })
                 .toList();
@@ -508,6 +516,8 @@ public class ClubScheduleService {
             ClubAccessResolver.ClubAccess access,
             ClubScheduleEvent event
     ) {
+        ClubSchedulePermissionService.ScheduleEventActionPermission actionPermission =
+                clubSchedulePermissionService.getActionPermission(access, event.getAuthorClubProfileId());
         EventParticipationSnapshot participation = toParticipationSnapshot(
                 clubEventParticipantRepository.findByEventIdIn(List.of(event.getEventId())),
                 access.clubProfile().getClubProfileId()
@@ -539,7 +549,8 @@ public class ClubScheduleService {
                 participation.myParticipationStatus(),
                 participation.goingCount(),
                 participation.notGoingCount(),
-                canManage(access, event.getAuthorClubProfileId())
+                actionPermission.canEdit(),
+                actionPermission.canDelete()
         );
     }
 
@@ -548,6 +559,8 @@ public class ClubScheduleService {
             ClubScheduleVote vote
     ) {
         List<ClubScheduleVoteOption> options = clubScheduleVoteOptionRepository.findByVoteIdOrderBySortOrderAscVoteOptionIdAsc(vote.getVoteId());
+        ClubPollPermissionService.PollActionPermission actionPermission =
+                clubPollPermissionService.getActionPermission(access, vote.getAuthorClubProfileId());
         VoteSelectionSnapshot selection = toVoteSelectionSnapshot(
                 options,
                 clubScheduleVoteSelectionRepository.findByVoteIdIn(List.of(vote.getVoteId())),
@@ -574,7 +587,8 @@ public class ClubScheduleService {
                 selection.mySelectedOptionId(),
                 selection.totalResponses(),
                 selection.options(),
-                canManage(access, vote.getAuthorClubProfileId()),
+                actionPermission.canEdit(),
+                actionPermission.canDelete(),
                 isVoteOpen(vote)
         );
     }
@@ -683,6 +697,8 @@ public class ClubScheduleService {
             Long viewerClubProfileId,
             ClubProfile authorProfile
     ) {
+        ClubSchedulePermissionService.ScheduleEventActionPermission actionPermission =
+                clubSchedulePermissionService.getActionPermission(access, event.getAuthorClubProfileId());
         EventParticipationSnapshot participation = toParticipationSnapshot(participants, viewerClubProfileId);
         return new ScheduleEventSummaryResponse(
                 event.getEventId(),
@@ -708,7 +724,8 @@ public class ClubScheduleService {
                 participation.myParticipationStatus(),
                 participation.goingCount(),
                 participation.notGoingCount(),
-                canManage(access, event.getAuthorClubProfileId())
+                actionPermission.canEdit(),
+                actionPermission.canDelete()
         );
     }
 
@@ -820,13 +837,45 @@ public class ClubScheduleService {
         );
     }
 
-    private boolean canManage(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
-        return access.isAdmin() || access.clubProfile().getClubProfileId().equals(authorClubProfileId);
+    private void requireEventCreatePermission(ClubAccessResolver.ClubAccess access) {
+        if (!clubSchedulePermissionService.canCreateSchedule(access)) {
+            throw new SemoException.ForbiddenException("일정 작성 권한이 없습니다.");
+        }
     }
 
-    private void requireManagePermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
-        if (!canManage(access, authorClubProfileId)) {
-            throw new SemoException.ForbiddenException("작성자 또는 관리자만 관리할 수 있습니다.");
+    private void requireEventEditPermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        if (!clubSchedulePermissionService.getActionPermission(access, authorClubProfileId).canEdit()) {
+            throw new SemoException.ForbiddenException("일정 수정 권한이 없습니다.");
+        }
+    }
+
+    private void requireEventDeletePermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        if (!clubSchedulePermissionService.getActionPermission(access, authorClubProfileId).canDelete()) {
+            throw new SemoException.ForbiddenException("일정 삭제 권한이 없습니다.");
+        }
+    }
+
+    private void requireVoteCreatePermission(ClubAccessResolver.ClubAccess access) {
+        if (!clubPollPermissionService.canCreatePoll(access)) {
+            throw new SemoException.ForbiddenException("투표 작성 권한이 없습니다.");
+        }
+    }
+
+    private void requireVoteEditPermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        if (!clubPollPermissionService.getActionPermission(access, authorClubProfileId).canEdit()) {
+            throw new SemoException.ForbiddenException("투표 수정 권한이 없습니다.");
+        }
+    }
+
+    private void requireVoteDeletePermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        if (!clubPollPermissionService.getActionPermission(access, authorClubProfileId).canDelete()) {
+            throw new SemoException.ForbiddenException("투표 삭제 권한이 없습니다.");
+        }
+    }
+
+    private void requireVoteClosePermission(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
+        if (!clubPollPermissionService.getActionPermission(access, authorClubProfileId).canEdit()) {
+            throw new SemoException.ForbiddenException("투표 종료 권한이 없습니다.");
         }
     }
 
