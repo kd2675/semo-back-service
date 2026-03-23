@@ -179,6 +179,8 @@ public class ClubService {
                                 "campaign",
                                 notice.getTitle(),
                                 summarizeContent(notice.getContent()),
+                                imageFileUrlResolver.resolveImageUrl(notice.getImageFileName()),
+                                imageFileUrlResolver.resolveThumbnailUrl(notice.getImageFileName()),
                                 profileById.get(notice.getAuthorClubProfileId()) == null
                                         ? "Unknown Member"
                                         : profileById.get(notice.getAuthorClubProfileId()).getDisplayName(),

@@ -5,6 +5,8 @@ public record ClubBoardNoticeResponse(
         String icon,
         String title,
         String summary,
+        String imageUrl,
+        String thumbnailUrl,
         String author,
         String timeAgo,
         String category
