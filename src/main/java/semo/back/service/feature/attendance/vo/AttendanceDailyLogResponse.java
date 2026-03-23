@@ -1,10 +1,9 @@
 package semo.back.service.feature.attendance.vo;
 
-public record AttendanceHistoryItemResponse(
-        Long sessionId,
-        String title,
+public record AttendanceDailyLogResponse(
         String attendanceDateLabel,
-        String status,
+        int checkedInCount,
+        int memberCount,
         boolean checkedIn,
         String checkedInAtLabel
 ) {

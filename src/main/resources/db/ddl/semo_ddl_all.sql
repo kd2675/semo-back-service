@@ -540,3 +540,32 @@ CREATE TABLE IF NOT EXISTS club_dashboard_widget (
 
 CREATE INDEX idx_club_dashboard_widget_sort
     ON club_dashboard_widget (club_id, visibility_scope, enabled, sort_order);
+
+-- ============================================================
+-- Club activity log
+-- Recent activity is stored as an append-only stream for admin home
+-- and future audit-style views. Actor is the user who triggered the
+-- action, detail is a human-readable sentence, and status stores outcome.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS club_activity_log (
+    club_activity_log_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    actor_club_member_id BIGINT NULL,
+    actor_club_profile_id BIGINT NULL,
+    actor_display_name VARCHAR(100) NOT NULL,
+    subject VARCHAR(100) NOT NULL,
+    detail_text VARCHAR(500) NOT NULL,
+    status_code VARCHAR(20) NOT NULL,
+    error_message VARCHAR(500) NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_club_activity_log_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_club_activity_log_member FOREIGN KEY (actor_club_member_id) REFERENCES club_member(club_member_id),
+    CONSTRAINT fk_club_activity_log_profile FOREIGN KEY (actor_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_activity_log_recent
+    ON club_activity_log (club_id, create_date, club_activity_log_id);
+
+CREATE INDEX idx_club_activity_log_status
+    ON club_activity_log (club_id, status_code, create_date);

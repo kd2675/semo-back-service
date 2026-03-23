@@ -1,0 +1,7 @@
+USE SEMO;
+
+DELETE FROM club_position_permission
+WHERE permission_key IN ('ATTENDANCE_SESSION_CREATE', 'ATTENDANCE_SESSION_CLOSE');
+
+DELETE FROM feature_permission_catalog
+WHERE permission_key IN ('ATTENDANCE_SESSION_CREATE', 'ATTENDANCE_SESSION_CLOSE');

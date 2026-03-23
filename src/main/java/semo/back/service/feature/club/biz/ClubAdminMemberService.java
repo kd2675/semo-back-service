@@ -12,6 +12,8 @@ import semo.back.service.database.pub.entity.ProfileUser;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
+import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
+import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.vo.ClubAdminMemberResponse;
 import semo.back.service.feature.club.vo.ClubAdminMembersResponse;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberRoleRequest;
@@ -68,6 +70,7 @@ public class ClubAdminMemberService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
+    @RecordClubActivity(subject = "멤버관리")
     public ClubAdminMemberResponse updateMemberRole(
             Long clubId,
             Long clubMemberId,
@@ -79,10 +82,22 @@ public class ClubAdminMemberService {
         String normalizedRoleCode = normalizeRoleCode(request.roleCode());
         validateRoleMutation(access, target, normalizedRoleCode);
         target.updateRoleCode(normalizedRoleCode);
-        return toResponse(target, access, loadClubProfile(target), loadProfileUser(target), loadAssignedPositions(clubId, target.getClubMemberId()));
+        ClubAdminMemberResponse response = toResponse(
+                target,
+                access,
+                loadClubProfile(target),
+                loadProfileUser(target),
+                loadAssignedPositions(clubId, target.getClubMemberId())
+        );
+        ClubActivityContextHolder.setDetails(
+                response.displayName() + "의 기본 권한을 " + toRoleDisplayName(normalizedRoleCode) + "로 변경했습니다.",
+                response.displayName() + "의 기본 권한을 변경하지 못했습니다."
+        );
+        return response;
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
+    @RecordClubActivity(subject = "멤버관리")
     public ClubAdminMemberResponse updateMemberStatus(
             Long clubId,
             Long clubMemberId,
@@ -94,10 +109,22 @@ public class ClubAdminMemberService {
         String normalizedStatus = normalizeStatus(request.membershipStatus());
         validateStatusMutation(target, normalizedStatus);
         target.updateMembershipStatus(normalizedStatus);
-        return toResponse(target, access, loadClubProfile(target), loadProfileUser(target), loadAssignedPositions(clubId, target.getClubMemberId()));
+        ClubAdminMemberResponse response = toResponse(
+                target,
+                access,
+                loadClubProfile(target),
+                loadProfileUser(target),
+                loadAssignedPositions(clubId, target.getClubMemberId())
+        );
+        ClubActivityContextHolder.setDetails(
+                response.displayName() + "의 상태를 " + toMembershipStatusDisplayName(normalizedStatus) + "로 변경했습니다.",
+                response.displayName() + "의 상태를 변경하지 못했습니다."
+        );
+        return response;
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
+    @RecordClubActivity(subject = "멤버관리")
     public ClubAdminMemberResponse approvePendingMember(Long clubId, Long clubMemberId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         ClubMember target = requireManagedMember(clubId, clubMemberId, access);
@@ -114,10 +141,16 @@ public class ClubAdminMemberService {
                         .introText(null)
                         .avatarFileName(null)
                         .build()));
-        return toResponse(target, access, clubProfile, profileUser, List.of());
+        ClubAdminMemberResponse response = toResponse(target, access, clubProfile, profileUser, List.of());
+        ClubActivityContextHolder.setDetails(
+                response.displayName() + "을 승인했습니다.",
+                response.displayName() + " 승인에 실패했습니다."
+        );
+        return response;
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
+    @RecordClubActivity(subject = "멤버관리")
     public ClubAdminMemberResponse updateMemberPositions(
             Long clubId,
             Long clubMemberId,
@@ -127,7 +160,23 @@ public class ClubAdminMemberService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         ClubMember target = requireManagedMember(clubId, clubMemberId, access);
         clubPositionService.replaceMemberPositions(access, target, request == null ? null : request.clubPositionIds());
-        return toResponse(target, access, loadClubProfile(target), loadProfileUser(target), loadAssignedPositions(clubId, target.getClubMemberId()));
+        ClubAdminMemberResponse response = toResponse(
+                target,
+                access,
+                loadClubProfile(target),
+                loadProfileUser(target),
+                loadAssignedPositions(clubId, target.getClubMemberId())
+        );
+        String assignedPositions = response.positions().isEmpty()
+                ? "직책 없음"
+                : response.positions().stream()
+                        .map(ClubPositionSummaryResponse::displayName)
+                        .collect(Collectors.joining(", "));
+        ClubActivityContextHolder.setDetails(
+                response.displayName() + "의 직책을 " + assignedPositions + "로 변경했습니다.",
+                response.displayName() + "의 직책을 변경하지 못했습니다."
+        );
+        return response;
     }
 
     private List<ClubAdminMemberResponse> loadMemberResponses(Long clubId, ClubAccessResolver.ClubAccess access) {
@@ -285,5 +334,22 @@ public class ClubAdminMemberService {
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String toRoleDisplayName(String roleCode) {
+        return switch (roleCode) {
+            case ROLE_OWNER -> "오너";
+            case ROLE_ADMIN -> "어드민";
+            default -> "유저";
+        };
+    }
+
+    private String toMembershipStatusDisplayName(String membershipStatus) {
+        return switch (membershipStatus) {
+            case STATUS_ACTIVE -> "활동";
+            case STATUS_DORMANT -> "휴면";
+            case STATUS_PENDING -> "대기";
+            default -> membershipStatus;
+        };
     }
 }

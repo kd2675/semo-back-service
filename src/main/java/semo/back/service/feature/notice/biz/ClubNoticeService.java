@@ -14,6 +14,8 @@ import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
+import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
+import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.notice.vo.ClubNoticeDetailResponse;
@@ -90,11 +92,16 @@ public class ClubNoticeService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "공지관리")
     public ClubNoticeUpsertResponse createNotice(Long clubId, String userKey, UpsertClubNoticeRequest request) {
         requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireCreatePermission(access);
         validateRequest(request);
+        ClubActivityContextHolder.setDetails(
+                "공지 '" + request.title().trim() + "'을 생성했습니다.",
+                "공지 '" + request.title().trim() + "' 생성에 실패했습니다."
+        );
         boolean postToBoard = resolvePostToBoard(request.postToBoard());
         boolean postToCalendar = resolvePostToCalendar(request.postToCalendar(), request.postToSchedule());
         ClubNotice notice = clubNoticeRepository.save(ClubNotice.builder()
@@ -117,12 +124,17 @@ public class ClubNoticeService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "공지관리")
     public ClubNoticeUpsertResponse updateNotice(Long clubId, Long noticeId, String userKey, UpsertClubNoticeRequest request) {
         requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         validateRequest(request);
         ClubNotice current = getNotice(clubId, noticeId);
         requireUpdatePermission(access, current.getAuthorClubProfileId());
+        ClubActivityContextHolder.setDetails(
+                "공지 '" + current.getTitle() + "'을 수정했습니다.",
+                "공지 '" + current.getTitle() + "' 수정에 실패했습니다."
+        );
         boolean postToBoard = resolvePostToBoard(request.postToBoard());
         boolean postToCalendar = resolvePostToCalendar(request.postToCalendar(), request.postToSchedule());
         ClubNotice updated = clubNoticeRepository.save(ClubNotice.builder()
@@ -146,11 +158,16 @@ public class ClubNoticeService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "공지관리")
     public void deleteNotice(Long clubId, Long noticeId, String userKey) {
         requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubNotice current = getNotice(clubId, noticeId);
         requireDeletePermission(access, current.getAuthorClubProfileId());
+        ClubActivityContextHolder.setDetails(
+                "공지 '" + current.getTitle() + "'을 삭제했습니다.",
+                "공지 '" + current.getTitle() + "' 삭제에 실패했습니다."
+        );
         clubNoticeRepository.save(ClubNotice.builder()
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())

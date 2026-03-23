@@ -10,6 +10,8 @@ import semo.back.service.database.pub.entity.ClubFeature;
 import semo.back.service.database.pub.entity.FeatureCatalog;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
+import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
+import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.vo.ClubFeatureResponse;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
@@ -46,6 +48,7 @@ public class ClubFeatureService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "기능관리", failureDetail = "활성 기능 구성을 업데이트하지 못했습니다.")
     public List<ClubFeatureResponse> updateClubFeatures(Long clubId, String userKey, UpdateClubFeaturesRequest request) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         List<FeatureCatalog> catalogs = featureCatalogRepository.findByActiveTrueOrderBySortOrderAscFeatureKeyAsc();
@@ -58,6 +61,10 @@ public class ClubFeatureService {
         Map<String, ClubFeature> existingByKey = clubFeatureRepository.findByClubId(clubId).stream()
                 .collect(Collectors.toMap(ClubFeature::getFeatureKey, Function.identity()));
         LocalDateTime now = LocalDateTime.now();
+        ClubActivityContextHolder.setDetails(
+                buildFeatureUpdateDetail(catalogs, enabledFeatureKeys),
+                "활성 기능 구성을 업데이트하지 못했습니다."
+        );
 
         for (FeatureCatalog catalog : catalogs) {
             boolean enabled = enabledFeatureKeys.contains(catalog.getFeatureKey());
@@ -195,9 +202,9 @@ public class ClubFeatureService {
         return switch (normalizeFeatureKey(featureKey)) {
             case "ATTENDANCE" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
             case "TIMELINE" -> "/clubs/%d/admin/more/timeline".formatted(clubId);
-            case "NOTICE" -> "/clubs/%d/admin/more/roles?feature=NOTICE".formatted(clubId);
-            case "POLL" -> "/clubs/%d/admin/more/roles?feature=POLL".formatted(clubId);
-            case "SCHEDULE_MANAGE" -> "/clubs/%d/admin/more/roles?feature=SCHEDULE_MANAGE".formatted(clubId);
+            case "NOTICE" -> "/clubs/%d/admin/more/notices".formatted(clubId);
+            case "POLL" -> "/clubs/%d/admin/more/polls".formatted(clubId);
+            case "SCHEDULE_MANAGE" -> "/clubs/%d/admin/more/schedules".formatted(clubId);
             case "ROLE_MANAGEMENT" -> "/clubs/%d/admin/more/roles".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
@@ -219,5 +226,16 @@ public class ClubFeatureService {
             return "";
         }
         return featureKey.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String buildFeatureUpdateDetail(List<FeatureCatalog> catalogs, Set<String> enabledFeatureKeys) {
+        List<String> enabledDisplayNames = catalogs.stream()
+                .filter(catalog -> enabledFeatureKeys.contains(catalog.getFeatureKey()))
+                .map(FeatureCatalog::getDisplayName)
+                .toList();
+        if (enabledDisplayNames.isEmpty()) {
+            return "활성 기능을 모두 비활성화했습니다.";
+        }
+        return "활성 기능을 " + String.join(", ", enabledDisplayNames) + "로 업데이트했습니다.";
     }
 }

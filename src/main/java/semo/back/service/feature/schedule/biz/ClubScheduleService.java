@@ -23,6 +23,8 @@ import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
+import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
+import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.notice.biz.ClubNoticeService;
 import semo.back.service.feature.poll.biz.ClubPollPermissionService;
@@ -189,10 +191,15 @@ public class ClubScheduleService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "일정관리")
     public ScheduleEventUpsertResponse createScheduleEvent(Long clubId, String userKey, UpsertScheduleEventRequest request) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireEventCreatePermission(access);
         EventDraft draft = toEventDraft(request);
+        ClubActivityContextHolder.setDetails(
+                "일정 '" + draft.title() + "'을 생성했습니다.",
+                "일정 '" + draft.title() + "' 생성에 실패했습니다."
+        );
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostToCalendar(request.postToCalendar());
 
@@ -224,6 +231,7 @@ public class ClubScheduleService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "일정관리")
     public ScheduleEventUpsertResponse updateScheduleEvent(
             Long clubId,
             Long eventId,
@@ -234,6 +242,10 @@ public class ClubScheduleService {
         ClubScheduleEvent current = getEvent(clubId, eventId);
         requireEventEditPermission(access, current.getAuthorClubProfileId());
         EventDraft draft = toEventDraft(request);
+        ClubActivityContextHolder.setDetails(
+                "일정 '" + current.getTitle() + "'을 수정했습니다.",
+                "일정 '" + current.getTitle() + "' 수정에 실패했습니다."
+        );
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostToCalendar(request.postToCalendar());
 
@@ -266,10 +278,15 @@ public class ClubScheduleService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "일정관리")
     public void deleteScheduleEvent(Long clubId, Long eventId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleEvent current = getEvent(clubId, eventId);
         requireEventDeletePermission(access, current.getAuthorClubProfileId());
+        ClubActivityContextHolder.setDetails(
+                "일정 '" + current.getTitle() + "'을 삭제했습니다.",
+                "일정 '" + current.getTitle() + "' 삭제에 실패했습니다."
+        );
         clubEventParticipantRepository.deleteByEventId(current.getEventId());
         clubContentShareService.removeAllShares(clubId, ClubContentShareService.CONTENT_SCHEDULE_EVENT, eventId);
         clubScheduleEventRepository.delete(current);
@@ -293,6 +310,7 @@ public class ClubScheduleService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "일정관리")
     public ScheduleEventDetailResponse updateScheduleEventParticipation(
             Long clubId,
             Long eventId,
@@ -305,6 +323,10 @@ public class ClubScheduleService {
             throw new SemoException.ValidationException("이 일정은 참석 응답을 받지 않습니다.");
         }
         String participationStatus = normalizeParticipationStatus(request);
+        ClubActivityContextHolder.setDetails(
+                "일정 '" + event.getTitle() + "'에 " + toParticipationActivityLabel(participationStatus) + ".",
+                "일정 참석 상태 변경에 실패했습니다."
+        );
 
         ClubEventParticipant current = clubEventParticipantRepository
                 .findByEventIdAndClubProfileId(eventId, access.clubProfile().getClubProfileId())
@@ -321,10 +343,15 @@ public class ClubScheduleService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "투표관리")
     public ScheduleVoteUpsertResponse createScheduleVote(Long clubId, String userKey, UpsertScheduleVoteRequest request) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireVoteCreatePermission(access);
         VoteDraft draft = toVoteDraft(request);
+        ClubActivityContextHolder.setDetails(
+                "투표 '" + draft.title() + "'를 생성했습니다.",
+                "투표 '" + draft.title() + "' 생성에 실패했습니다."
+        );
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
 
@@ -347,6 +374,7 @@ public class ClubScheduleService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "투표관리")
     public ScheduleVoteUpsertResponse updateScheduleVote(
             Long clubId,
             Long voteId,
@@ -357,6 +385,10 @@ public class ClubScheduleService {
         ClubScheduleVote current = getVote(clubId, voteId);
         requireVoteEditPermission(access, current.getAuthorClubProfileId());
         VoteDraft draft = toVoteDraft(request);
+        ClubActivityContextHolder.setDetails(
+                "투표 '" + current.getTitle() + "'를 수정했습니다.",
+                "투표 '" + current.getTitle() + "' 수정에 실패했습니다."
+        );
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
 
@@ -384,10 +416,15 @@ public class ClubScheduleService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "투표관리")
     public void deleteScheduleVote(Long clubId, Long voteId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote current = getVote(clubId, voteId);
         requireVoteDeletePermission(access, current.getAuthorClubProfileId());
+        ClubActivityContextHolder.setDetails(
+                "투표 '" + current.getTitle() + "'를 삭제했습니다.",
+                "투표 '" + current.getTitle() + "' 삭제에 실패했습니다."
+        );
         clubScheduleVoteSelectionRepository.deleteByVoteId(voteId);
         clubScheduleVoteOptionRepository.deleteByVoteId(voteId);
         clubContentShareService.removeAllShares(clubId, ClubContentShareService.CONTENT_SCHEDULE_VOTE, voteId);
@@ -395,10 +432,15 @@ public class ClubScheduleService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "투표관리")
     public ScheduleVoteDetailResponse closeScheduleVote(Long clubId, Long voteId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote current = getVote(clubId, voteId);
         requireVoteClosePermission(access, current.getAuthorClubProfileId());
+        ClubActivityContextHolder.setDetails(
+                "투표 '" + current.getTitle() + "'를 종료했습니다.",
+                "투표 종료에 실패했습니다."
+        );
         if (current.getClosedAt() != null) {
             return buildVoteDetailResponse(access, current);
         }
@@ -423,6 +465,7 @@ public class ClubScheduleService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "투표관리")
     public ScheduleVoteDetailResponse submitScheduleVoteSelection(
             Long clubId,
             Long voteId,
@@ -439,6 +482,10 @@ public class ClubScheduleService {
                 .filter(option -> option.getVoteOptionId().equals(request.voteOptionId()))
                 .findFirst()
                 .orElseThrow(() -> new SemoException.ValidationException("해당 투표의 항목이 아닙니다."));
+        ClubActivityContextHolder.setDetails(
+                "투표 '" + vote.getTitle() + "'에서 '" + selectedOption.getOptionLabel() + "' 항목을 선택했습니다.",
+                "투표 선택 제출에 실패했습니다."
+        );
 
         ClubScheduleVoteSelection current = clubScheduleVoteSelectionRepository
                 .findByVoteIdAndClubProfileId(voteId, access.clubProfile().getClubProfileId())
@@ -688,6 +735,14 @@ public class ClubScheduleService {
             throw new SemoException.ValidationException("지원하지 않는 참석 상태입니다.");
         }
         return normalized;
+    }
+
+    private String toParticipationActivityLabel(String participationStatus) {
+        return switch (participationStatus) {
+            case PARTICIPATION_GOING -> "참석으로 응답했습니다";
+            case PARTICIPATION_NOT_GOING -> "불참으로 응답했습니다";
+            default -> "응답했습니다";
+        };
     }
 
     private ScheduleEventSummaryResponse toEventSummaryResponse(

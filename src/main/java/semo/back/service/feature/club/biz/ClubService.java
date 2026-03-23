@@ -20,6 +20,8 @@ import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
+import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
+import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.vo.ClubCreateResponse;
 import semo.back.service.feature.club.vo.ClubBoardNoticeResponse;
 import semo.back.service.feature.club.vo.ClubBoardResponse;
@@ -242,6 +244,7 @@ public class ClubService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "모임관리")
     public ClubProfileResponse updateClubProfile(Long clubId, String userKey, UpdateClubProfileRequest request) {
         MembershipClubPair pair = getMembershipClubPair(clubId, userKey);
         ProfileSummaryResponse appProfile = profileUserService.getProfileSummary(userKey);
@@ -255,6 +258,10 @@ public class ClubService {
 
         String displayName = resolveClubProfileDisplayName(current.getDisplayName(), request);
         String avatarFileName = resolveClubProfileAvatarFileName(current.getAvatarFileName(), request);
+        ClubActivityContextHolder.setDetails(
+                "모임 프로필을 수정했습니다.",
+                "모임 프로필 수정에 실패했습니다."
+        );
         clubProfileRepository.save(ClubProfile.builder()
                 .clubProfileId(current.getClubProfileId())
                 .clubMemberId(current.getClubMemberId())

@@ -6,7 +6,7 @@ public record ClubAttendanceResponse(
         Long clubId,
         String clubName,
         boolean featureEnabled,
-        AttendanceSessionResponse currentSession,
-        List<AttendanceHistoryItemResponse> recentSessions
+        AttendanceTodayResponse todayAttendance,
+        List<AttendanceDailyLogResponse> recentLogs
 ) {
 }

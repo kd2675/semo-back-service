@@ -19,6 +19,8 @@ import semo.back.service.database.pub.repository.ClubPositionPermissionRepositor
 import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.FeaturePermissionCatalogRepository;
+import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
+import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.position.vo.ClubAdminRoleManagementResponse;
 import semo.back.service.feature.position.vo.ClubPermissionGroupResponse;
@@ -43,7 +45,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubPositionService {
-    private static final String FEATURE_ATTENDANCE = "ATTENDANCE";
     private static final String FEATURE_NOTICE = "NOTICE";
     private static final String FEATURE_POLL = "POLL";
     private static final String FEATURE_ROLE_MANAGEMENT = "ROLE_MANAGEMENT";
@@ -92,6 +93,7 @@ public class ClubPositionService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "직책관리")
     public ClubPositionDetailResponse createPosition(Long clubId, String userKey, CreateClubPositionRequest request) {
         requireRoleManagementFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
@@ -100,11 +102,16 @@ public class ClubPositionService {
         if (clubPositionRepository.existsByClubIdAndPositionCode(clubId, normalizedCode)) {
             throw new SemoException.ValidationException("이미 사용 중인 직책 코드입니다.");
         }
+        String displayName = requireDisplayName(request.displayName());
+        ClubActivityContextHolder.setDetails(
+                "직책 '" + displayName + "'을 생성했습니다.",
+                "직책 '" + displayName + "' 생성에 실패했습니다."
+        );
 
         ClubPosition position = clubPositionRepository.save(ClubPosition.builder()
                 .clubId(clubId)
                 .positionCode(normalizedCode)
-                .displayName(requireDisplayName(request.displayName()))
+                .displayName(displayName)
                 .description(trimToNull(request.description()))
                 .iconName(trimToNull(request.iconName()))
                 .colorHex(normalizeColorHex(request.colorHex()))
@@ -119,6 +126,7 @@ public class ClubPositionService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "직책관리")
     public ClubPositionDetailResponse updatePosition(
             Long clubId,
             Long clubPositionId,
@@ -133,12 +141,17 @@ public class ClubPositionService {
         if (clubPositionRepository.existsByClubIdAndPositionCodeAndClubPositionIdNot(clubId, normalizedCode, clubPositionId)) {
             throw new SemoException.ValidationException("이미 사용 중인 직책 코드입니다.");
         }
+        String displayName = requireDisplayName(request.displayName());
+        ClubActivityContextHolder.setDetails(
+                "직책 '" + current.getDisplayName() + "'을 수정했습니다.",
+                "직책 '" + current.getDisplayName() + "' 수정에 실패했습니다."
+        );
 
         clubPositionRepository.save(ClubPosition.builder()
                 .clubPositionId(current.getClubPositionId())
                 .clubId(current.getClubId())
                 .positionCode(normalizedCode)
-                .displayName(requireDisplayName(request.displayName()))
+                .displayName(displayName)
                 .description(trimToNull(request.description()))
                 .iconName(trimToNull(request.iconName()))
                 .colorHex(normalizeColorHex(request.colorHex()))
@@ -156,10 +169,15 @@ public class ClubPositionService {
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "직책관리")
     public void deletePosition(Long clubId, Long clubPositionId, String userKey) {
         requireRoleManagementFeature(clubId);
         clubAccessResolver.requireAdmin(clubId, userKey);
         ClubPosition current = requirePosition(clubId, clubPositionId);
+        ClubActivityContextHolder.setDetails(
+                "직책 '" + current.getDisplayName() + "'을 삭제했습니다.",
+                "직책 '" + current.getDisplayName() + "' 삭제에 실패했습니다."
+        );
         clubMemberPositionRepository.deleteByClubPositionId(current.getClubPositionId());
         clubPositionPermissionRepository.deleteByClubPositionId(current.getClubPositionId());
         clubPositionRepository.delete(current);
@@ -321,7 +339,6 @@ public class ClubPositionService {
 
     private String resolvePermissionGroupDisplayName(FeatureCatalog catalog) {
         return switch (catalog.getFeatureKey()) {
-            case FEATURE_ATTENDANCE -> "출석관리";
             case FEATURE_NOTICE -> "공지관리";
             case FEATURE_POLL -> "투표관리";
             case FEATURE_SCHEDULE_MANAGE -> "일정관리";

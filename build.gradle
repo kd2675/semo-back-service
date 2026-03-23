@@ -38,6 +38,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework:spring-aop'
+    runtimeOnly 'org.aspectj:aspectjweaver'
     implementation 'com.github.ben-manes.caffeine:caffeine'
 
     // Spring Cloud (Feign Client)

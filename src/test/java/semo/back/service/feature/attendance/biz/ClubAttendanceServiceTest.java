@@ -19,8 +19,6 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
-import semo.back.service.feature.attendance.vo.AttendanceCheckInRequest;
-import semo.back.service.feature.attendance.vo.CreateAttendanceSessionRequest;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
@@ -106,7 +104,7 @@ class ClubAttendanceServiceTest {
     }
 
     @Test
-    void memberCanCheckInToOpenAttendanceSession() {
+    void memberCanCheckInToTodayAttendance() {
         Long clubId = clubService.createClub(
                 "attendance-owner-001",
                 "Attendance Owner",
@@ -136,20 +134,14 @@ class ClubAttendanceServiceTest {
                 .lastActivityAt(LocalDateTime.now())
                 .build());
 
-        var session = clubAttendanceService.createAttendanceSession(
-                clubId,
-                "attendance-owner-001",
-                new CreateAttendanceSessionRequest("오늘 출석체크", null)
-        );
+        var attendance = clubAttendanceService.getAttendance(clubId, "attendance-member-001");
+        assertThat(attendance.todayAttendance()).isNotNull();
 
-        var checkedIn = clubAttendanceService.checkIn(
-                clubId,
-                "attendance-member-001",
-                new AttendanceCheckInRequest(session.sessionId())
-        );
+        var checkedIn = clubAttendanceService.checkIn(clubId, "attendance-member-001");
 
         assertThat(checkedIn.checkedIn()).isTrue();
         assertThat(checkedIn.checkedInCount()).isEqualTo(1);
         assertThat(clubAttendanceCheckInRepository.count()).isOne();
+        assertThat(clubAttendanceSessionRepository.count()).isOne();
     }
 }
