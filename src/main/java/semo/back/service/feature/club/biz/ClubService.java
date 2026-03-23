@@ -67,7 +67,7 @@ public class ClubService {
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String CLUB_IMAGE_TARGET_DIR = "semo/clubs";
     private static final String CLUB_PROFILE_IMAGE_TARGET_DIR = "semo/club-profiles";
-    private static final DateTimeFormatter JOINED_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM yyyy", Locale.ENGLISH);
+    private static final DateTimeFormatter JOINED_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter SCHEDULE_MONTH_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter SCHEDULE_MONTH_SHORT_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH);
     private static final DateTimeFormatter SCHEDULE_TIME_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH);
@@ -237,9 +237,9 @@ public class ClubService {
                         formatJoinedLabel(membership.getJoinedAt())
                 ),
                 List.of(
-                        new ClubProfileRecordResponse("club-role", "Club Role", membership.getRoleCode(), "현재 클럽에서의 역할"),
-                        new ClubProfileRecordResponse("club-status", "Membership", membership.getMembershipStatus(), "가입 상태"),
                         new ClubProfileRecordResponse("club-name", "Club Name", pair.club().getName(), "현재 활동 중인 모임"),
+                        new ClubProfileRecordResponse("club-status", "Membership", membership.getMembershipStatus(), "가입 상태"),
+                        new ClubProfileRecordResponse("club-role", "Club Role", membership.getRoleCode(), "현재 클럽에서의 역할"),
                         new ClubProfileRecordResponse("club-joined", "Joined", formatJoinedLabel(membership.getJoinedAt()), "클럽 가입 시점")
                 )
         );
@@ -538,9 +538,9 @@ public class ClubService {
 
     private String formatJoinedLabel(LocalDateTime joinedAt) {
         if (joinedAt == null) {
-            return "Joined recently";
+            return "-";
         }
-        return "Joined " + joinedAt.format(JOINED_LABEL_FORMATTER);
+        return joinedAt.format(JOINED_LABEL_FORMATTER);
     }
 
     private record MembershipClubPair(ClubMember membership, Club club) {
