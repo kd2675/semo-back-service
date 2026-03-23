@@ -16,6 +16,9 @@ import semo.back.service.feature.club.vo.ClubAdminMemberResponse;
 import semo.back.service.feature.club.vo.ClubAdminMembersResponse;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberRoleRequest;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberStatusRequest;
+import semo.back.service.feature.position.biz.ClubPositionService;
+import semo.back.service.feature.position.vo.ClubPositionSummaryResponse;
+import semo.back.service.feature.position.vo.UpdateClubMemberPositionsRequest;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -47,14 +50,19 @@ public class ClubAdminMemberService {
     private final ClubProfileRepository clubProfileRepository;
     private final ProfileUserRepository profileUserRepository;
     private final ImageFileUrlResolver imageFileUrlResolver;
+    private final ClubPositionService clubPositionService;
 
     public ClubAdminMembersResponse getAdminMembers(Long clubId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        boolean roleManagementEnabled = clubPositionService.isRoleManagementEnabled(clubId);
+        List<ClubPositionSummaryResponse> availablePositions = clubPositionService.getAvailablePositionSummaries(clubId);
         List<ClubAdminMemberResponse> members = loadMemberResponses(clubId, access);
         return new ClubAdminMembersResponse(
                 access.club().getClubId(),
                 access.club().getName(),
                 true,
+                roleManagementEnabled,
+                availablePositions,
                 members
         );
     }
@@ -71,7 +79,7 @@ public class ClubAdminMemberService {
         String normalizedRoleCode = normalizeRoleCode(request.roleCode());
         validateRoleMutation(access, target, normalizedRoleCode);
         target.updateRoleCode(normalizedRoleCode);
-        return toResponse(target, access, loadClubProfile(target), loadProfileUser(target));
+        return toResponse(target, access, loadClubProfile(target), loadProfileUser(target), loadAssignedPositions(clubId, target.getClubMemberId()));
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
@@ -86,7 +94,7 @@ public class ClubAdminMemberService {
         String normalizedStatus = normalizeStatus(request.membershipStatus());
         validateStatusMutation(target, normalizedStatus);
         target.updateMembershipStatus(normalizedStatus);
-        return toResponse(target, access, loadClubProfile(target), loadProfileUser(target));
+        return toResponse(target, access, loadClubProfile(target), loadProfileUser(target), loadAssignedPositions(clubId, target.getClubMemberId()));
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
@@ -106,7 +114,20 @@ public class ClubAdminMemberService {
                         .introText(null)
                         .avatarFileName(null)
                         .build()));
-        return toResponse(target, access, clubProfile, profileUser);
+        return toResponse(target, access, clubProfile, profileUser, List.of());
+    }
+
+    @Transactional(transactionManager = "pubTransactionManager")
+    public ClubAdminMemberResponse updateMemberPositions(
+            Long clubId,
+            Long clubMemberId,
+            String userKey,
+            UpdateClubMemberPositionsRequest request
+    ) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubMember target = requireManagedMember(clubId, clubMemberId, access);
+        clubPositionService.replaceMemberPositions(access, target, request == null ? null : request.clubPositionIds());
+        return toResponse(target, access, loadClubProfile(target), loadProfileUser(target), loadAssignedPositions(clubId, target.getClubMemberId()));
     }
 
     private List<ClubAdminMemberResponse> loadMemberResponses(Long clubId, ClubAccessResolver.ClubAccess access) {
@@ -114,6 +135,10 @@ public class ClubAdminMemberService {
         if (memberships.isEmpty()) {
             return List.of();
         }
+        Map<Long, List<ClubPositionSummaryResponse>> positionsByMemberId = clubPositionService.getAssignedPositionSummaries(
+                clubId,
+                memberships.stream().map(ClubMember::getClubMemberId).toList()
+        );
 
         Map<Long, ClubProfile> clubProfileByMemberId = clubProfileRepository.findByClubMemberIdIn(
                         memberships.stream().map(ClubMember::getClubMemberId).toList()
@@ -130,7 +155,8 @@ public class ClubAdminMemberService {
                         member,
                         access,
                         clubProfileByMemberId.get(member.getClubMemberId()),
-                        profileUserById.get(member.getProfileId())
+                        profileUserById.get(member.getProfileId()),
+                        positionsByMemberId.getOrDefault(member.getClubMemberId(), List.of())
                 ))
                 .sorted(adminMemberComparator())
                 .toList();
@@ -155,7 +181,8 @@ public class ClubAdminMemberService {
             ClubMember member,
             ClubAccessResolver.ClubAccess access,
             ClubProfile clubProfile,
-            ProfileUser profileUser
+            ProfileUser profileUser,
+            List<ClubPositionSummaryResponse> positions
     ) {
         String displayName = clubProfile != null && StringUtils.hasText(clubProfile.getDisplayName())
                 ? clubProfile.getDisplayName()
@@ -182,7 +209,8 @@ public class ClubAdminMemberService {
                 member.getMembershipStatus(),
                 canManage,
                 canApprove,
-                self
+                self,
+                positions
         );
     }
 
@@ -248,6 +276,11 @@ public class ClubAdminMemberService {
     private ProfileUser loadProfileUser(ClubMember target) {
         return profileUserRepository.findById(target.getProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ProfileUser", "profileId", target.getProfileId()));
+    }
+
+    private List<ClubPositionSummaryResponse> loadAssignedPositions(Long clubId, Long clubMemberId) {
+        return clubPositionService.getAssignedPositionSummaries(clubId, List.of(clubMemberId))
+                .getOrDefault(clubMemberId, List.of());
     }
 
     private String trimToNull(String value) {

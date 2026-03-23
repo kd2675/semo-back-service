@@ -14,32 +14,34 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import semo.back.service.common.jpa.CommonDateEntity;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(
-        name = "notice_permission_policy",
+        name = "club_member_position",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_notice_permission_policy_club", columnNames = "club_id")
+                @UniqueConstraint(name = "uk_club_member_position", columnNames = {"club_member_id", "club_position_id"})
         }
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
-public class NoticePermissionPolicy extends CommonDateEntity {
+public class ClubMemberPosition extends CommonDateEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "notice_permission_policy_id")
-    private Long noticePermissionPolicyId;
+    @Column(name = "club_member_position_id")
+    private Long clubMemberPositionId;
 
-    @Column(name = "club_id", nullable = false)
-    private Long clubId;
+    @Column(name = "club_member_id", nullable = false)
+    private Long clubMemberId;
 
-    @Column(name = "allow_member_create", nullable = false)
-    private boolean allowMemberCreate;
+    @Column(name = "club_position_id", nullable = false)
+    private Long clubPositionId;
 
-    @Column(name = "allow_member_update", nullable = false)
-    private boolean allowMemberUpdate;
+    @Column(name = "assigned_by_club_profile_id")
+    private Long assignedByClubProfileId;
 
-    @Column(name = "allow_member_delete", nullable = false)
-    private boolean allowMemberDelete;
+    @Column(name = "assigned_at")
+    private LocalDateTime assignedAt;
 }

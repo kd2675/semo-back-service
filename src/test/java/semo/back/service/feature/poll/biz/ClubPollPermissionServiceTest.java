@@ -8,23 +8,28 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubMember;
+import semo.back.service.database.pub.entity.ClubMemberPosition;
+import semo.back.service.database.pub.entity.ClubPosition;
+import semo.back.service.database.pub.entity.ClubPositionPermission;
 import semo.back.service.database.pub.entity.ProfileUser;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
+import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
+import semo.back.service.database.pub.repository.ClubPositionPermissionRepository;
+import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
-import semo.back.service.database.pub.repository.PollPermissionPolicyRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
+import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 import semo.back.service.feature.schedule.biz.ClubScheduleService;
-import semo.back.service.feature.poll.vo.UpdateClubAdminPollSettingsRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleVoteRequest;
 
 import java.time.LocalDateTime;
@@ -54,9 +59,6 @@ class ClubPollPermissionServiceTest {
     private ClubPollPermissionService clubPollPermissionService;
 
     @Autowired
-    private PollPermissionPolicyRepository pollPermissionPolicyRepository;
-
-    @Autowired
     private ClubScheduleVoteSelectionRepository clubScheduleVoteSelectionRepository;
 
     @Autowired
@@ -64,6 +66,15 @@ class ClubPollPermissionServiceTest {
 
     @Autowired
     private ClubScheduleVoteRepository clubScheduleVoteRepository;
+
+    @Autowired
+    private ClubMemberPositionRepository clubMemberPositionRepository;
+
+    @Autowired
+    private ClubPositionRepository clubPositionRepository;
+
+    @Autowired
+    private ClubPositionPermissionRepository clubPositionPermissionRepository;
 
     @Autowired
     private ClubFeatureRepository clubFeatureRepository;
@@ -88,7 +99,9 @@ class ClubPollPermissionServiceTest {
         clubScheduleVoteSelectionRepository.deleteAll();
         clubScheduleVoteOptionRepository.deleteAll();
         clubScheduleVoteRepository.deleteAll();
-        pollPermissionPolicyRepository.deleteAll();
+        clubMemberPositionRepository.deleteAll();
+        clubPositionPermissionRepository.deleteAll();
+        clubPositionRepository.deleteAll();
         clubFeatureRepository.deleteAll();
         clubProfileRepository.deleteAll();
         clubMemberRepository.deleteAll();
@@ -102,7 +115,9 @@ class ClubPollPermissionServiceTest {
         clubScheduleVoteSelectionRepository.deleteAll();
         clubScheduleVoteOptionRepository.deleteAll();
         clubScheduleVoteRepository.deleteAll();
-        pollPermissionPolicyRepository.deleteAll();
+        clubMemberPositionRepository.deleteAll();
+        clubPositionPermissionRepository.deleteAll();
+        clubPositionRepository.deleteAll();
         clubFeatureRepository.deleteAll();
         clubProfileRepository.deleteAll();
         clubMemberRepository.deleteAll();
@@ -111,27 +126,32 @@ class ClubPollPermissionServiceTest {
     }
 
     @Test
-    void adminPollSettingsExposeDefaultPolicyAndHomeCreateFallback() {
+    void adminPollSettingsRemovedAndPollHomeUsesRoleManagementPermission() {
         String ownerUserKey = "poll-policy-owner-001";
         String memberUserKey = "poll-policy-member-001";
         Long clubId = createPollClub(ownerUserKey, "Poll Policy Club");
-        addActiveMember(clubId, memberUserKey, "Poll Member");
+        ClubMember member = addActiveMember(clubId, memberUserKey, "Poll Member");
 
-        var settings = clubPollPermissionService.getAdminSettings(clubId, ownerUserKey);
-        var home = clubPollService.getPollHome(clubId, memberUserKey, null);
+        assertThatThrownBy(() -> clubPollPermissionService.getAdminSettings(clubId, ownerUserKey))
+                .isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("투표 권한 설정 페이지는 제거되었습니다.")
+                .hasMessageContaining("직책관리");
 
-        assertThat(settings.allowMemberCreate()).isFalse();
-        assertThat(settings.allowMemberUpdate()).isTrue();
-        assertThat(settings.allowMemberDelete()).isTrue();
-        assertThat(home.canCreate()).isFalse();
+        var deniedHome = clubPollService.getPollHome(clubId, memberUserKey, null);
+        assertThat(deniedHome.canCreate()).isFalse();
+
+        assignPositionPermissions(clubId, member, ClubPositionPermissionEvaluator.PERMISSION_POLL_CREATE);
+
+        var allowedHome = clubPollService.getPollHome(clubId, memberUserKey, null);
+        assertThat(allowedHome.canCreate()).isTrue();
     }
 
     @Test
-    void memberPollCreateUpdateDeleteFollowConfiguredPolicyWhileAdminStillCanManage() {
+    void memberPollCreateUpdateDeleteFollowAssignedPositionPermissions() {
         String ownerUserKey = "poll-policy-owner-002";
         String memberUserKey = "poll-policy-member-002";
         Long clubId = createPollClub(ownerUserKey, "Poll Permission Lab");
-        addActiveMember(clubId, memberUserKey, "Poll Member");
+        ClubMember member = addActiveMember(clubId, memberUserKey, "Poll Member");
 
         assertThatThrownBy(() -> clubScheduleService.createScheduleVote(
                 clubId,
@@ -141,10 +161,10 @@ class ClubPollPermissionServiceTest {
                 .isInstanceOf(SemoException.ForbiddenException.class)
                 .hasMessageContaining("투표 작성 권한");
 
-        clubPollPermissionService.updateAdminSettings(
+        assignPositionPermissions(
                 clubId,
-                ownerUserKey,
-                new UpdateClubAdminPollSettingsRequest(true, false, false)
+                member,
+                ClubPositionPermissionEvaluator.PERMISSION_POLL_CREATE
         );
 
         var created = clubScheduleService.createScheduleVote(
@@ -181,10 +201,12 @@ class ClubPollPermissionServiceTest {
 
         assertThat(adminUpdated.title()).isEqualTo("관리자가 수정한 투표");
 
-        clubPollPermissionService.updateAdminSettings(
+        assignPositionPermissions(
                 clubId,
-                ownerUserKey,
-                new UpdateClubAdminPollSettingsRequest(true, true, true)
+                member,
+                ClubPositionPermissionEvaluator.PERMISSION_POLL_CREATE,
+                ClubPositionPermissionEvaluator.PERMISSION_POLL_UPDATE_SELF,
+                ClubPositionPermissionEvaluator.PERMISSION_POLL_DELETE_SELF
         );
 
         var memberUpdated = clubScheduleService.updateScheduleVote(
@@ -218,12 +240,12 @@ class ClubPollPermissionServiceTest {
         clubFeatureService.updateClubFeatures(
                 clubId,
                 ownerUserKey,
-                new UpdateClubFeaturesRequest(List.of("POLL"))
+                new UpdateClubFeaturesRequest(List.of("POLL", "ROLE_MANAGEMENT"))
         );
         return clubId;
     }
 
-    private void addActiveMember(Long clubId, String userKey, String displayName) {
+    private ClubMember addActiveMember(Long clubId, String userKey, String displayName) {
         ProfileUser profileUser = profileUserRepository.save(ProfileUser.builder()
                 .userKey(userKey)
                 .displayName(displayName)
@@ -231,13 +253,39 @@ class ClubPollPermissionServiceTest {
                 .profileColor("#135bec")
                 .build());
 
-        clubMemberRepository.save(ClubMember.builder()
+        return clubMemberRepository.save(ClubMember.builder()
                 .clubId(clubId)
                 .profileId(profileUser.getProfileId())
                 .roleCode("MEMBER")
                 .membershipStatus("ACTIVE")
                 .joinedAt(LocalDateTime.now())
                 .lastActivityAt(LocalDateTime.now())
+                .build());
+    }
+
+    private void assignPositionPermissions(Long clubId, ClubMember member, String... permissionKeys) {
+        long nextCodeSuffix = clubPositionRepository.count() + 1;
+        ClubPosition position = clubPositionRepository.save(ClubPosition.builder()
+                .clubId(clubId)
+                .positionCode("POLL_EDITOR_" + nextCodeSuffix)
+                .displayName("투표 담당")
+                .description("투표 생성 및 본인 투표 관리")
+                .iconName("poll")
+                .colorHex("#7f4400")
+                .active(true)
+                .build());
+
+        for (String permissionKey : permissionKeys) {
+            clubPositionPermissionRepository.save(ClubPositionPermission.builder()
+                    .clubPositionId(position.getClubPositionId())
+                    .permissionKey(permissionKey)
+                    .build());
+        }
+
+        clubMemberPositionRepository.save(ClubMemberPosition.builder()
+                .clubMemberId(member.getClubMemberId())
+                .clubPositionId(position.getClubPositionId())
+                .assignedAt(LocalDateTime.now())
                 .build());
     }
 

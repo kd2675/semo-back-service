@@ -112,15 +112,16 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("ATTENDANCE"))
         );
 
-        assertThat(responses).hasSize(5);
+        assertThat(responses).hasSize(6);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactly("ATTENDANCE:true", "TIMELINE:false", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:false");
+                .containsExactly("ATTENDANCE:true", "TIMELINE:false", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:false", "ROLE_MANAGEMENT:false");
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "ATTENDANCE")).isTrue();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "TIMELINE")).isFalse();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "NOTICE")).isFalse();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "POLL")).isFalse();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")).isFalse();
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "ROLE_MANAGEMENT")).isFalse();
     }
 
     @Test
@@ -144,10 +145,17 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("TIMELINE"))
         );
 
-        assertThat(responses).hasSize(5);
+        assertThat(responses).hasSize(6);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactlyInAnyOrder("ATTENDANCE:false", "TIMELINE:true", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:false");
+                .containsExactlyInAnyOrder(
+                        "ATTENDANCE:false",
+                        "TIMELINE:true",
+                        "NOTICE:false",
+                        "POLL:false",
+                        "SCHEDULE_MANAGE:false",
+                        "ROLE_MANAGEMENT:false"
+                );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "TIMELINE")).isTrue();
     }
 
@@ -172,10 +180,17 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("NOTICE"))
         );
 
-        assertThat(responses).hasSize(5);
+        assertThat(responses).hasSize(6);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactlyInAnyOrder("ATTENDANCE:false", "TIMELINE:false", "NOTICE:true", "POLL:false", "SCHEDULE_MANAGE:false");
+                .containsExactlyInAnyOrder(
+                        "ATTENDANCE:false",
+                        "TIMELINE:false",
+                        "NOTICE:true",
+                        "POLL:false",
+                        "SCHEDULE_MANAGE:false",
+                        "ROLE_MANAGEMENT:false"
+                );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "NOTICE")).isTrue();
     }
 
@@ -200,10 +215,17 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("POLL"))
         );
 
-        assertThat(responses).hasSize(5);
+        assertThat(responses).hasSize(6);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactlyInAnyOrder("ATTENDANCE:false", "TIMELINE:false", "NOTICE:false", "POLL:true", "SCHEDULE_MANAGE:false");
+                .containsExactlyInAnyOrder(
+                        "ATTENDANCE:false",
+                        "TIMELINE:false",
+                        "NOTICE:false",
+                        "POLL:true",
+                        "SCHEDULE_MANAGE:false",
+                        "ROLE_MANAGEMENT:false"
+                );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "POLL")).isTrue();
     }
 
@@ -228,10 +250,17 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("SCHEDULE_MANAGE"))
         );
 
-        assertThat(responses).hasSize(5);
+        assertThat(responses).hasSize(6);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactlyInAnyOrder("ATTENDANCE:false", "TIMELINE:false", "NOTICE:false", "POLL:false", "SCHEDULE_MANAGE:true");
+                .containsExactlyInAnyOrder(
+                        "ATTENDANCE:false",
+                        "TIMELINE:false",
+                        "NOTICE:false",
+                        "POLL:false",
+                        "SCHEDULE_MANAGE:true",
+                        "ROLE_MANAGEMENT:false"
+                );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")).isTrue();
     }
 }

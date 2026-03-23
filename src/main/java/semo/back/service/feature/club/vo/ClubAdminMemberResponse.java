@@ -1,5 +1,9 @@
 package semo.back.service.feature.club.vo;
 
+import semo.back.service.feature.position.vo.ClubPositionSummaryResponse;
+
+import java.util.List;
+
 public record ClubAdminMemberResponse(
         Long clubMemberId,
         Long clubProfileId,
@@ -13,6 +17,7 @@ public record ClubAdminMemberResponse(
         String membershipStatus,
         boolean canManage,
         boolean canApprove,
-        boolean self
+        boolean self,
+        List<ClubPositionSummaryResponse> positions
 ) {
 }

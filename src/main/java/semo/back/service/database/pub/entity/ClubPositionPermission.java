@@ -16,30 +16,24 @@ import semo.back.service.common.jpa.CommonDateEntity;
 
 @Entity
 @Table(
-        name = "poll_permission_policy",
+        name = "club_position_permission",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_poll_permission_policy_club", columnNames = "club_id")
+                @UniqueConstraint(name = "uk_club_position_permission", columnNames = {"club_position_id", "permission_key"})
         }
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
-public class PollPermissionPolicy extends CommonDateEntity {
+public class ClubPositionPermission extends CommonDateEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "poll_permission_policy_id")
-    private Long pollPermissionPolicyId;
+    @Column(name = "club_position_permission_id")
+    private Long clubPositionPermissionId;
 
-    @Column(name = "club_id", nullable = false)
-    private Long clubId;
+    @Column(name = "club_position_id", nullable = false)
+    private Long clubPositionId;
 
-    @Column(name = "allow_member_create", nullable = false)
-    private boolean allowMemberCreate;
-
-    @Column(name = "allow_member_update", nullable = false)
-    private boolean allowMemberUpdate;
-
-    @Column(name = "allow_member_delete", nullable = false)
-    private boolean allowMemberDelete;
+    @Column(name = "permission_key", nullable = false, length = 80)
+    private String permissionKey;
 }

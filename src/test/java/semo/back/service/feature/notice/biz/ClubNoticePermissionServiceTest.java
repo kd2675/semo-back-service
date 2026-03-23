@@ -7,21 +7,26 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubMember;
+import semo.back.service.database.pub.entity.ClubMemberPosition;
+import semo.back.service.database.pub.entity.ClubPosition;
+import semo.back.service.database.pub.entity.ClubPositionPermission;
 import semo.back.service.database.pub.entity.ProfileUser;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
+import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
+import semo.back.service.database.pub.repository.ClubPositionPermissionRepository;
+import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
-import semo.back.service.database.pub.repository.NoticePermissionPolicyRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
-import semo.back.service.feature.notice.vo.UpdateClubAdminNoticeSettingsRequest;
 import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
+import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,10 +52,16 @@ class ClubNoticePermissionServiceTest {
     private ClubNoticePermissionService clubNoticePermissionService;
 
     @Autowired
-    private NoticePermissionPolicyRepository noticePermissionPolicyRepository;
+    private ClubNoticeRepository clubNoticeRepository;
 
     @Autowired
-    private ClubNoticeRepository clubNoticeRepository;
+    private ClubMemberPositionRepository clubMemberPositionRepository;
+
+    @Autowired
+    private ClubPositionRepository clubPositionRepository;
+
+    @Autowired
+    private ClubPositionPermissionRepository clubPositionPermissionRepository;
 
     @Autowired
     private ClubFeatureRepository clubFeatureRepository;
@@ -73,7 +84,9 @@ class ClubNoticePermissionServiceTest {
     @BeforeEach
     void setUp() {
         clubNoticeRepository.deleteAll();
-        noticePermissionPolicyRepository.deleteAll();
+        clubMemberPositionRepository.deleteAll();
+        clubPositionPermissionRepository.deleteAll();
+        clubPositionRepository.deleteAll();
         clubFeatureRepository.deleteAll();
         clubProfileRepository.deleteAll();
         clubMemberRepository.deleteAll();
@@ -83,23 +96,22 @@ class ClubNoticePermissionServiceTest {
     }
 
     @Test
-    void adminNoticeSettingsExposeDefaultPolicy() {
+    void adminNoticeSettingsRemovedAndRedirectedToRoleManagement() {
         String ownerUserKey = "notice-policy-owner-001";
         Long clubId = createNoticeClub(ownerUserKey, "Notice Policy Club");
 
-        var response = clubNoticePermissionService.getAdminSettings(clubId, ownerUserKey);
-
-        assertThat(response.allowMemberCreate()).isFalse();
-        assertThat(response.allowMemberUpdate()).isTrue();
-        assertThat(response.allowMemberDelete()).isTrue();
+        assertThatThrownBy(() -> clubNoticePermissionService.getAdminSettings(clubId, ownerUserKey))
+                .isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("공지 권한 설정 페이지는 제거되었습니다.")
+                .hasMessageContaining("직책관리");
     }
 
     @Test
-    void memberCreateUpdateDeleteFollowConfiguredPolicyWhileAdminStillCanManage() {
+    void memberCreateUpdateDeleteFollowAssignedPositionPermissions() {
         String ownerUserKey = "notice-policy-owner-002";
         String memberUserKey = "notice-policy-member-001";
         Long clubId = createNoticeClub(ownerUserKey, "Notice Permission Lab");
-        addActiveMember(clubId, memberUserKey, "Notice Member");
+        ClubMember member = addActiveMember(clubId, memberUserKey, "Notice Member");
 
         assertThatThrownBy(() -> clubNoticeService.createNotice(
                 clubId,
@@ -109,10 +121,10 @@ class ClubNoticePermissionServiceTest {
                 .isInstanceOf(SemoException.ForbiddenException.class)
                 .hasMessageContaining("공지 작성 권한");
 
-        clubNoticePermissionService.updateAdminSettings(
+        assignPositionPermissions(
                 clubId,
-                ownerUserKey,
-                new UpdateClubAdminNoticeSettingsRequest(true, false, false)
+                member,
+                ClubPositionPermissionEvaluator.PERMISSION_NOTICE_CREATE
         );
 
         var created = clubNoticeService.createNotice(
@@ -149,10 +161,12 @@ class ClubNoticePermissionServiceTest {
 
         assertThat(adminUpdated.title()).isEqualTo("관리자가 수정한 공지");
 
-        clubNoticePermissionService.updateAdminSettings(
+        assignPositionPermissions(
                 clubId,
-                ownerUserKey,
-                new UpdateClubAdminNoticeSettingsRequest(true, true, true)
+                member,
+                ClubPositionPermissionEvaluator.PERMISSION_NOTICE_CREATE,
+                ClubPositionPermissionEvaluator.PERMISSION_NOTICE_UPDATE_SELF,
+                ClubPositionPermissionEvaluator.PERMISSION_NOTICE_DELETE_SELF
         );
 
         var memberUpdated = clubNoticeService.updateNotice(
@@ -186,12 +200,12 @@ class ClubNoticePermissionServiceTest {
         clubFeatureService.updateClubFeatures(
                 clubId,
                 ownerUserKey,
-                new UpdateClubFeaturesRequest(List.of("NOTICE"))
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "ROLE_MANAGEMENT"))
         );
         return clubId;
     }
 
-    private void addActiveMember(Long clubId, String userKey, String displayName) {
+    private ClubMember addActiveMember(Long clubId, String userKey, String displayName) {
         ProfileUser profileUser = profileUserRepository.save(ProfileUser.builder()
                 .userKey(userKey)
                 .displayName(displayName)
@@ -199,13 +213,39 @@ class ClubNoticePermissionServiceTest {
                 .profileColor("#135bec")
                 .build());
 
-        clubMemberRepository.save(ClubMember.builder()
+        return clubMemberRepository.save(ClubMember.builder()
                 .clubId(clubId)
                 .profileId(profileUser.getProfileId())
                 .roleCode("MEMBER")
                 .membershipStatus("ACTIVE")
                 .joinedAt(LocalDateTime.now())
                 .lastActivityAt(LocalDateTime.now())
+                .build());
+    }
+
+    private void assignPositionPermissions(Long clubId, ClubMember member, String... permissionKeys) {
+        long nextCodeSuffix = clubPositionRepository.count() + 1;
+        ClubPosition position = clubPositionRepository.save(ClubPosition.builder()
+                .clubId(clubId)
+                .positionCode("NOTICE_EDITOR_" + nextCodeSuffix)
+                .displayName("공지 담당")
+                .description("공지 작성 및 본인 글 관리")
+                .iconName("campaign")
+                .colorHex("#c76117")
+                .active(true)
+                .build());
+
+        for (String permissionKey : permissionKeys) {
+            clubPositionPermissionRepository.save(ClubPositionPermission.builder()
+                    .clubPositionId(position.getClubPositionId())
+                    .permissionKey(permissionKey)
+                    .build());
+        }
+
+        clubMemberPositionRepository.save(ClubMemberPosition.builder()
+                .clubMemberId(member.getClubMemberId())
+                .clubPositionId(position.getClubPositionId())
+                .assignedAt(LocalDateTime.now())
                 .build());
     }
 

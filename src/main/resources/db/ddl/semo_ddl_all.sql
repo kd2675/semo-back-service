@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS feature_catalog (
     display_name VARCHAR(100) NOT NULL,
     description VARCHAR(255) NULL,
     icon_name VARCHAR(50) NOT NULL,
+    navigation_scope VARCHAR(20) NOT NULL DEFAULT 'USER_AND_ADMIN',
     active TINYINT(1) NOT NULL DEFAULT 1,
     sort_order INT NOT NULL DEFAULT 0,
     create_date DATETIME NOT NULL,
@@ -78,6 +79,73 @@ CREATE TABLE IF NOT EXISTS feature_activation (
 
 CREATE INDEX idx_feature_activation_enabled
     ON feature_activation (club_id, enabled, feature_key);
+
+CREATE TABLE IF NOT EXISTS feature_permission_catalog (
+    permission_key VARCHAR(80) PRIMARY KEY,
+    feature_key VARCHAR(50) NOT NULL,
+    display_name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NULL,
+    ownership_scope VARCHAR(20) NOT NULL DEFAULT 'CLUB',
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    sort_order INT NOT NULL DEFAULT 0,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_feature_permission_catalog_feature FOREIGN KEY (feature_key) REFERENCES feature_catalog(feature_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_feature_permission_catalog_feature
+    ON feature_permission_catalog (feature_key, active, sort_order);
+
+CREATE TABLE IF NOT EXISTS club_position (
+    club_position_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    position_code VARCHAR(50) NOT NULL,
+    display_name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NULL,
+    icon_name VARCHAR(50) NULL,
+    color_hex VARCHAR(20) NULL,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    created_by_club_profile_id BIGINT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_position_code UNIQUE (club_id, position_code),
+    CONSTRAINT fk_club_position_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_club_position_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_position_club_active
+    ON club_position (club_id, active, display_name);
+
+CREATE TABLE IF NOT EXISTS club_position_permission (
+    club_position_permission_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_position_id BIGINT NOT NULL,
+    permission_key VARCHAR(80) NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_position_permission UNIQUE (club_position_id, permission_key),
+    CONSTRAINT fk_club_position_permission_position FOREIGN KEY (club_position_id) REFERENCES club_position(club_position_id),
+    CONSTRAINT fk_club_position_permission_catalog FOREIGN KEY (permission_key) REFERENCES feature_permission_catalog(permission_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_position_permission_position
+    ON club_position_permission (club_position_id, permission_key);
+
+CREATE TABLE IF NOT EXISTS club_member_position (
+    club_member_position_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_member_id BIGINT NOT NULL,
+    club_position_id BIGINT NOT NULL,
+    assigned_by_club_profile_id BIGINT NULL,
+    assigned_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_member_position UNIQUE (club_member_id, club_position_id),
+    CONSTRAINT fk_club_member_position_member FOREIGN KEY (club_member_id) REFERENCES club_member(club_member_id),
+    CONSTRAINT fk_club_member_position_position FOREIGN KEY (club_position_id) REFERENCES club_position(club_position_id),
+    CONSTRAINT fk_club_member_position_assigned_by FOREIGN KEY (assigned_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_member_position_member
+    ON club_member_position (club_member_id, club_position_id);
 
 -- ============================================================
 -- Club membership / role
@@ -186,42 +254,6 @@ CREATE INDEX idx_club_notice_pinned
 
 CREATE INDEX idx_club_notice_schedule
     ON club_notice (club_id, schedule_at, deleted);
-
-CREATE TABLE IF NOT EXISTS notice_permission_policy (
-    notice_permission_policy_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    club_id BIGINT NOT NULL,
-    allow_member_create TINYINT(1) NOT NULL DEFAULT 0,
-    allow_member_update TINYINT(1) NOT NULL DEFAULT 1,
-    allow_member_delete TINYINT(1) NOT NULL DEFAULT 1,
-    create_date DATETIME NOT NULL,
-    update_date DATETIME NOT NULL,
-    CONSTRAINT uk_notice_permission_policy_club UNIQUE (club_id),
-    CONSTRAINT fk_notice_permission_policy_club FOREIGN KEY (club_id) REFERENCES club(club_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS schedule_permission_policy (
-    schedule_permission_policy_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    club_id BIGINT NOT NULL,
-    allow_member_create TINYINT(1) NOT NULL DEFAULT 0,
-    allow_member_update TINYINT(1) NOT NULL DEFAULT 1,
-    allow_member_delete TINYINT(1) NOT NULL DEFAULT 1,
-    create_date DATETIME NOT NULL,
-    update_date DATETIME NOT NULL,
-    CONSTRAINT uk_schedule_permission_policy_club UNIQUE (club_id),
-    CONSTRAINT fk_schedule_permission_policy_club FOREIGN KEY (club_id) REFERENCES club(club_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS poll_permission_policy (
-    poll_permission_policy_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    club_id BIGINT NOT NULL,
-    allow_member_create TINYINT(1) NOT NULL DEFAULT 0,
-    allow_member_update TINYINT(1) NOT NULL DEFAULT 1,
-    allow_member_delete TINYINT(1) NOT NULL DEFAULT 1,
-    create_date DATETIME NOT NULL,
-    update_date DATETIME NOT NULL,
-    CONSTRAINT uk_poll_permission_policy_club UNIQUE (club_id),
-    CONSTRAINT fk_poll_permission_policy_club FOREIGN KEY (club_id) REFERENCES club(club_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS club_board_item (
     board_item_id BIGINT AUTO_INCREMENT PRIMARY KEY,

@@ -493,7 +493,7 @@ class ClubScheduleServiceTest {
     }
 
     @Test
-    void authorCanStillManageOwnEventAndVoteAfterLosingAdminRole() {
+    void downgradedMemberCannotManageOwnEventAndVoteWithoutAssignedPosition() {
         Long clubId = clubService.createClub(
                 "schedule-owner-004",
                 "Schedule Author",
@@ -548,12 +548,12 @@ class ClubScheduleServiceTest {
 
         var eventDetail = clubScheduleService.getScheduleEventDetail(clubId, createdEvent.eventId(), "schedule-owner-004");
         var voteDetail = clubScheduleService.getScheduleVoteDetail(clubId, createdVote.voteId(), "schedule-owner-004");
-        assertThat(eventDetail.canEdit()).isTrue();
-        assertThat(eventDetail.canDelete()).isTrue();
-        assertThat(voteDetail.canEdit()).isTrue();
-        assertThat(voteDetail.canDelete()).isTrue();
+        assertThat(eventDetail.canEdit()).isFalse();
+        assertThat(eventDetail.canDelete()).isFalse();
+        assertThat(voteDetail.canEdit()).isFalse();
+        assertThat(voteDetail.canDelete()).isFalse();
 
-        var updatedEvent = clubScheduleService.updateScheduleEvent(
+        assertThatThrownBy(() -> clubScheduleService.updateScheduleEvent(
                 clubId,
                 createdEvent.eventId(),
                 "schedule-owner-004",
@@ -574,8 +574,10 @@ class ClubScheduleServiceTest {
                         false,
                         true
                 )
-        );
-        var updatedVote = clubScheduleService.updateScheduleVote(
+        ))
+                .hasMessageContaining("일정 수정 권한");
+
+        assertThatThrownBy(() -> clubScheduleService.updateScheduleVote(
                 clubId,
                 createdVote.voteId(),
                 "schedule-owner-004",
@@ -590,16 +592,13 @@ class ClubScheduleServiceTest {
                         false,
                         false
                 )
-        );
+        ))
+                .hasMessageContaining("투표 수정 권한");
 
-        assertThat(updatedEvent.title()).isEqualTo("작성자 일정 수정");
-        assertThat(updatedVote.title()).isEqualTo("작성자 투표 수정");
-
-        clubScheduleService.deleteScheduleEvent(clubId, createdEvent.eventId(), "schedule-owner-004");
-        clubScheduleService.deleteScheduleVote(clubId, createdVote.voteId(), "schedule-owner-004");
-
-        assertThat(clubScheduleEventRepository.count()).isZero();
-        assertThat(clubScheduleVoteRepository.count()).isZero();
+        assertThatThrownBy(() -> clubScheduleService.deleteScheduleEvent(clubId, createdEvent.eventId(), "schedule-owner-004"))
+                .hasMessageContaining("일정 삭제 권한");
+        assertThatThrownBy(() -> clubScheduleService.deleteScheduleVote(clubId, createdVote.voteId(), "schedule-owner-004"))
+                .hasMessageContaining("투표 삭제 권한");
     }
 
     private void downgradeMembershipToMember(Long clubId, String userKey) {

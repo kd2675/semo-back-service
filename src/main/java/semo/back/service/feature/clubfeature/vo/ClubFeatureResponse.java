@@ -5,6 +5,7 @@ public record ClubFeatureResponse(
         String displayName,
         String description,
         String iconName,
+        String navigationScope,
         boolean enabled,
         String userPath,
         String adminPath

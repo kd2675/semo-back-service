@@ -5,10 +5,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.database.pub.entity.PollPermissionPolicy;
-import semo.back.service.database.pub.repository.PollPermissionPolicyRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
-import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
+import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 import semo.back.service.feature.poll.vo.ClubAdminPollSettingsResponse;
 import semo.back.service.feature.poll.vo.UpdateClubAdminPollSettingsRequest;
 
@@ -16,17 +14,10 @@ import semo.back.service.feature.poll.vo.UpdateClubAdminPollSettingsRequest;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubPollPermissionService {
-    private static final String FEATURE_POLL = "POLL";
-    private static final PollPolicy DEFAULT_POLICY = new PollPolicy(false, true, true);
-
-    private final ClubAccessResolver clubAccessResolver;
-    private final ClubFeatureService clubFeatureService;
-    private final PollPermissionPolicyRepository pollPermissionPolicyRepository;
+    private final ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
 
     public ClubAdminPollSettingsResponse getAdminSettings(Long clubId, String userKey) {
-        requirePollFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        return toAdminSettingsResponse(access, getPolicy(clubId));
+        throw new SemoException.ValidationException("투표 권한 설정 페이지는 제거되었습니다. 직책관리에서 권한을 관리해주세요.");
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -35,24 +26,15 @@ public class ClubPollPermissionService {
             String userKey,
             UpdateClubAdminPollSettingsRequest request
     ) {
-        requirePollFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        PollPermissionPolicy current = pollPermissionPolicyRepository.findByClubId(clubId).orElse(null);
-        pollPermissionPolicyRepository.save(PollPermissionPolicy.builder()
-                .pollPermissionPolicyId(current == null ? null : current.getPollPermissionPolicyId())
-                .clubId(clubId)
-                .allowMemberCreate(Boolean.TRUE.equals(request.allowMemberCreate()))
-                .allowMemberUpdate(Boolean.TRUE.equals(request.allowMemberUpdate()))
-                .allowMemberDelete(Boolean.TRUE.equals(request.allowMemberDelete()))
-                .build());
-        return toAdminSettingsResponse(access, getPolicy(clubId));
+        throw new SemoException.ValidationException("투표 권한 설정 페이지는 제거되었습니다. 직책관리에서 권한을 관리해주세요.");
     }
 
     public boolean canCreatePoll(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return getPolicy(access.club().getClubId()).allowMemberCreate();
+        return clubPositionPermissionEvaluator.isRoleManagementEnabled(access.club().getClubId())
+                && clubPositionPermissionEvaluator.hasPermission(access, ClubPositionPermissionEvaluator.PERMISSION_POLL_CREATE);
     }
 
     public PollActionPermission getActionPermission(
@@ -65,48 +47,12 @@ public class ClubPollPermissionService {
         if (!access.clubProfile().getClubProfileId().equals(authorClubProfileId)) {
             return new PollActionPermission(false, false);
         }
-        PollPolicy policy = getPolicy(access.club().getClubId());
         return new PollActionPermission(
-                policy.allowMemberUpdate(),
-                policy.allowMemberDelete()
+                clubPositionPermissionEvaluator.isRoleManagementEnabled(access.club().getClubId())
+                        && clubPositionPermissionEvaluator.hasPermission(access, ClubPositionPermissionEvaluator.PERMISSION_POLL_UPDATE_SELF),
+                clubPositionPermissionEvaluator.isRoleManagementEnabled(access.club().getClubId())
+                        && clubPositionPermissionEvaluator.hasPermission(access, ClubPositionPermissionEvaluator.PERMISSION_POLL_DELETE_SELF)
         );
-    }
-
-    public PollPolicy getPolicy(Long clubId) {
-        return pollPermissionPolicyRepository.findByClubId(clubId)
-                .map(policy -> new PollPolicy(
-                        policy.isAllowMemberCreate(),
-                        policy.isAllowMemberUpdate(),
-                        policy.isAllowMemberDelete()
-                ))
-                .orElse(DEFAULT_POLICY);
-    }
-
-    private ClubAdminPollSettingsResponse toAdminSettingsResponse(
-            ClubAccessResolver.ClubAccess access,
-            PollPolicy policy
-    ) {
-        return new ClubAdminPollSettingsResponse(
-                access.club().getClubId(),
-                access.club().getName(),
-                true,
-                policy.allowMemberCreate(),
-                policy.allowMemberUpdate(),
-                policy.allowMemberDelete()
-        );
-    }
-
-    private void requirePollFeature(Long clubId) {
-        if (!clubFeatureService.isFeatureEnabled(clubId, FEATURE_POLL)) {
-            throw new SemoException.ValidationException("투표 기능이 활성화되지 않았습니다.");
-        }
-    }
-
-    public record PollPolicy(
-            boolean allowMemberCreate,
-            boolean allowMemberUpdate,
-            boolean allowMemberDelete
-    ) {
     }
 
     public record PollActionPermission(

@@ -5,10 +5,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.database.pub.entity.SchedulePermissionPolicy;
-import semo.back.service.database.pub.repository.SchedulePermissionPolicyRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
-import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
+import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 import semo.back.service.feature.schedule.vo.ClubAdminScheduleSettingsResponse;
 import semo.back.service.feature.schedule.vo.UpdateClubAdminScheduleSettingsRequest;
 
@@ -16,17 +14,10 @@ import semo.back.service.feature.schedule.vo.UpdateClubAdminScheduleSettingsRequ
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubSchedulePermissionService {
-    private static final String FEATURE_SCHEDULE = "SCHEDULE_MANAGE";
-    private static final SchedulePolicy DEFAULT_POLICY = new SchedulePolicy(false, true, true);
-
-    private final ClubAccessResolver clubAccessResolver;
-    private final ClubFeatureService clubFeatureService;
-    private final SchedulePermissionPolicyRepository schedulePermissionPolicyRepository;
+    private final ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
 
     public ClubAdminScheduleSettingsResponse getAdminSettings(Long clubId, String userKey) {
-        requireScheduleFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        return toAdminSettingsResponse(access, getPolicy(clubId));
+        throw new SemoException.ValidationException("일정 권한 설정 페이지는 제거되었습니다. 직책관리에서 권한을 관리해주세요.");
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -35,24 +26,15 @@ public class ClubSchedulePermissionService {
             String userKey,
             UpdateClubAdminScheduleSettingsRequest request
     ) {
-        requireScheduleFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        SchedulePermissionPolicy current = schedulePermissionPolicyRepository.findByClubId(clubId).orElse(null);
-        schedulePermissionPolicyRepository.save(SchedulePermissionPolicy.builder()
-                .schedulePermissionPolicyId(current == null ? null : current.getSchedulePermissionPolicyId())
-                .clubId(clubId)
-                .allowMemberCreate(Boolean.TRUE.equals(request.allowMemberCreate()))
-                .allowMemberUpdate(Boolean.TRUE.equals(request.allowMemberUpdate()))
-                .allowMemberDelete(Boolean.TRUE.equals(request.allowMemberDelete()))
-                .build());
-        return toAdminSettingsResponse(access, getPolicy(clubId));
+        throw new SemoException.ValidationException("일정 권한 설정 페이지는 제거되었습니다. 직책관리에서 권한을 관리해주세요.");
     }
 
     public boolean canCreateSchedule(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return getPolicy(access.club().getClubId()).allowMemberCreate();
+        return clubPositionPermissionEvaluator.isRoleManagementEnabled(access.club().getClubId())
+                && clubPositionPermissionEvaluator.hasPermission(access, ClubPositionPermissionEvaluator.PERMISSION_SCHEDULE_CREATE);
     }
 
     public ScheduleEventActionPermission getActionPermission(
@@ -65,52 +47,16 @@ public class ClubSchedulePermissionService {
         if (!access.clubProfile().getClubProfileId().equals(authorClubProfileId)) {
             return new ScheduleEventActionPermission(false, false);
         }
-        SchedulePolicy policy = getPolicy(access.club().getClubId());
         return new ScheduleEventActionPermission(
-                policy.allowMemberUpdate(),
-                policy.allowMemberDelete()
+                clubPositionPermissionEvaluator.isRoleManagementEnabled(access.club().getClubId())
+                        && clubPositionPermissionEvaluator.hasPermission(access, ClubPositionPermissionEvaluator.PERMISSION_SCHEDULE_UPDATE_SELF),
+                clubPositionPermissionEvaluator.isRoleManagementEnabled(access.club().getClubId())
+                        && clubPositionPermissionEvaluator.hasPermission(access, ClubPositionPermissionEvaluator.PERMISSION_SCHEDULE_DELETE_SELF)
         );
     }
 
     public boolean canManageSchedule(ClubAccessResolver.ClubAccess access, Long authorClubProfileId) {
         return getActionPermission(access, authorClubProfileId).canManage();
-    }
-
-    public SchedulePolicy getPolicy(Long clubId) {
-        return schedulePermissionPolicyRepository.findByClubId(clubId)
-                .map(policy -> new SchedulePolicy(
-                        policy.isAllowMemberCreate(),
-                        policy.isAllowMemberUpdate(),
-                        policy.isAllowMemberDelete()
-                ))
-                .orElse(DEFAULT_POLICY);
-    }
-
-    private ClubAdminScheduleSettingsResponse toAdminSettingsResponse(
-            ClubAccessResolver.ClubAccess access,
-            SchedulePolicy policy
-    ) {
-        return new ClubAdminScheduleSettingsResponse(
-                access.club().getClubId(),
-                access.club().getName(),
-                true,
-                policy.allowMemberCreate(),
-                policy.allowMemberUpdate(),
-                policy.allowMemberDelete()
-        );
-    }
-
-    private void requireScheduleFeature(Long clubId) {
-        if (!clubFeatureService.isFeatureEnabled(clubId, FEATURE_SCHEDULE)) {
-            throw new SemoException.ValidationException("일정 관리 기능이 활성화되지 않았습니다.");
-        }
-    }
-
-    public record SchedulePolicy(
-            boolean allowMemberCreate,
-            boolean allowMemberUpdate,
-            boolean allowMemberDelete
-    ) {
     }
 
     public record ScheduleEventActionPermission(

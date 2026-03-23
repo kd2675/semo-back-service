@@ -12,13 +12,16 @@ import lombok.NoArgsConstructor;
 import semo.back.service.common.jpa.CommonDateEntity;
 
 @Entity
-@Table(name = "feature_catalog")
+@Table(name = "feature_permission_catalog")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
-public class FeatureCatalog extends CommonDateEntity {
+public class FeaturePermissionCatalog extends CommonDateEntity {
     @Id
+    @Column(name = "permission_key", nullable = false, length = 80)
+    private String permissionKey;
+
     @Column(name = "feature_key", nullable = false, length = 50)
     private String featureKey;
 
@@ -28,11 +31,8 @@ public class FeatureCatalog extends CommonDateEntity {
     @Column(name = "description", length = 255)
     private String description;
 
-    @Column(name = "icon_name", nullable = false, length = 50)
-    private String iconName;
-
-    @Column(name = "navigation_scope", nullable = false, length = 20)
-    private String navigationScope;
+    @Column(name = "ownership_scope", nullable = false, length = 20)
+    private String ownershipScope;
 
     @Column(name = "active", nullable = false)
     private boolean active;

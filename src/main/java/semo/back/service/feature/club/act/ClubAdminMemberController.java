@@ -17,6 +17,7 @@ import semo.back.service.feature.club.vo.ClubAdminMemberResponse;
 import semo.back.service.feature.club.vo.ClubAdminMembersResponse;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberRoleRequest;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberStatusRequest;
+import semo.back.service.feature.position.vo.UpdateClubMemberPositionsRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
 @RestController
@@ -75,6 +76,20 @@ public class ClubAdminMemberController {
         return ResponseDataDTO.of(
                 clubAdminMemberService.approvePendingMember(clubId, clubMemberId, requireUserKey(userContext)),
                 "가입 승인 성공"
+        );
+    }
+
+    @PutMapping("/{clubMemberId}/positions")
+    public ResponseDataDTO<ClubAdminMemberResponse> updateMemberPositions(
+            @PathVariable Long clubId,
+            @PathVariable Long clubMemberId,
+            @RequestBody UpdateClubMemberPositionsRequest request,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubAdminMemberService.updateMemberPositions(clubId, clubMemberId, requireUserKey(userContext), request),
+                "회원 직책 변경 성공"
         );
     }
 

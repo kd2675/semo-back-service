@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubFeature;
 import semo.back.service.database.pub.entity.FeatureCatalog;
@@ -30,6 +31,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubFeatureService {
+    private static final String NAVIGATION_SCOPE_USER_AND_ADMIN = "USER_AND_ADMIN";
+    private static final String NAVIGATION_SCOPE_ADMIN_ONLY = "ADMIN_ONLY";
+
     private final FeatureCatalogRepository featureCatalogRepository;
     private final ClubFeatureRepository clubFeatureRepository;
     private final ClubAccessResolver clubAccessResolver;
@@ -166,6 +170,7 @@ public class ClubFeatureService {
                             catalog.getDisplayName(),
                             catalog.getDescription(),
                             catalog.getIconName(),
+                            resolveNavigationScope(catalog),
                             clubFeature != null && clubFeature.isEnabled(),
                             toUserPath(clubId, catalog.getFeatureKey()),
                             toAdminPath(clubId, catalog.getFeatureKey())
@@ -181,6 +186,7 @@ public class ClubFeatureService {
             case "NOTICE" -> "/clubs/%d/more/notices".formatted(clubId);
             case "POLL" -> "/clubs/%d/more/polls".formatted(clubId);
             case "SCHEDULE_MANAGE" -> "/clubs/%d/more/schedules".formatted(clubId);
+            case "ROLE_MANAGEMENT" -> "/clubs/%d/admin/more/roles".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
     }
@@ -189,10 +195,22 @@ public class ClubFeatureService {
         return switch (normalizeFeatureKey(featureKey)) {
             case "ATTENDANCE" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
             case "TIMELINE" -> "/clubs/%d/admin/more/timeline".formatted(clubId);
-            case "NOTICE" -> "/clubs/%d/admin/more/notices".formatted(clubId);
-            case "POLL" -> "/clubs/%d/admin/more/polls".formatted(clubId);
-            case "SCHEDULE_MANAGE" -> "/clubs/%d/admin/more/schedules".formatted(clubId);
+            case "NOTICE" -> "/clubs/%d/admin/more/roles?feature=NOTICE".formatted(clubId);
+            case "POLL" -> "/clubs/%d/admin/more/roles?feature=POLL".formatted(clubId);
+            case "SCHEDULE_MANAGE" -> "/clubs/%d/admin/more/roles?feature=SCHEDULE_MANAGE".formatted(clubId);
+            case "ROLE_MANAGEMENT" -> "/clubs/%d/admin/more/roles".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
+        };
+    }
+
+    private String resolveNavigationScope(FeatureCatalog catalog) {
+        if (catalog == null || !StringUtils.hasText(catalog.getNavigationScope())) {
+            return NAVIGATION_SCOPE_USER_AND_ADMIN;
+        }
+        String normalized = catalog.getNavigationScope().trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case NAVIGATION_SCOPE_ADMIN_ONLY -> NAVIGATION_SCOPE_ADMIN_ONLY;
+            default -> NAVIGATION_SCOPE_USER_AND_ADMIN;
         };
     }
 
