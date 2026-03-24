@@ -21,6 +21,7 @@ public record ClubPollSummaryResponse(
         boolean postedToBoard,
         boolean postedToCalendar,
         boolean sharedToSchedule,
+        boolean pinned,
         boolean canEdit,
         boolean canDelete,
         Long mySelectedOptionId,

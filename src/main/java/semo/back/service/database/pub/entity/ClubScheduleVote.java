@@ -44,6 +44,9 @@ public class ClubScheduleVote extends CommonDateEntity {
     @Column(name = "shared_to_calendar", nullable = false)
     private boolean sharedToCalendar;
 
+    @Column(name = "pinned", nullable = false)
+    private boolean pinned;
+
     @Column(name = "title", nullable = false, length = 200)
     private String title;
 

@@ -170,6 +170,7 @@ class ClubBoardFeedServiceTest {
                         false,
                         false,
                         true,
+                        false,
                         false
                 )
         );
@@ -187,6 +188,7 @@ class ClubBoardFeedServiceTest {
                         "22:00",
                         List.of("A안", "B안"),
                         true,
+                        false,
                         false,
                         false
                 )
@@ -236,6 +238,125 @@ class ClubBoardFeedServiceTest {
         assertThat(secondPage.items().get(0).event()).isNotNull();
         assertThat(secondPage.items().get(0).event().eventId()).isEqualTo(event.eventId());
         assertThat(secondPage.hasNext()).isFalse();
+    }
+
+    @Test
+    void boardFeedPinnedOnlyIncludesPinnedNoticeEventAndVote() {
+        String userKey = "board-owner-002";
+        Long clubId = clubService.createClub(
+                userKey,
+                "Board Owner",
+                new CreateClubRequest(
+                        "Pinned Feed Lab",
+                        "핀 게시물 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+        enableNoticeFeature(clubId, userKey);
+
+        var pinnedNotice = clubNoticeService.createNotice(
+                clubId,
+                userKey,
+                new UpsertClubNoticeRequest(
+                        "핀 공지",
+                        "공지 핀 테스트",
+                        null,
+                        null,
+                        null,
+                        null,
+                        true,
+                        false,
+                        false,
+                        true
+                )
+        );
+
+        pauseForOrdering();
+
+        var pinnedEvent = clubScheduleService.createScheduleEvent(
+                clubId,
+                userKey,
+                new UpsertScheduleEventRequest(
+                        "핀 일정",
+                        "2030-09-10",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        false,
+                        null,
+                        false,
+                        false,
+                        true,
+                        false,
+                        true
+                )
+        );
+
+        pauseForOrdering();
+
+        var pinnedVote = clubScheduleService.createScheduleVote(
+                clubId,
+                userKey,
+                new UpsertScheduleVoteRequest(
+                        "핀 투표",
+                        "2030-09-10",
+                        "2030-09-11",
+                        null,
+                        null,
+                        List.of("찬성", "보류"),
+                        true,
+                        false,
+                        false,
+                        true
+                )
+        );
+
+        pauseForOrdering();
+
+        clubScheduleService.createScheduleEvent(
+                clubId,
+                userKey,
+                new UpsertScheduleEventRequest(
+                        "일반 일정",
+                        "2030-09-12",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        false,
+                        null,
+                        false,
+                        false,
+                        true,
+                        false,
+                        false
+                )
+        );
+
+        var pinnedFeed = clubBoardFeedService.getBoardFeed(clubId, userKey, null, true, null, 10);
+
+        assertThat(pinnedFeed.items()).hasSize(3);
+        assertThat(pinnedFeed.items().stream().map(item -> item.contentType())).containsExactlyInAnyOrder(
+                "NOTICE",
+                "SCHEDULE_EVENT",
+                "SCHEDULE_VOTE"
+        );
+        assertThat(pinnedFeed.items().stream().map(item -> item.notice() != null ? item.notice().noticeId() : null))
+                .contains(pinnedNotice.noticeId());
+        assertThat(pinnedFeed.items().stream().map(item -> item.event() != null ? item.event().eventId() : null))
+                .contains(pinnedEvent.eventId());
+        assertThat(pinnedFeed.items().stream().map(item -> item.vote() != null ? item.vote().voteId() : null))
+                .contains(pinnedVote.voteId());
     }
 
     @Test

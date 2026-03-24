@@ -202,6 +202,7 @@ public class ClubScheduleService {
         );
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostToCalendar(request.postToCalendar());
+        boolean pinned = shouldPin(request.pinned());
 
         ClubScheduleEvent event = clubScheduleEventRepository.save(ClubScheduleEvent.builder()
                 .clubId(clubId)
@@ -222,6 +223,7 @@ public class ClubScheduleService {
                 .feeAmount(draft.feeAmount())
                 .feeAmountUndecided(draft.feeAmountUndecided())
                 .feeNWaySplit(draft.feeNWaySplit())
+                .pinned(pinned)
                 .visibilityStatus(VISIBILITY_STATUS)
                 .eventStatus(EVENT_STATUS)
                 .build());
@@ -248,6 +250,7 @@ public class ClubScheduleService {
         );
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostToCalendar(request.postToCalendar());
+        boolean pinned = shouldPin(request.pinned());
 
         ClubScheduleEvent updated = clubScheduleEventRepository.save(ClubScheduleEvent.builder()
                 .eventId(current.getEventId())
@@ -269,6 +272,7 @@ public class ClubScheduleService {
                 .feeAmount(draft.feeAmount())
                 .feeAmountUndecided(draft.feeAmountUndecided())
                 .feeNWaySplit(draft.feeNWaySplit())
+                .pinned(pinned)
                 .visibilityStatus(current.getVisibilityStatus())
                 .eventStatus(EVENT_STATUS)
                 .build());
@@ -354,6 +358,7 @@ public class ClubScheduleService {
         );
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
+        boolean pinned = shouldPin(request.pinned());
 
         ClubScheduleVote vote = clubScheduleVoteRepository.save(ClubScheduleVote.builder()
                 .clubId(clubId)
@@ -366,6 +371,7 @@ public class ClubScheduleService {
                 .voteEndDate(draft.voteEndDate())
                 .voteStartTime(draft.voteStartTime())
                 .voteEndTime(draft.voteEndTime())
+                .pinned(pinned)
                 .closedAt(null)
                 .build());
         syncVoteShares(vote);
@@ -391,6 +397,7 @@ public class ClubScheduleService {
         );
         boolean postToBoard = shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
+        boolean pinned = shouldPin(request.pinned());
 
         ClubScheduleVote updated = clubScheduleVoteRepository.save(ClubScheduleVote.builder()
                 .voteId(current.getVoteId())
@@ -404,6 +411,7 @@ public class ClubScheduleService {
                 .voteEndDate(draft.voteEndDate())
                 .voteStartTime(draft.voteStartTime())
                 .voteEndTime(draft.voteEndTime())
+                .pinned(pinned)
                 .closedAt(current.getClosedAt())
                 .build());
         syncVoteShares(updated);
@@ -458,6 +466,7 @@ public class ClubScheduleService {
                 .voteEndDate(current.getVoteEndDate())
                 .voteStartTime(current.getVoteStartTime())
                 .voteEndTime(current.getVoteEndTime())
+                .pinned(current.isPinned())
                 .closedAt(closedAt)
                 .build());
         syncVoteShares(closedVote);
@@ -548,6 +557,7 @@ public class ClubScheduleService {
                             vote.isSharedToBoard(),
                             vote.isSharedToCalendar(),
                             vote.isSharedToCalendar(),
+                            vote.isPinned(),
                             null,
                             selection.mySelectedOptionId(),
                             selection.options(),
@@ -592,6 +602,7 @@ public class ClubScheduleService {
                 event.isFeeNWaySplit(),
                 event.isSharedToBoard(),
                 event.isSharedToCalendar(),
+                event.isPinned(),
                 null,
                 participation.myParticipationStatus(),
                 participation.goingCount(),
@@ -630,6 +641,7 @@ public class ClubScheduleService {
                 vote.isSharedToBoard(),
                 vote.isSharedToCalendar(),
                 vote.isSharedToCalendar(),
+                vote.isPinned(),
                 null,
                 selection.mySelectedOptionId(),
                 selection.totalResponses(),
@@ -775,6 +787,7 @@ public class ClubScheduleService {
                 event.isFeeNWaySplit(),
                 event.isSharedToBoard(),
                 event.isSharedToCalendar(),
+                event.isPinned(),
                 null,
                 participation.myParticipationStatus(),
                 participation.goingCount(),
@@ -870,7 +883,8 @@ public class ClubScheduleService {
                 formatDateRangeLabel(event.getStartAt().toLocalDate(), event.getEndAt() == null ? null : event.getEndAt().toLocalDate()),
                 formatTimeLabel(event.getStartAt(), event.getEndAt()),
                 event.isSharedToBoard(),
-                event.isSharedToCalendar()
+                event.isSharedToCalendar(),
+                event.isPinned()
         );
     }
 
@@ -888,7 +902,8 @@ public class ClubScheduleService {
                 optionCount,
                 vote.isSharedToBoard(),
                 vote.isSharedToCalendar(),
-                vote.isSharedToCalendar()
+                vote.isSharedToCalendar(),
+                vote.isPinned()
         );
     }
 
@@ -1045,6 +1060,10 @@ public class ClubScheduleService {
 
     private boolean shouldPostToBoard(Boolean postToBoard) {
         return Boolean.TRUE.equals(postToBoard);
+    }
+
+    private boolean shouldPin(Boolean pinned) {
+        return Boolean.TRUE.equals(pinned);
     }
 
     private boolean shouldPostToCalendar(Boolean postToCalendar) {

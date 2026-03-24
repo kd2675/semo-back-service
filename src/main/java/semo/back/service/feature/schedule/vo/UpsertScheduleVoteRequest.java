@@ -23,6 +23,7 @@ public record UpsertScheduleVoteRequest(
                 > optionLabels,
         Boolean postToBoard,
         Boolean postToCalendar,
-        Boolean postToSchedule
+        Boolean postToSchedule,
+        Boolean pinned
 ) {
 }

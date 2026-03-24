@@ -279,7 +279,8 @@ class ClubSchedulePermissionServiceTest {
                 false,
                 false,
                 false,
-                true
+                true,
+                false
         );
     }
 }

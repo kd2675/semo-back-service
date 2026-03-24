@@ -20,6 +20,7 @@ public record ScheduleEventSummaryResponse(
         boolean feeNWaySplit,
         boolean postedToBoard,
         boolean postedToCalendar,
+        boolean pinned,
         Long linkedNoticeId,
         String myParticipationStatus,
         int goingCount,

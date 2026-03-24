@@ -46,6 +46,8 @@ public interface ClubBoardItemRepository extends JpaRepository<ClubBoardItem, Lo
               and (
                     :pinnedOnly = false
                     or (bi.contentType = 'NOTICE' and n.pinned = true)
+                    or (bi.contentType = 'SCHEDULE_EVENT' and e.pinned = true)
+                    or (bi.contentType = 'SCHEDULE_VOTE' and v.pinned = true)
                   )
               and (
                     :cursorBoardItemId is null

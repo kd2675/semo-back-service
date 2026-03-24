@@ -18,6 +18,7 @@ public record ScheduleVoteDetailResponse(
         boolean postedToBoard,
         boolean postedToCalendar,
         boolean sharedToSchedule,
+        boolean pinned,
         Long linkedNoticeId,
         Long mySelectedOptionId,
         int totalResponses,

@@ -299,6 +299,7 @@ class ClubPollPermissionServiceTest {
                 optionLabels,
                 false,
                 false,
+                false,
                 false
         );
     }

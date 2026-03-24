@@ -147,6 +147,7 @@ class ClubScheduleServiceTest {
                         false,
                         true,
                         true,
+                        true,
                         true
                 )
         );
@@ -161,6 +162,7 @@ class ClubScheduleServiceTest {
                         "18:30",
                         "22:00",
                         List.of("성수", "건대", "잠실"),
+                        true,
                         true,
                         true,
                         true
@@ -230,6 +232,7 @@ class ClubScheduleServiceTest {
         assertThat(eventDetail.feeAmountUndecided()).isFalse();
         assertThat(eventDetail.feeNWaySplit()).isTrue();
         assertThat(eventDetail.postedToBoard()).isTrue();
+        assertThat(eventDetail.pinned()).isTrue();
         assertThat(eventDetail.linkedNoticeId()).isNull();
 
         assertThat(voteDetail.options()).hasSize(3);
@@ -240,6 +243,7 @@ class ClubScheduleServiceTest {
         assertThat(voteDetail.voteTimeLabel()).isEqualTo("18:30 - 22:00");
         assertThat(voteDetail.votingOpen()).isFalse();
         assertThat(voteDetail.postedToBoard()).isTrue();
+        assertThat(voteDetail.pinned()).isTrue();
         assertThat(voteDetail.linkedNoticeId()).isNull();
         assertThat(clubNoticeRepository.count()).isEqualTo(2);
     }
@@ -277,7 +281,8 @@ class ClubScheduleServiceTest {
                         false,
                         false,
                         false,
-                        true
+                        true,
+                        false
                 )
         );
         var createdVote = clubScheduleService.createScheduleVote(
@@ -292,7 +297,8 @@ class ClubScheduleServiceTest {
                         List.of("성수", "건대"),
                         false,
                         true,
-                        true
+                        true,
+                        false
                 )
         );
 
@@ -349,7 +355,8 @@ class ClubScheduleServiceTest {
                         List.of("찬성", "보류"),
                         false,
                         true,
-                        true
+                        true,
+                        false
                 )
         );
 
@@ -363,6 +370,7 @@ class ClubScheduleServiceTest {
                         null,
                         null,
                         List.of("A", "B"),
+                        false,
                         false,
                         false,
                         false
@@ -409,7 +417,8 @@ class ClubScheduleServiceTest {
                         List.of("1/N", "회비"),
                         true,
                         true,
-                        true
+                        true,
+                        false
                 )
         );
 
@@ -456,6 +465,7 @@ class ClubScheduleServiceTest {
                         List.of("A", "B"),
                         false,
                         false,
+                        false,
                         false
                 )
         );
@@ -473,6 +483,7 @@ class ClubScheduleServiceTest {
                         List.of("서울숲", "왕십리", "건대"),
                         true,
                         true,
+                        true,
                         true
                 )
         );
@@ -484,6 +495,7 @@ class ClubScheduleServiceTest {
         assertThat(detail.voteTimeLabel()).isEqualTo("19:00 - 21:30");
         assertThat(detail.options()).hasSize(3);
         assertThat(updatedVote.postedToBoard()).isTrue();
+        assertThat(detail.pinned()).isTrue();
 
         clubScheduleService.deleteScheduleVote(clubId, updatedVote.voteId(), "schedule-owner-002");
 
@@ -525,7 +537,8 @@ class ClubScheduleServiceTest {
                         false,
                         false,
                         false,
-                        true
+                        true,
+                        false
                 )
         );
         var createdVote = clubScheduleService.createScheduleVote(
@@ -538,6 +551,7 @@ class ClubScheduleServiceTest {
                         null,
                         null,
                         List.of("찬성", "반대"),
+                        false,
                         false,
                         false,
                         false
@@ -572,7 +586,8 @@ class ClubScheduleServiceTest {
                         false,
                         false,
                         false,
-                        true
+                        true,
+                        false
                 )
         ))
                 .hasMessageContaining("일정 수정 권한");
@@ -588,6 +603,7 @@ class ClubScheduleServiceTest {
                         "20:00",
                         "22:00",
                         List.of("점심", "저녁", "야식"),
+                        false,
                         false,
                         false,
                         false

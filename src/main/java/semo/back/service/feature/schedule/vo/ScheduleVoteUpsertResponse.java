@@ -13,6 +13,7 @@ public record ScheduleVoteUpsertResponse(
         int optionCount,
         boolean postedToBoard,
         boolean postedToCalendar,
-        boolean sharedToSchedule
+        boolean sharedToSchedule,
+        boolean pinned
 ) {
 }

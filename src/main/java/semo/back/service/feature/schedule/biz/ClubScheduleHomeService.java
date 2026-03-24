@@ -81,7 +81,9 @@ public class ClubScheduleHomeService {
         return clubScheduleEventRepository.findAllActiveEvents(clubId).stream()
                 .filter(event -> access.isAdmin()
                         || clubSchedulePermissionService.canManageSchedule(access, event.getAuthorClubProfileId()))
-                .sorted(Comparator.comparing(ClubScheduleEvent::getStartAt).reversed().thenComparing(ClubScheduleEvent::getEventId).reversed())
+                .sorted(Comparator.comparing(ClubScheduleEvent::isPinned).reversed()
+                        .thenComparing(ClubScheduleEvent::getStartAt).reversed()
+                        .thenComparing(ClubScheduleEvent::getEventId).reversed())
                 .toList();
     }
 

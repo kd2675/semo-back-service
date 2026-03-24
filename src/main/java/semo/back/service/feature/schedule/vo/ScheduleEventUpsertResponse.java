@@ -9,6 +9,7 @@ public record ScheduleEventUpsertResponse(
         String dateLabel,
         String timeLabel,
         boolean postedToBoard,
-        boolean postedToCalendar
+        boolean postedToCalendar,
+        boolean pinned
 ) {
 }

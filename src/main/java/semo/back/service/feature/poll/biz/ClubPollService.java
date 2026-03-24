@@ -109,6 +109,7 @@ public class ClubPollService {
                             vote.isSharedToBoard(),
                             vote.isSharedToCalendar(),
                             vote.isSharedToCalendar(),
+                            vote.isPinned(),
                             actionPermission.canEdit(),
                             actionPermission.canDelete(),
                             selection.mySelectedOptionId(),
@@ -149,7 +150,8 @@ public class ClubPollService {
 
     private Comparator<ClubPollSummaryResponse> pollComparator() {
         return Comparator
-                .comparingInt((ClubPollSummaryResponse poll) -> switch (poll.voteStatus()) {
+                .comparing(ClubPollSummaryResponse::pinned).reversed()
+                .thenComparingInt((ClubPollSummaryResponse poll) -> switch (poll.voteStatus()) {
                     case "ONGOING" -> 0;
                     case "WAITING" -> 1;
                     default -> 2;

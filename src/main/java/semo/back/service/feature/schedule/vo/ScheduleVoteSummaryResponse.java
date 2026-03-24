@@ -18,6 +18,7 @@ public record ScheduleVoteSummaryResponse(
         boolean postedToBoard,
         boolean postedToCalendar,
         boolean sharedToSchedule,
+        boolean pinned,
         Long linkedNoticeId,
         Long mySelectedOptionId,
         List<ScheduleVoteOptionSummaryResponse> options,
