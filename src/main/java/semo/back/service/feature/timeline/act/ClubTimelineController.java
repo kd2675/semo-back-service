@@ -24,8 +24,8 @@ public class ClubTimelineController {
     @GetMapping("/more/timeline")
     public ResponseDataDTO<ClubTimelineResponse> getTimeline(
             @PathVariable Long clubId,
-            @RequestParam(required = false) String cursorPublishedAt,
-            @RequestParam(required = false) Long cursorNoticeId,
+            @RequestParam(required = false) String cursorCreatedAt,
+            @RequestParam(required = false) Long cursorActivityId,
             @RequestParam(required = false) Integer size,
             UserContext userContext
     ) {
@@ -34,8 +34,8 @@ public class ClubTimelineController {
                 clubTimelineService.getTimeline(
                         clubId,
                         requireUserKey(userContext),
-                        cursorPublishedAt,
-                        cursorNoticeId,
+                        cursorCreatedAt,
+                        cursorActivityId,
                         size
                 ),
                 "타임라인 조회 성공"

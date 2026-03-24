@@ -28,4 +28,24 @@ public interface ClubActivityLogRepository extends JpaRepository<ClubActivityLog
             Long cursorActivityId,
             Pageable pageable
     );
+
+    @Query("""
+            select a
+            from ClubActivityLog a
+            where a.clubId = :clubId
+              and a.actorClubProfileId = :actorClubProfileId
+              and (
+                    :cursorCreatedAt is null
+                    or a.createDate < :cursorCreatedAt
+                    or (a.createDate = :cursorCreatedAt and a.clubActivityLogId < :cursorActivityId)
+                  )
+            order by a.createDate desc, a.clubActivityLogId desc
+            """)
+    List<ClubActivityLog> findActorFeed(
+            Long clubId,
+            Long actorClubProfileId,
+            LocalDateTime cursorCreatedAt,
+            Long cursorActivityId,
+            Pageable pageable
+    );
 }

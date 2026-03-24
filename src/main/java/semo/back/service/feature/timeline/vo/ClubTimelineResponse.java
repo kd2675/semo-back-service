@@ -7,8 +7,8 @@ public record ClubTimelineResponse(
         String clubName,
         boolean admin,
         List<TimelineEntryResponse> entries,
-        String nextCursorPublishedAt,
-        Long nextCursorNoticeId,
+        String nextCursorCreatedAt,
+        Long nextCursorActivityId,
         boolean hasNext
 ) {
 }

@@ -26,7 +26,7 @@ public final class TestCatalogSeeder {
                 FeatureCatalog.builder()
                         .featureKey("TIMELINE")
                         .displayName("타임라인")
-                        .description("공지 기반 타임라인 카드로 모임 활동을 확인합니다.")
+                        .description("모임 전체 활동을 시간순 타임라인으로 확인합니다.")
                         .iconName("timeline")
                         .navigationScope("USER_AND_ADMIN")
                         .active(true)

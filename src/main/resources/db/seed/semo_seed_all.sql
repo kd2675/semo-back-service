@@ -73,7 +73,7 @@ INSERT INTO feature_catalog (
 SELECT
     'TIMELINE',
     '타임라인',
-    '공지 기반 타임라인 카드로 모임 활동을 확인합니다.',
+    '모임 전체 활동을 시간순 타임라인으로 확인합니다.',
     'timeline',
     'USER_AND_ADMIN',
     1,
