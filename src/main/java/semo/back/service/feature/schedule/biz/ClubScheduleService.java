@@ -33,6 +33,7 @@ import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.share.biz.ClubContentShareService;
 import semo.back.service.feature.schedule.vo.ClubScheduleResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventDetailResponse;
+import semo.back.service.feature.schedule.vo.ScheduleEventParticipantSummaryResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventSummaryResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventUpsertResponse;
 import semo.back.service.feature.schedule.vo.ScheduleOverviewResponse;
@@ -67,6 +68,7 @@ public class ClubScheduleService {
     private static final String EVENT_STATUS = "SCHEDULED";
     private static final String PARTICIPATION_GOING = "GOING";
     private static final String PARTICIPATION_NOT_GOING = "NOT_GOING";
+    private static final String PARTICIPATION_CANCEL = "CANCEL";
     private static final String CONTENT_NOTICE = ClubContentShareService.CONTENT_NOTICE;
     private static final String CONTENT_SCHEDULE_EVENT = ClubContentShareService.CONTENT_SCHEDULE_EVENT;
     private static final String CONTENT_SCHEDULE_VOTE = ClubContentShareService.CONTENT_SCHEDULE_VOTE;
@@ -335,6 +337,13 @@ public class ClubScheduleService {
         ClubEventParticipant current = clubEventParticipantRepository
                 .findByEventIdAndClubProfileId(eventId, access.clubProfile().getClubProfileId())
                 .orElse(null);
+        if (PARTICIPATION_CANCEL.equals(participationStatus)) {
+            if (current != null) {
+                clubEventParticipantRepository.delete(current);
+            }
+            return buildEventDetailResponse(access, event);
+        }
+
         clubEventParticipantRepository.save(ClubEventParticipant.builder()
                 .clubEventParticipantId(current == null ? null : current.getClubEventParticipantId())
                 .eventId(eventId)
@@ -575,10 +584,12 @@ public class ClubScheduleService {
     ) {
         ClubSchedulePermissionService.ScheduleEventActionPermission actionPermission =
                 clubSchedulePermissionService.getActionPermission(access, event.getAuthorClubProfileId());
+        List<ClubEventParticipant> participants = clubEventParticipantRepository.findByEventIdIn(List.of(event.getEventId()));
         EventParticipationSnapshot participation = toParticipationSnapshot(
-                clubEventParticipantRepository.findByEventIdIn(List.of(event.getEventId())),
+                participants,
                 access.clubProfile().getClubProfileId()
         );
+        List<ScheduleEventParticipantSummaryResponse> goingParticipants = toGoingParticipantSummaries(participants);
 
         return new ScheduleEventDetailResponse(
                 access.club().getClubId(),
@@ -607,6 +618,7 @@ public class ClubScheduleService {
                 participation.myParticipationStatus(),
                 participation.goingCount(),
                 participation.notGoingCount(),
+                goingParticipants,
                 actionPermission.canEdit(),
                 actionPermission.canDelete()
         );
@@ -743,7 +755,9 @@ public class ClubScheduleService {
             throw new SemoException.ValidationException("참석 상태는 필수입니다.");
         }
         String normalized = request.participationStatus().trim().toUpperCase(Locale.ROOT);
-        if (!PARTICIPATION_GOING.equals(normalized) && !PARTICIPATION_NOT_GOING.equals(normalized)) {
+        if (!PARTICIPATION_GOING.equals(normalized)
+                && !PARTICIPATION_NOT_GOING.equals(normalized)
+                && !PARTICIPATION_CANCEL.equals(normalized)) {
             throw new SemoException.ValidationException("지원하지 않는 참석 상태입니다.");
         }
         return normalized;
@@ -753,6 +767,7 @@ public class ClubScheduleService {
         return switch (participationStatus) {
             case PARTICIPATION_GOING -> "참석으로 응답했습니다";
             case PARTICIPATION_NOT_GOING -> "불참으로 응답했습니다";
+            case PARTICIPATION_CANCEL -> "응답을 취소했습니다";
             default -> "응답했습니다";
         };
     }
@@ -818,6 +833,37 @@ public class ClubScheduleService {
         }
 
         return new EventParticipationSnapshot(myParticipationStatus, goingCount, notGoingCount);
+    }
+
+    private List<ScheduleEventParticipantSummaryResponse> toGoingParticipantSummaries(
+            List<ClubEventParticipant> participants
+    ) {
+        List<ClubEventParticipant> goingParticipants = participants.stream()
+                .filter(participant -> PARTICIPATION_GOING.equals(participant.getParticipationStatus()))
+                .sorted(Comparator.comparing(ClubEventParticipant::getClubEventParticipantId))
+                .toList();
+        if (goingParticipants.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, ClubProfile> profileById = loadAuthorProfiles(
+                goingParticipants.stream()
+                        .map(ClubEventParticipant::getClubProfileId)
+                        .distinct()
+                        .toList()
+        );
+
+        return goingParticipants.stream()
+                .map(participant -> {
+                    ClubProfile profile = profileById.get(participant.getClubProfileId());
+                    return new ScheduleEventParticipantSummaryResponse(
+                            participant.getClubProfileId(),
+                            resolveAuthorDisplayName(profile),
+                            resolveAuthorAvatarImageUrl(profile),
+                            resolveAuthorAvatarThumbnailUrl(profile)
+                    );
+                })
+                .toList();
     }
 
     private VoteSelectionSnapshot toVoteSelectionSnapshot(

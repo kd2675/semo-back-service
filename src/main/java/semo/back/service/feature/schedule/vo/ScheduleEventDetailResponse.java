@@ -27,6 +27,7 @@ public record ScheduleEventDetailResponse(
         String myParticipationStatus,
         int goingCount,
         int notGoingCount,
+        java.util.List<ScheduleEventParticipantSummaryResponse> goingParticipants,
         boolean canEdit,
         boolean canDelete
 ) {

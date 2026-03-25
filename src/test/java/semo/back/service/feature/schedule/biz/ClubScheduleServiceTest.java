@@ -321,7 +321,21 @@ class ClubScheduleServiceTest {
 
         assertThat(participated.myParticipationStatus()).isEqualTo("GOING");
         assertThat(participated.goingCount()).isEqualTo(1);
+        assertThat(participated.goingParticipants()).hasSize(1);
+        assertThat(participated.goingParticipants().getFirst().displayName()).isNotBlank();
         assertThat(clubEventParticipantRepository.count()).isOne();
+
+        var canceled = clubScheduleService.updateScheduleEventParticipation(
+                clubId,
+                createdEvent.eventId(),
+                "schedule-owner-003",
+                new UpdateScheduleEventParticipationRequest("CANCEL")
+        );
+
+        assertThat(canceled.myParticipationStatus()).isNull();
+        assertThat(canceled.goingCount()).isZero();
+        assertThat(canceled.goingParticipants()).isEmpty();
+        assertThat(clubEventParticipantRepository.count()).isZero();
 
         assertThat(voted.mySelectedOptionId()).isNotNull();
         assertThat(voted.totalResponses()).isEqualTo(1);

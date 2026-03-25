@@ -302,11 +302,12 @@ public class ClubDashboardService {
             return Set.of();
         }
 
-        return clubFeatureRepository.findByClubIdAndFeatureKeyIn(clubId, requiredFeatureKeys).stream()
+        Set<String> enabledFeatureKeys = clubFeatureRepository.findByClubIdAndFeatureKeyIn(clubId, requiredFeatureKeys).stream()
                 .filter(ClubFeature::isEnabled)
                 .map(ClubFeature::getFeatureKey)
                 .map(this::normalizeFeatureKey)
                 .collect(Collectors.toSet());
+        return enabledFeatureKeys;
     }
 
     private boolean isWidgetAvailable(DashboardWidgetCatalog catalog, Set<String> enabledFeatureKeys) {
