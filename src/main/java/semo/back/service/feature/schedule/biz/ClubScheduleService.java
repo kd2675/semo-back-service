@@ -28,6 +28,7 @@ import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.contentread.biz.ClubContentReadService;
 import semo.back.service.feature.notice.biz.ClubNoticeService;
 import semo.back.service.feature.poll.biz.ClubPollPermissionService;
 import semo.back.service.feature.schedule.vo.ClubCalendarFeedItemResponse;
@@ -97,6 +98,7 @@ public class ClubScheduleService {
     private final ClubPollPermissionService clubPollPermissionService;
     private final ClubNoticeService clubNoticeService;
     private final ClubContentShareService clubContentShareService;
+    private final ClubContentReadService clubContentReadService;
     private final ClubTournamentService clubTournamentService;
     private final ImageFileUrlResolver imageFileUrlResolver;
 
@@ -120,9 +122,19 @@ public class ClubScheduleService {
         Map<Long, ScheduleEventSummaryResponse> eventById = loadCalendarEventSummaries(access, calendarItems);
         Map<Long, ScheduleVoteSummaryResponse> voteById = loadCalendarVoteSummaries(access, calendarItems);
         Map<Long, TournamentSummaryResponse> tournamentById = loadCalendarTournamentSummaries(access, calendarItems);
+        Map<Long, Integer> readCountByCalendarItemId = clubContentReadService.getCalendarReadCounts(
+                calendarItems.stream().map(ClubCalendarItem::getCalendarItemId).toList()
+        );
 
         List<ClubCalendarFeedItemResponse> items = calendarItems.stream()
-                .map(item -> toCalendarFeedItemResponse(item, noticeById, eventById, voteById, tournamentById))
+                .map(item -> toCalendarFeedItemResponse(
+                        item,
+                        readCountByCalendarItemId,
+                        noticeById,
+                        eventById,
+                        voteById,
+                        tournamentById
+                ))
                 .filter(Objects::nonNull)
                 .toList();
 
@@ -1269,16 +1281,19 @@ public class ClubScheduleService {
 
     private ClubCalendarFeedItemResponse toCalendarFeedItemResponse(
             ClubCalendarItem calendarItem,
+            Map<Long, Integer> readCountByCalendarItemId,
             Map<Long, ClubNoticeSummaryResponse> noticeById,
             Map<Long, ScheduleEventSummaryResponse> eventById,
             Map<Long, ScheduleVoteSummaryResponse> voteById,
             Map<Long, TournamentSummaryResponse> tournamentById
     ) {
+        int readCount = readCountByCalendarItemId.getOrDefault(calendarItem.getCalendarItemId(), 0);
         return switch (calendarItem.getContentType()) {
             case CONTENT_NOTICE -> {
                 ClubNoticeSummaryResponse notice = noticeById.get(calendarItem.getContentId());
                 yield notice == null ? null : new ClubCalendarFeedItemResponse(
                         calendarItem.getCalendarItemId(),
+                        readCount,
                         calendarItem.getContentType(),
                         notice,
                         null,
@@ -1290,6 +1305,7 @@ public class ClubScheduleService {
                 ScheduleEventSummaryResponse event = eventById.get(calendarItem.getContentId());
                 yield event == null ? null : new ClubCalendarFeedItemResponse(
                         calendarItem.getCalendarItemId(),
+                        readCount,
                         calendarItem.getContentType(),
                         null,
                         event,
@@ -1301,6 +1317,7 @@ public class ClubScheduleService {
                 ScheduleVoteSummaryResponse vote = voteById.get(calendarItem.getContentId());
                 yield vote == null ? null : new ClubCalendarFeedItemResponse(
                         calendarItem.getCalendarItemId(),
+                        readCount,
                         calendarItem.getContentType(),
                         null,
                         null,
@@ -1312,6 +1329,7 @@ public class ClubScheduleService {
                 TournamentSummaryResponse tournament = tournamentById.get(calendarItem.getContentId());
                 yield tournament == null ? null : new ClubCalendarFeedItemResponse(
                         calendarItem.getCalendarItemId(),
+                        readCount,
                         calendarItem.getContentType(),
                         null,
                         null,

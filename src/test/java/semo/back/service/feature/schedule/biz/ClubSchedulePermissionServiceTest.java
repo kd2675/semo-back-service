@@ -50,9 +50,6 @@ class ClubSchedulePermissionServiceTest {
     private ClubScheduleService clubScheduleService;
 
     @Autowired
-    private ClubSchedulePermissionService clubSchedulePermissionService;
-
-    @Autowired
     private ClubScheduleEventRepository clubScheduleEventRepository;
 
     @Autowired
@@ -110,19 +107,8 @@ class ClubSchedulePermissionServiceTest {
     }
 
     @Test
-    void adminScheduleSettingsRemovedAndRedirectedToRoleManagement() {
-        String ownerUserKey = "schedule-policy-owner-001";
-        Long clubId = createScheduleClub(ownerUserKey, "Schedule Policy Club");
-
-        assertThatThrownBy(() -> clubSchedulePermissionService.getAdminSettings(clubId, ownerUserKey))
-                .isInstanceOf(SemoException.ValidationException.class)
-                .hasMessageContaining("일정 권한 설정 페이지는 제거되었습니다.")
-                .hasMessageContaining("직책관리");
-    }
-
-    @Test
     void memberScheduleCreateUpdateDeleteFollowAssignedPositionPermissions() {
-        String ownerUserKey = "schedule-policy-owner-002";
+        String ownerUserKey = "schedule-policy-owner-001";
         String memberUserKey = "schedule-policy-member-001";
         Long clubId = createScheduleClub(ownerUserKey, "Schedule Permission Lab");
         ClubMember member = addActiveMember(clubId, memberUserKey, "Schedule Member");

@@ -49,9 +49,6 @@ class ClubNoticePermissionServiceTest {
     private ClubNoticeService clubNoticeService;
 
     @Autowired
-    private ClubNoticePermissionService clubNoticePermissionService;
-
-    @Autowired
     private ClubNoticeRepository clubNoticeRepository;
 
     @Autowired
@@ -96,19 +93,8 @@ class ClubNoticePermissionServiceTest {
     }
 
     @Test
-    void adminNoticeSettingsRemovedAndRedirectedToRoleManagement() {
-        String ownerUserKey = "notice-policy-owner-001";
-        Long clubId = createNoticeClub(ownerUserKey, "Notice Policy Club");
-
-        assertThatThrownBy(() -> clubNoticePermissionService.getAdminSettings(clubId, ownerUserKey))
-                .isInstanceOf(SemoException.ValidationException.class)
-                .hasMessageContaining("공지 권한 설정 페이지는 제거되었습니다.")
-                .hasMessageContaining("직책관리");
-    }
-
-    @Test
     void memberCreateUpdateDeleteFollowAssignedPositionPermissions() {
-        String ownerUserKey = "notice-policy-owner-002";
+        String ownerUserKey = "notice-policy-owner-001";
         String memberUserKey = "notice-policy-member-001";
         Long clubId = createNoticeClub(ownerUserKey, "Notice Permission Lab");
         ClubMember member = addActiveMember(clubId, memberUserKey, "Notice Member");

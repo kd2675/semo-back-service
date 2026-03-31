@@ -17,6 +17,7 @@ import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.contentread.biz.ClubContentReadService;
 import semo.back.service.feature.notice.vo.ClubBoardFeedItemResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
@@ -50,6 +51,7 @@ public class ClubBoardFeedService {
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
     private final TournamentRecordRepository tournamentRecordRepository;
+    private final ClubContentReadService clubContentReadService;
     private final ClubNoticeService clubNoticeService;
     private final ClubScheduleService clubScheduleService;
     private final ClubTournamentService clubTournamentService;
@@ -79,9 +81,19 @@ public class ClubBoardFeedService {
         Map<Long, ScheduleEventSummaryResponse> eventById = loadEventSummaries(access, pageRows);
         Map<Long, ScheduleVoteSummaryResponse> voteById = loadVoteSummaries(access, pageRows);
         Map<Long, TournamentSummaryResponse> tournamentById = loadTournamentSummaries(access, pageRows);
+        Map<Long, Integer> readCountByBoardItemId = clubContentReadService.getBoardReadCounts(
+                pageRows.stream().map(ClubBoardItem::getBoardItemId).toList()
+        );
 
         List<ClubBoardFeedItemResponse> items = pageRows.stream()
-                .map(row -> toBoardFeedItemResponse(row, noticeById, eventById, voteById, tournamentById))
+                .map(row -> toBoardFeedItemResponse(
+                        row,
+                        readCountByBoardItemId,
+                        noticeById,
+                        eventById,
+                        voteById,
+                        tournamentById
+                ))
                 .filter(item -> item != null)
                 .toList();
 
@@ -192,16 +204,19 @@ public class ClubBoardFeedService {
 
     private ClubBoardFeedItemResponse toBoardFeedItemResponse(
             ClubBoardItem row,
+            Map<Long, Integer> readCountByBoardItemId,
             Map<Long, ClubNoticeSummaryResponse> noticeById,
             Map<Long, ScheduleEventSummaryResponse> eventById,
             Map<Long, ScheduleVoteSummaryResponse> voteById,
             Map<Long, TournamentSummaryResponse> tournamentById
     ) {
+        int readCount = readCountByBoardItemId.getOrDefault(row.getBoardItemId(), 0);
         return switch (row.getContentType()) {
             case CONTENT_NOTICE -> {
                 ClubNoticeSummaryResponse notice = noticeById.get(row.getContentId());
                 yield notice == null ? null : new ClubBoardFeedItemResponse(
                         row.getBoardItemId(),
+                        readCount,
                         row.getContentType(),
                         notice,
                         null,
@@ -213,6 +228,7 @@ public class ClubBoardFeedService {
                 ScheduleEventSummaryResponse event = eventById.get(row.getContentId());
                 yield event == null ? null : new ClubBoardFeedItemResponse(
                         row.getBoardItemId(),
+                        readCount,
                         row.getContentType(),
                         null,
                         event,
@@ -224,6 +240,7 @@ public class ClubBoardFeedService {
                 ScheduleVoteSummaryResponse vote = voteById.get(row.getContentId());
                 yield vote == null ? null : new ClubBoardFeedItemResponse(
                         row.getBoardItemId(),
+                        readCount,
                         row.getContentType(),
                         null,
                         null,
@@ -235,6 +252,7 @@ public class ClubBoardFeedService {
                 TournamentSummaryResponse tournament = tournamentById.get(row.getContentId());
                 yield tournament == null ? null : new ClubBoardFeedItemResponse(
                         row.getBoardItemId(),
+                        readCount,
                         row.getContentType(),
                         null,
                         null,

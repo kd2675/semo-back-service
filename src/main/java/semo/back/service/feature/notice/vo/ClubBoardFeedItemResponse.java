@@ -6,6 +6,7 @@ import semo.back.service.feature.tournament.vo.TournamentSummaryResponse;
 
 public record ClubBoardFeedItemResponse(
         Long boardItemId,
+        Integer readCount,
         String contentType,
         ClubNoticeSummaryResponse notice,
         ScheduleEventSummaryResponse event,

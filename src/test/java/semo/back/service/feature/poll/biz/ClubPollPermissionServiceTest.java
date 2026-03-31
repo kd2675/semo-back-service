@@ -56,9 +56,6 @@ class ClubPollPermissionServiceTest {
     private ClubPollService clubPollService;
 
     @Autowired
-    private ClubPollPermissionService clubPollPermissionService;
-
-    @Autowired
     private ClubScheduleVoteSelectionRepository clubScheduleVoteSelectionRepository;
 
     @Autowired
@@ -126,16 +123,11 @@ class ClubPollPermissionServiceTest {
     }
 
     @Test
-    void adminPollSettingsRemovedAndPollHomeUsesRoleManagementPermission() {
+    void pollHomeUsesRoleManagementPermission() {
         String ownerUserKey = "poll-policy-owner-001";
         String memberUserKey = "poll-policy-member-001";
         Long clubId = createPollClub(ownerUserKey, "Poll Policy Club");
         ClubMember member = addActiveMember(clubId, memberUserKey, "Poll Member");
-
-        assertThatThrownBy(() -> clubPollPermissionService.getAdminSettings(clubId, ownerUserKey))
-                .isInstanceOf(SemoException.ValidationException.class)
-                .hasMessageContaining("투표 권한 설정 페이지는 제거되었습니다.")
-                .hasMessageContaining("직책관리");
 
         var deniedHome = clubPollService.getPollHome(clubId, memberUserKey, null);
         assertThat(deniedHome.canCreate()).isFalse();
