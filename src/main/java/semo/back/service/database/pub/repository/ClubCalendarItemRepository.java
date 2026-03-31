@@ -12,6 +12,8 @@ import java.util.Optional;
 public interface ClubCalendarItemRepository extends JpaRepository<ClubCalendarItem, Long> {
     Optional<ClubCalendarItem> findByClubIdAndContentTypeAndContentId(Long clubId, String contentType, Long contentId);
 
+    List<ClubCalendarItem> findAllByClubIdAndContentTypeAndContentId(Long clubId, String contentType, Long contentId);
+
     List<ClubCalendarItem> findAllByClubIdAndContentTypeOrderByCalendarItemIdDesc(Long clubId, String contentType);
 
     @Query("""

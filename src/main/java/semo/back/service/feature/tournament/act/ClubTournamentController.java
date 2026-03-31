@@ -16,6 +16,7 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.tournament.biz.ClubTournamentService;
 import semo.back.service.feature.tournament.vo.CancelTournamentRequest;
 import semo.back.service.feature.tournament.vo.ClubTournamentHomeResponse;
+import semo.back.service.feature.tournament.vo.ReviewTournamentApplicationRequest;
 import semo.back.service.feature.tournament.vo.SubmitTournamentApplicationRequest;
 import semo.back.service.feature.tournament.vo.TournamentDetailResponse;
 import semo.back.service.feature.tournament.vo.TournamentUpsertResponse;
@@ -118,6 +119,27 @@ public class ClubTournamentController {
         return ResponseDataDTO.of(
                 clubTournamentService.cancelMyApplication(clubId, tournamentRecordId, requireUserKey(userContext)),
                 "대회 참가 신청 취소 성공"
+        );
+    }
+
+    @PutMapping("/{tournamentRecordId}/applications/{tournamentApplicationId}/review")
+    public ResponseDataDTO<TournamentDetailResponse> reviewApplication(
+            @PathVariable Long clubId,
+            @PathVariable Long tournamentRecordId,
+            @PathVariable Long tournamentApplicationId,
+            @Valid @RequestBody ReviewTournamentApplicationRequest request,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubTournamentService.reviewApplication(
+                        clubId,
+                        tournamentRecordId,
+                        tournamentApplicationId,
+                        requireUserKey(userContext),
+                        request
+                ),
+                "참가 신청 검토 성공"
         );
     }
 

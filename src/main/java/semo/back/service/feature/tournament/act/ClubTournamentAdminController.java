@@ -15,9 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.tournament.biz.ClubTournamentService;
 import semo.back.service.feature.tournament.vo.ClubAdminTournamentHomeResponse;
-import semo.back.service.feature.tournament.vo.ReviewTournamentApplicationRequest;
+import semo.back.service.feature.tournament.vo.ReviewTournamentRecordRequest;
 import semo.back.service.feature.tournament.vo.TournamentDetailResponse;
-import semo.back.service.feature.tournament.vo.UpdateTournamentEntriesRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
 @RestController
@@ -38,38 +37,22 @@ public class ClubTournamentAdminController {
         );
     }
 
-    @PutMapping("/admin/more/tournaments/{tournamentRecordId}/applications/{tournamentApplicationId}/review")
-    public ResponseDataDTO<TournamentDetailResponse> reviewApplication(
+    @PutMapping("/admin/more/tournaments/{tournamentRecordId}/review")
+    public ResponseDataDTO<TournamentDetailResponse> reviewTournament(
             @PathVariable Long clubId,
             @PathVariable Long tournamentRecordId,
-            @PathVariable Long tournamentApplicationId,
-            @Valid @RequestBody ReviewTournamentApplicationRequest request,
+            @Valid @RequestBody ReviewTournamentRecordRequest request,
             UserContext userContext
     ) {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
-                clubTournamentService.reviewApplication(
+                clubTournamentService.reviewTournament(
                         clubId,
                         tournamentRecordId,
-                        tournamentApplicationId,
                         requireUserKey(userContext),
                         request
                 ),
-                "참가 신청 검토 성공"
-        );
-    }
-
-    @PutMapping("/admin/more/tournaments/{tournamentRecordId}/entries")
-    public ResponseDataDTO<TournamentDetailResponse> updateEntries(
-            @PathVariable Long clubId,
-            @PathVariable Long tournamentRecordId,
-            @Valid @RequestBody UpdateTournamentEntriesRequest request,
-            UserContext userContext
-    ) {
-        requireUserRole(userContext);
-        return ResponseDataDTO.of(
-                clubTournamentService.updateEntries(clubId, tournamentRecordId, requireUserKey(userContext), request),
-                "엔트리 편성 저장 성공"
+                "대회 승인 검토 성공"
         );
     }
 

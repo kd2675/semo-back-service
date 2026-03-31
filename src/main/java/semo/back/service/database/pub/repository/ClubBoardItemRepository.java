@@ -11,6 +11,8 @@ import org.springframework.data.domain.Pageable;
 public interface ClubBoardItemRepository extends JpaRepository<ClubBoardItem, Long> {
     Optional<ClubBoardItem> findByClubIdAndContentTypeAndContentId(Long clubId, String contentType, Long contentId);
 
+    List<ClubBoardItem> findAllByClubIdAndContentTypeAndContentId(Long clubId, String contentType, Long contentId);
+
     List<ClubBoardItem> findAllByClubIdAndContentTypeOrderByBoardItemIdDesc(Long clubId, String contentType);
 
     @Query("""

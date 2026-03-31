@@ -15,8 +15,7 @@ public class ClubTournamentPermissionService {
     public static final String PERMISSION_TOURNAMENT_CREATE = "TOURNAMENT_RECORD_CREATE";
     public static final String PERMISSION_TOURNAMENT_UPDATE_SELF = "TOURNAMENT_RECORD_UPDATE_SELF";
     public static final String PERMISSION_TOURNAMENT_PIN = "TOURNAMENT_RECORD_PIN";
-    public static final String PERMISSION_TOURNAMENT_APPLICATION_REVIEW = "TOURNAMENT_RECORD_APPLICATION_REVIEW";
-    public static final String PERMISSION_TOURNAMENT_ENTRY_MANAGE = "TOURNAMENT_RECORD_ENTRY_MANAGE";
+    public static final String PERMISSION_TOURNAMENT_REVIEW = "TOURNAMENT_RECORD_REVIEW";
     public static final String PERMISSION_TOURNAMENT_DELETE_ANY = "TOURNAMENT_RECORD_DELETE_ANY";
 
     private final ClubFeatureService clubFeatureService;
@@ -58,18 +57,11 @@ public class ClubTournamentPermissionService {
         return hasRolePermission(access, PERMISSION_TOURNAMENT_PIN);
     }
 
-    public boolean canReviewApplications(ClubAccessResolver.ClubAccess access) {
+    public boolean canReviewTournament(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_TOURNAMENT_APPLICATION_REVIEW);
-    }
-
-    public boolean canManageEntries(ClubAccessResolver.ClubAccess access) {
-        if (access.isAdmin()) {
-            return true;
-        }
-        return hasRolePermission(access, PERMISSION_TOURNAMENT_ENTRY_MANAGE);
+        return hasRolePermission(access, PERMISSION_TOURNAMENT_REVIEW);
     }
 
     public boolean canDeleteTournament(ClubAccessResolver.ClubAccess access) {

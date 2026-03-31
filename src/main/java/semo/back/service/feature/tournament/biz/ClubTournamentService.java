@@ -9,20 +9,10 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.common.util.ImageFileUrlResolver;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.TournamentApplication;
-import semo.back.service.database.pub.entity.TournamentEntry;
-import semo.back.service.database.pub.entity.TournamentEntryMember;
-import semo.back.service.database.pub.entity.TournamentMatch;
-import semo.back.service.database.pub.entity.TournamentMatchSide;
 import semo.back.service.database.pub.entity.TournamentRecord;
-import semo.back.service.database.pub.entity.TournamentRound;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.TournamentApplicationRepository;
-import semo.back.service.database.pub.repository.TournamentEntryMemberRepository;
-import semo.back.service.database.pub.repository.TournamentEntryRepository;
-import semo.back.service.database.pub.repository.TournamentMatchRepository;
-import semo.back.service.database.pub.repository.TournamentMatchSideRepository;
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
-import semo.back.service.database.pub.repository.TournamentRoundRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
@@ -31,16 +21,13 @@ import semo.back.service.feature.tournament.vo.CancelTournamentRequest;
 import semo.back.service.feature.tournament.vo.ClubAdminTournamentHomeResponse;
 import semo.back.service.feature.tournament.vo.ClubTournamentHomeResponse;
 import semo.back.service.feature.tournament.vo.ReviewTournamentApplicationRequest;
+import semo.back.service.feature.tournament.vo.ReviewTournamentRecordRequest;
 import semo.back.service.feature.tournament.vo.SubmitTournamentApplicationRequest;
 import semo.back.service.feature.tournament.vo.TournamentApplicationSummaryResponse;
 import semo.back.service.feature.tournament.vo.TournamentDetailResponse;
-import semo.back.service.feature.tournament.vo.TournamentEntryDraftMemberRequest;
-import semo.back.service.feature.tournament.vo.TournamentEntryMemberResponse;
-import semo.back.service.feature.tournament.vo.TournamentEntrySummaryResponse;
+import semo.back.service.feature.tournament.vo.TournamentParticipantSummaryResponse;
 import semo.back.service.feature.tournament.vo.TournamentSummaryResponse;
 import semo.back.service.feature.tournament.vo.TournamentUpsertResponse;
-import semo.back.service.feature.tournament.vo.UpdateTournamentEntriesRequest;
-import semo.back.service.feature.tournament.vo.UpsertTournamentEntryDraftRequest;
 import semo.back.service.feature.tournament.vo.UpsertTournamentRequest;
 
 import java.time.LocalDate;
@@ -50,14 +37,12 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -75,23 +60,18 @@ public class ClubTournamentService {
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_CANCELLED = "CANCELLED";
 
+    private static final String APPROVAL_PENDING = "PENDING";
+    private static final String APPROVAL_APPROVED = "APPROVED";
+    private static final String APPROVAL_REJECTED = "REJECTED";
+
     private static final String APPLICATION_APPLIED = "APPLIED";
     private static final String APPLICATION_APPROVED = "APPROVED";
     private static final String APPLICATION_REJECTED = "REJECTED";
     private static final String APPLICATION_CANCELLED = "CANCELLED";
 
-    private static final String ENTRY_ACTIVE = "ACTIVE";
-    private static final String ENTRY_WITHDRAWN = "WITHDRAWN";
-    private static final String ENTRY_WINNER = "WINNER";
-    private static final String ENTRY_INDIVIDUAL = "INDIVIDUAL";
-    private static final String ENTRY_PAIR = "PAIR";
-    private static final String ENTRY_TEAM = "TEAM";
-
     private static final String MATCH_FORMAT_SINGLE = "SINGLE";
     private static final String MATCH_FORMAT_DOUBLE = "DOUBLE";
     private static final String MATCH_FORMAT_TEAM = "TEAM";
-
-    private static final String BRACKET_MODE_RANDOM = "RANDOM";
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -102,11 +82,6 @@ public class ClubTournamentService {
 
     private final TournamentRecordRepository tournamentRecordRepository;
     private final TournamentApplicationRepository tournamentApplicationRepository;
-    private final TournamentEntryRepository tournamentEntryRepository;
-    private final TournamentEntryMemberRepository tournamentEntryMemberRepository;
-    private final TournamentRoundRepository tournamentRoundRepository;
-    private final TournamentMatchRepository tournamentMatchRepository;
-    private final TournamentMatchSideRepository tournamentMatchSideRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubTournamentPermissionService clubTournamentPermissionService;
@@ -120,10 +95,13 @@ public class ClubTournamentService {
                 .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(clubId);
         TournamentContext context = buildTournamentContext(access, tournaments);
 
-        List<TournamentSummaryResponse> archived = context.summaries().stream()
+        List<TournamentSummaryResponse> approvedVisible = context.summaries().stream()
+                .filter(summary -> APPROVAL_APPROVED.equals(summary.approvalStatus()))
+                .toList();
+        List<TournamentSummaryResponse> archived = approvedVisible.stream()
                 .filter(summary -> isArchived(summary.tournamentStatus()))
                 .toList();
-        List<TournamentSummaryResponse> visible = context.summaries().stream()
+        List<TournamentSummaryResponse> visible = approvedVisible.stream()
                 .filter(summary -> !isArchived(summary.tournamentStatus()))
                 .toList();
         List<TournamentSummaryResponse> myTournaments = context.summaries().stream()
@@ -139,9 +117,9 @@ public class ClubTournamentService {
                 access.club().getName(),
                 access.isAdmin(),
                 clubTournamentPermissionService.canCreateTournament(access),
-                tournaments.size(),
-                (int) context.summaries().stream().filter(summary -> STATUS_APPLICATION_OPEN.equals(summary.tournamentStatus())).count(),
-                (int) context.summaries().stream().filter(summary -> STATUS_ONGOING.equals(summary.tournamentStatus())).count(),
+                visible.size(),
+                (int) visible.stream().filter(summary -> STATUS_APPLICATION_OPEN.equals(summary.tournamentStatus())).count(),
+                (int) visible.stream().filter(summary -> STATUS_ONGOING.equals(summary.tournamentStatus())).count(),
                 myTournaments.size(),
                 featured,
                 visible,
@@ -161,11 +139,10 @@ public class ClubTournamentService {
                 access.club().getClubId(),
                 access.club().getName(),
                 true,
-                clubTournamentPermissionService.canCreateTournament(access),
-                tournaments.size(),
-                (int) context.summaries().stream().filter(summary -> !isArchived(summary.tournamentStatus())).count(),
-                (int) context.summaries().stream().filter(summary -> STATUS_COMPLETED.equals(summary.tournamentStatus())).count(),
-                (int) context.summaries().stream().filter(summary -> STATUS_APPLICATION_OPEN.equals(summary.tournamentStatus())).count(),
+                context.summaries().size(),
+                (int) context.summaries().stream().filter(summary -> APPROVAL_PENDING.equals(summary.approvalStatus())).count(),
+                (int) context.summaries().stream().filter(summary -> APPROVAL_APPROVED.equals(summary.approvalStatus())).count(),
+                (int) context.summaries().stream().filter(summary -> APPROVAL_REJECTED.equals(summary.approvalStatus())).count(),
                 context.summaries()
         );
     }
@@ -174,6 +151,7 @@ public class ClubTournamentService {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         TournamentRecord tournament = getTournament(clubId, tournamentRecordId);
+        validateTournamentVisible(access, tournament);
         return buildTournamentDetail(access, tournament);
     }
 
@@ -205,6 +183,10 @@ public class ClubTournamentService {
                 .summaryText(draft.summaryText())
                 .detailText(draft.detailText())
                 .tournamentStatus(resolveTournamentStatus(draft.applicationStartAt(), draft.applicationEndAt(), draft.startDate(), draft.endDate(), null))
+                .approvalStatus(APPROVAL_PENDING)
+                .reviewedByClubProfileId(null)
+                .reviewedAt(null)
+                .rejectionReason(null)
                 .applicationStartAt(draft.applicationStartAt())
                 .applicationEndAt(draft.applicationEndAt())
                 .startDate(draft.startDate())
@@ -219,8 +201,6 @@ public class ClubTournamentService {
                 .sharedToBoard(draft.postToBoard())
                 .sharedToCalendar(draft.postToCalendar())
                 .pinned(draft.pinned())
-                .bracketMode(BRACKET_MODE_RANDOM)
-                .bracketConfirmed(false)
                 .cancelledAt(null)
                 .cancelReason(null)
                 .deleted(false)
@@ -246,13 +226,11 @@ public class ClubTournamentService {
             throw new SemoException.ForbiddenException("대회를 수정할 권한이 없습니다.");
         }
         TournamentDraft draft = toTournamentDraft(request, access, current);
-        boolean bracketResetRequired =
-                !Objects.equals(draft.matchFormat(), current.getMatchFormat())
-                        || !Objects.equals(draft.teamMemberLimit(), current.getTeamMemberLimit());
         ClubActivityContextHolder.setDetails(
                 "대회 '" + current.getTitle() + "'을 수정했습니다.",
                 "대회 '" + current.getTitle() + "' 수정에 실패했습니다."
         );
+        boolean resubmitRequired = APPROVAL_REJECTED.equals(current.getApprovalStatus());
 
         TournamentRecord saved = tournamentRecordRepository.save(TournamentRecord.builder()
                 .tournamentRecordId(current.getTournamentRecordId())
@@ -262,6 +240,10 @@ public class ClubTournamentService {
                 .summaryText(draft.summaryText())
                 .detailText(draft.detailText())
                 .tournamentStatus(resolveTournamentStatus(draft.applicationStartAt(), draft.applicationEndAt(), draft.startDate(), draft.endDate(), current.getCancelledAt()))
+                .approvalStatus(resubmitRequired ? APPROVAL_PENDING : current.getApprovalStatus())
+                .reviewedByClubProfileId(resubmitRequired ? null : current.getReviewedByClubProfileId())
+                .reviewedAt(resubmitRequired ? null : current.getReviewedAt())
+                .rejectionReason(resubmitRequired ? null : current.getRejectionReason())
                 .applicationStartAt(draft.applicationStartAt())
                 .applicationEndAt(draft.applicationEndAt())
                 .startDate(draft.startDate())
@@ -276,17 +258,73 @@ public class ClubTournamentService {
                 .sharedToBoard(draft.postToBoard())
                 .sharedToCalendar(draft.postToCalendar())
                 .pinned(draft.pinned())
-                .bracketMode(current.getBracketMode())
-                .bracketConfirmed(bracketResetRequired ? false : current.isBracketConfirmed())
                 .cancelledAt(current.getCancelledAt())
                 .cancelReason(current.getCancelReason())
                 .deleted(false)
                 .build());
-        if (bracketResetRequired) {
-            clearBracket(tournamentRecordId);
-        }
         syncTournamentShares(saved);
         return toUpsertResponse(saved);
+    }
+
+    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "대회관리")
+    public TournamentDetailResponse reviewTournament(
+            Long clubId,
+            Long tournamentRecordId,
+            String userKey,
+            ReviewTournamentRecordRequest request
+    ) {
+        requireTournamentFeature(clubId);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        if (!clubTournamentPermissionService.canReviewTournament(access)) {
+            throw new SemoException.ForbiddenException("대회 승인 검토 권한이 없습니다.");
+        }
+        TournamentRecord current = getTournament(clubId, tournamentRecordId);
+        String approvalStatus = normalizeTournamentApprovalStatus(request.approvalStatus());
+        String rejectionReason = trimToNull(request.rejectionReason());
+        if (APPROVAL_REJECTED.equals(approvalStatus) && rejectionReason == null) {
+            throw new SemoException.ValidationException("대회 거절 사유를 입력해야 합니다.");
+        }
+        if (APPROVAL_APPROVED.equals(current.getApprovalStatus()) && APPROVAL_REJECTED.equals(approvalStatus)) {
+            throw new SemoException.ValidationException("이미 승인된 대회는 거절 상태로 되돌릴 수 없습니다.");
+        }
+        ClubActivityContextHolder.setDetails(
+                "대회 '" + current.getTitle() + "'을 " + approvalStatus + " 처리했습니다.",
+                "대회 '" + current.getTitle() + "' 승인 검토에 실패했습니다."
+        );
+
+        TournamentRecord saved = tournamentRecordRepository.save(TournamentRecord.builder()
+                .tournamentRecordId(current.getTournamentRecordId())
+                .clubId(current.getClubId())
+                .authorClubProfileId(current.getAuthorClubProfileId())
+                .title(current.getTitle())
+                .summaryText(current.getSummaryText())
+                .detailText(current.getDetailText())
+                .tournamentStatus(current.getTournamentStatus())
+                .approvalStatus(approvalStatus)
+                .reviewedByClubProfileId(access.clubProfile().getClubProfileId())
+                .reviewedAt(LocalDateTime.now())
+                .rejectionReason(APPROVAL_REJECTED.equals(approvalStatus) ? rejectionReason : null)
+                .applicationStartAt(current.getApplicationStartAt())
+                .applicationEndAt(current.getApplicationEndAt())
+                .startDate(current.getStartDate())
+                .endDate(current.getEndDate())
+                .locationLabel(current.getLocationLabel())
+                .matchFormat(current.getMatchFormat())
+                .teamMemberLimit(current.getTeamMemberLimit())
+                .participantLimit(current.getParticipantLimit())
+                .feeRequired(current.isFeeRequired())
+                .feeAmount(current.getFeeAmount())
+                .feeCurrencyCode(current.getFeeCurrencyCode())
+                .sharedToBoard(current.isSharedToBoard())
+                .sharedToCalendar(current.isSharedToCalendar())
+                .pinned(current.isPinned())
+                .cancelledAt(current.getCancelledAt())
+                .cancelReason(current.getCancelReason())
+                .deleted(current.isDeleted())
+                .build());
+        syncTournamentShares(saved);
+        return buildTournamentDetail(access, saved);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -317,6 +355,10 @@ public class ClubTournamentService {
                 .summaryText(current.getSummaryText())
                 .detailText(current.getDetailText())
                 .tournamentStatus(STATUS_CANCELLED)
+                .approvalStatus(current.getApprovalStatus())
+                .reviewedByClubProfileId(current.getReviewedByClubProfileId())
+                .reviewedAt(current.getReviewedAt())
+                .rejectionReason(current.getRejectionReason())
                 .applicationStartAt(current.getApplicationStartAt())
                 .applicationEndAt(current.getApplicationEndAt())
                 .startDate(current.getStartDate())
@@ -331,8 +373,6 @@ public class ClubTournamentService {
                 .sharedToBoard(current.isSharedToBoard())
                 .sharedToCalendar(current.isSharedToCalendar())
                 .pinned(current.isPinned())
-                .bracketMode(current.getBracketMode())
-                .bracketConfirmed(current.isBracketConfirmed())
                 .cancelledAt(LocalDateTime.now())
                 .cancelReason(trimToNull(request == null ? null : request.cancelReason()))
                 .deleted(false)
@@ -354,8 +394,6 @@ public class ClubTournamentService {
                 "대회 '" + current.getTitle() + "' 삭제에 실패했습니다."
         );
         clubContentShareService.removeAllShares(clubId, CONTENT_TOURNAMENT, tournamentRecordId);
-        clearBracket(tournamentRecordId);
-        clearEntries(tournamentRecordId);
         tournamentApplicationRepository.deleteByTournamentRecordId(tournamentRecordId);
         tournamentRecordRepository.save(TournamentRecord.builder()
                 .tournamentRecordId(current.getTournamentRecordId())
@@ -365,6 +403,10 @@ public class ClubTournamentService {
                 .summaryText(current.getSummaryText())
                 .detailText(current.getDetailText())
                 .tournamentStatus(current.getTournamentStatus())
+                .approvalStatus(current.getApprovalStatus())
+                .reviewedByClubProfileId(current.getReviewedByClubProfileId())
+                .reviewedAt(current.getReviewedAt())
+                .rejectionReason(current.getRejectionReason())
                 .applicationStartAt(current.getApplicationStartAt())
                 .applicationEndAt(current.getApplicationEndAt())
                 .startDate(current.getStartDate())
@@ -379,8 +421,6 @@ public class ClubTournamentService {
                 .sharedToBoard(false)
                 .sharedToCalendar(false)
                 .pinned(false)
-                .bracketMode(current.getBracketMode())
-                .bracketConfirmed(false)
                 .cancelledAt(current.getCancelledAt())
                 .cancelReason(current.getCancelReason())
                 .deleted(true)
@@ -398,6 +438,10 @@ public class ClubTournamentService {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         TournamentRecord tournament = getTournament(clubId, tournamentRecordId);
+        validateTournamentVisible(access, tournament);
+        if (!isTournamentApproved(tournament)) {
+            throw new SemoException.ValidationException("아직 승인되지 않은 대회입니다.");
+        }
         if (!isApplicationOpen(tournament)) {
             throw new SemoException.ValidationException("현재 참가 신청을 받을 수 없습니다.");
         }
@@ -440,20 +484,16 @@ public class ClubTournamentService {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         TournamentRecord tournament = getTournament(clubId, tournamentRecordId);
+        validateTournamentVisible(access, tournament);
         TournamentApplication current = tournamentApplicationRepository
                 .findByTournamentRecordIdAndClubProfileId(tournamentRecordId, access.clubProfile().getClubProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TournamentApplication", "tournamentRecordId", tournamentRecordId));
-        boolean approvedBeforeCancel = APPLICATION_APPROVED.equals(current.getApplicationStatus());
         ClubActivityContextHolder.setDetails(
                 "대회 '" + tournament.getTitle() + "' 참가 신청을 취소했습니다.",
                 "대회 '" + tournament.getTitle() + "' 참가 신청 취소에 실패했습니다."
         );
         current.review(APPLICATION_CANCELLED, access.clubProfile().getClubProfileId(), LocalDateTime.now());
         tournamentApplicationRepository.save(current);
-        if (approvedBeforeCancel) {
-            removeEntriesBySourceApplicationIds(List.of(current.getTournamentApplicationId()));
-            clearBracket(tournamentRecordId);
-        }
         return buildTournamentDetail(access, tournament);
     }
 
@@ -468,10 +508,14 @@ public class ClubTournamentService {
     ) {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        if (!clubTournamentPermissionService.canReviewApplications(access)) {
+        TournamentRecord tournament = getTournament(clubId, tournamentRecordId);
+        validateTournamentVisible(access, tournament);
+        if (!canManageApplications(access, tournament)) {
             throw new SemoException.ForbiddenException("참가 신청을 검토할 권한이 없습니다.");
         }
-        TournamentRecord tournament = getTournament(clubId, tournamentRecordId);
+        if (!isTournamentApproved(tournament)) {
+            throw new SemoException.ValidationException("승인된 대회만 참가 신청을 검토할 수 있습니다.");
+        }
         TournamentApplication current = tournamentApplicationRepository.findById(tournamentApplicationId)
                 .filter(application -> application.getTournamentRecordId().equals(tournamentRecordId))
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TournamentApplication", "tournamentApplicationId", tournamentApplicationId));
@@ -481,86 +525,35 @@ public class ClubTournamentService {
                 "대회 '" + tournament.getTitle() + "' 참가 신청 검토에 실패했습니다."
         );
         current.review(nextStatus, access.clubProfile().getClubProfileId(), LocalDateTime.now());
-        TournamentApplication saved = tournamentApplicationRepository.save(current);
-        if (APPLICATION_REJECTED.equals(saved.getApplicationStatus())) {
-            removeEntriesBySourceApplicationIds(List.of(saved.getTournamentApplicationId()));
-            clearBracket(tournamentRecordId);
-        }
-        return buildTournamentDetail(access, tournament);
-    }
-
-    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
-    @RecordClubActivity(subject = "대회관리")
-    public TournamentDetailResponse updateEntries(
-            Long clubId,
-            Long tournamentRecordId,
-            String userKey,
-            UpdateTournamentEntriesRequest request
-    ) {
-        requireTournamentFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        if (!clubTournamentPermissionService.canManageEntries(access)) {
-            throw new SemoException.ForbiddenException("엔트리를 편성할 권한이 없습니다.");
-        }
-        TournamentRecord tournament = getTournament(clubId, tournamentRecordId);
-        List<UpsertTournamentEntryDraftRequest> entryRequests = request == null || request.entries() == null
-                ? List.of()
-                : request.entries();
-        validateEntryRequests(tournament, entryRequests);
-        ClubActivityContextHolder.setDetails(
-                "대회 '" + tournament.getTitle() + "' 엔트리를 편성했습니다.",
-                "대회 '" + tournament.getTitle() + "' 엔트리 편성에 실패했습니다."
-        );
-        clearBracket(tournamentRecordId);
-        clearEntries(tournamentRecordId);
-
-        int sortOrder = 10;
-        for (UpsertTournamentEntryDraftRequest entryRequest : entryRequests) {
-            TournamentEntry entry = tournamentEntryRepository.save(TournamentEntry.builder()
-                    .tournamentRecordId(tournamentRecordId)
-                    .entryType(resolveEntryType(tournament.getMatchFormat()))
-                    .displayName(entryRequest.displayName().trim())
-                    .sourceApplicationId(resolveSourceApplicationId(tournamentRecordId, entryRequest.members()))
-                    .entryStatus(ENTRY_ACTIVE)
-                    .seedNumber(entryRequest.seedNumber())
-                    .sortOrder(sortOrder)
-                    .build());
-            int memberSortOrder = 10;
-            for (TournamentEntryDraftMemberRequest memberRequest : entryRequest.members()) {
-                tournamentEntryMemberRepository.save(TournamentEntryMember.builder()
-                        .tournamentEntryId(entry.getTournamentEntryId())
-                        .clubProfileId(memberRequest.clubProfileId())
-                        .memberRole(normalizeMemberRole(memberRequest.memberRole()))
-                        .sortOrder(memberSortOrder)
-                        .build());
-                memberSortOrder += 10;
-            }
-            sortOrder += 10;
-        }
+        tournamentApplicationRepository.save(current);
         return buildTournamentDetail(access, tournament);
     }
 
     private TournamentDetailResponse buildTournamentDetail(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
         List<TournamentApplication> applications = tournamentApplicationRepository
                 .findByTournamentRecordIdOrderByCreateDateAscTournamentApplicationIdAsc(tournament.getTournamentRecordId());
-        List<TournamentEntry> entries = tournamentEntryRepository
-                .findByTournamentRecordIdOrderBySortOrderAscTournamentEntryIdAsc(tournament.getTournamentRecordId());
-        Map<Long, List<TournamentEntryMember>> entryMembersByEntryId = loadEntryMembersByEntryId(entries);
 
         Set<Long> clubProfileIds = new HashSet<>();
         clubProfileIds.add(tournament.getAuthorClubProfileId());
+        if (tournament.getReviewedByClubProfileId() != null) {
+            clubProfileIds.add(tournament.getReviewedByClubProfileId());
+        }
         applications.forEach(application -> {
             clubProfileIds.add(application.getClubProfileId());
             if (application.getReviewedByClubProfileId() != null) {
                 clubProfileIds.add(application.getReviewedByClubProfileId());
             }
         });
-        entryMembersByEntryId.values().forEach(members -> members.forEach(member -> clubProfileIds.add(member.getClubProfileId())));
         Map<Long, ClubProfile> profileById = loadClubProfiles(clubProfileIds);
 
         ClubTournamentPermissionService.TournamentActionPermission actionPermission =
                 clubTournamentPermissionService.getActionPermission(access, tournament.getAuthorClubProfileId());
-        TournamentViewerState viewerState = resolveViewerState(access, tournament, applications, entryMembersByEntryId);
+        TournamentViewerState viewerState = resolveViewerState(access, tournament, applications);
+        boolean canReviewTournament = clubTournamentPermissionService.canReviewTournament(access);
+        boolean canManageApplications = canManageApplications(access, tournament);
+        List<TournamentApplication> approvedApplications = applications.stream()
+                .filter(application -> APPLICATION_APPROVED.equals(application.getApplicationStatus()))
+                .toList();
 
         return new TournamentDetailResponse(
                 access.club().getClubId(),
@@ -570,10 +563,14 @@ public class ClubTournamentService {
                 tournament.getTitle(),
                 tournament.getSummaryText(),
                 tournament.getDetailText(),
+                tournament.getApprovalStatus(),
                 resolveTournamentStatus(tournament),
                 resolveDisplayName(profileById.get(tournament.getAuthorClubProfileId())),
                 resolveAvatarImageUrl(profileById.get(tournament.getAuthorClubProfileId())),
                 resolveAvatarThumbnailUrl(profileById.get(tournament.getAuthorClubProfileId())),
+                resolveDisplayName(profileById.get(tournament.getReviewedByClubProfileId())),
+                formatDateTimeLabel(tournament.getReviewedAt()),
+                tournament.getRejectionReason(),
                 formatDateTime(tournament.getApplicationStartAt()),
                 formatDateTime(tournament.getApplicationEndAt()),
                 formatApplicationWindowLabel(tournament),
@@ -593,56 +590,60 @@ public class ClubTournamentService {
                 tournament.getCancelledAt() == null ? null : DATE_TIME_LABEL_FORMATTER.format(tournament.getCancelledAt()),
                 tournament.getCancelReason(),
                 applications.size(),
-                (int) applications.stream().filter(application -> APPLICATION_APPROVED.equals(application.getApplicationStatus())).count(),
-                (int) entries.stream().filter(entry -> ENTRY_ACTIVE.equals(entry.getEntryStatus())).count(),
+                approvedApplications.size(),
+                approvedApplications.size(),
                 isApplicationOpen(tournament),
                 !viewerState.applied() && isApplicationOpen(tournament),
                 viewerState.applied(),
                 viewerState.applicationStatus(),
                 viewerState.participating(),
+                canReviewTournament,
                 actionPermission.canEdit(),
                 actionPermission.canCancel(),
                 clubTournamentPermissionService.canDeleteTournament(access),
-                clubTournamentPermissionService.canReviewApplications(access),
-                clubTournamentPermissionService.canManageEntries(access),
-                applications.stream()
-                        .map(application -> toApplicationSummary(access, application, profileById.get(application.getClubProfileId())))
+                canManageApplications,
+                (canManageApplications ? applications : List.<TournamentApplication>of()).stream()
+                        .map(application -> toApplicationSummary(access, application, profileById.get(application.getClubProfileId()), canManageApplications))
                         .toList(),
-                entries.stream()
-                        .map(entry -> toEntrySummary(entry, entryMembersByEntryId.getOrDefault(entry.getTournamentEntryId(), List.of()), profileById))
+                approvedApplications.stream()
+                        .map(application -> toParticipantSummary(application, profileById.get(application.getClubProfileId())))
                         .toList()
         );
     }
 
     private TournamentContext buildTournamentContext(ClubAccessResolver.ClubAccess access, List<TournamentRecord> tournaments) {
-        List<TournamentApplication> applications = tournaments.isEmpty()
+        List<TournamentRecord> visibleTournaments = tournaments.stream()
+                .filter(tournament -> canViewTournament(access, tournament))
+                .toList();
+        List<TournamentApplication> applications = visibleTournaments.isEmpty()
                 ? List.of()
-                : tournamentApplicationRepository.findByTournamentRecordIdIn(tournaments.stream().map(TournamentRecord::getTournamentRecordId).toList());
-        List<TournamentEntry> entries = tournaments.isEmpty()
-                ? List.of()
-                : tournamentEntryRepository.findByTournamentRecordIdIn(tournaments.stream().map(TournamentRecord::getTournamentRecordId).toList());
+                : tournamentApplicationRepository.findByTournamentRecordIdIn(visibleTournaments.stream().map(TournamentRecord::getTournamentRecordId).toList());
         Map<Long, List<TournamentApplication>> applicationsByTournamentId = applications.stream()
                 .collect(Collectors.groupingBy(TournamentApplication::getTournamentRecordId));
-        Map<Long, List<TournamentEntry>> entriesByTournamentId = entries.stream()
-                .collect(Collectors.groupingBy(TournamentEntry::getTournamentRecordId));
-        Map<Long, List<TournamentEntryMember>> entryMembersByEntryId = loadEntryMembersByEntryId(entries);
         Set<Long> profileIds = new HashSet<>();
-        tournaments.forEach(tournament -> profileIds.add(tournament.getAuthorClubProfileId()));
+        visibleTournaments.forEach(tournament -> {
+            profileIds.add(tournament.getAuthorClubProfileId());
+            if (tournament.getReviewedByClubProfileId() != null) {
+                profileIds.add(tournament.getReviewedByClubProfileId());
+            }
+        });
         applications.forEach(application -> profileIds.add(application.getClubProfileId()));
-        entryMembersByEntryId.values().forEach(members -> members.forEach(member -> profileIds.add(member.getClubProfileId())));
         Map<Long, ClubProfile> profileById = loadClubProfiles(profileIds);
 
-        List<TournamentSummaryResponse> summaries = tournaments.stream()
+        List<TournamentSummaryResponse> summaries = visibleTournaments.stream()
                 .map(tournament -> {
                     List<TournamentApplication> tournamentApplications = applicationsByTournamentId.getOrDefault(tournament.getTournamentRecordId(), List.of());
-                    List<TournamentEntry> tournamentEntries = entriesByTournamentId.getOrDefault(tournament.getTournamentRecordId(), List.of());
                     ClubTournamentPermissionService.TournamentActionPermission permission =
                             clubTournamentPermissionService.getActionPermission(access, tournament.getAuthorClubProfileId());
-                    TournamentViewerState viewerState = resolveViewerState(access, tournament, tournamentApplications, filterEntryMembersForTournament(tournamentEntries, entryMembersByEntryId));
+                    TournamentViewerState viewerState = resolveViewerState(access, tournament, tournamentApplications);
+                    int approvedApplicationCount = (int) tournamentApplications.stream()
+                            .filter(application -> APPLICATION_APPROVED.equals(application.getApplicationStatus()))
+                            .count();
                     return new TournamentSummaryResponse(
                             tournament.getTournamentRecordId(),
                             tournament.getTitle(),
                             tournament.getSummaryText(),
+                            tournament.getApprovalStatus(),
                             resolveTournamentStatus(tournament),
                             resolveDisplayName(profileById.get(tournament.getAuthorClubProfileId())),
                             resolveAvatarImageUrl(profileById.get(tournament.getAuthorClubProfileId())),
@@ -655,8 +656,8 @@ public class ClubTournamentService {
                             tournament.getMatchFormat(),
                             tournament.getTeamMemberLimit(),
                             tournament.getParticipantLimit(),
-                            (int) tournamentApplications.stream().filter(application -> APPLICATION_APPROVED.equals(application.getApplicationStatus())).count(),
-                            (int) tournamentEntries.stream().filter(entry -> ENTRY_ACTIVE.equals(entry.getEntryStatus())).count(),
+                            approvedApplicationCount,
+                            approvedApplicationCount,
                             tournament.isFeeRequired(),
                             tournament.getFeeAmount(),
                             tournament.getFeeCurrencyCode(),
@@ -675,21 +676,11 @@ public class ClubTournamentService {
         return new TournamentContext(summaries);
     }
 
-    private Map<Long, List<TournamentEntryMember>> filterEntryMembersForTournament(
-            List<TournamentEntry> entries,
-            Map<Long, List<TournamentEntryMember>> entryMembersByEntryId
-    ) {
-        return entries.stream()
-                .collect(Collectors.toMap(
-                        TournamentEntry::getTournamentEntryId,
-                        entry -> entryMembersByEntryId.getOrDefault(entry.getTournamentEntryId(), List.of())
-                ));
-    }
-
     private TournamentApplicationSummaryResponse toApplicationSummary(
             ClubAccessResolver.ClubAccess access,
             TournamentApplication application,
-            ClubProfile profile
+            ClubProfile profile,
+            boolean canManageApplications
     ) {
         boolean mine = access.clubProfile().getClubProfileId().equals(application.getClubProfileId());
         return new TournamentApplicationSummaryResponse(
@@ -702,65 +693,34 @@ public class ClubTournamentService {
                 application.getApplicationNote(),
                 DATE_TIME_LABEL_FORMATTER.format(application.getCreateDate()),
                 mine,
-                clubTournamentPermissionService.canReviewApplications(access),
+                canManageApplications,
                 mine && (APPLICATION_APPLIED.equals(application.getApplicationStatus()) || APPLICATION_APPROVED.equals(application.getApplicationStatus()))
         );
     }
 
-    private TournamentEntrySummaryResponse toEntrySummary(
-            TournamentEntry entry,
-            List<TournamentEntryMember> members,
-            Map<Long, ClubProfile> profileById
-    ) {
-        return new TournamentEntrySummaryResponse(
-                entry.getTournamentEntryId(),
-                entry.getEntryType(),
-                entry.getDisplayName(),
-                entry.getEntryStatus(),
-                entry.getSeedNumber(),
-                entry.getSortOrder(),
-                members.stream()
-                        .sorted(Comparator.comparingInt(TournamentEntryMember::getSortOrder))
-                        .map(member -> toEntryMemberResponse(member, profileById.get(member.getClubProfileId())))
-                        .toList()
-        );
-    }
-
-    private TournamentEntryMemberResponse toEntryMemberResponse(TournamentEntryMember member, ClubProfile profile) {
-        return new TournamentEntryMemberResponse(
-                member.getClubProfileId(),
+    private TournamentParticipantSummaryResponse toParticipantSummary(TournamentApplication application, ClubProfile profile) {
+        return new TournamentParticipantSummaryResponse(
+                application.getClubProfileId(),
                 resolveDisplayName(profile),
                 resolveAvatarImageUrl(profile),
                 resolveAvatarThumbnailUrl(profile),
-                member.getMemberRole()
+                formatDateTimeLabel(application.getReviewedAt())
         );
-    }
-
-    private Map<Long, List<TournamentEntryMember>> loadEntryMembersByEntryId(List<TournamentEntry> entries) {
-        if (entries.isEmpty()) {
-            return Map.of();
-        }
-        return tournamentEntryMemberRepository.findByTournamentEntryIdIn(
-                        entries.stream().map(TournamentEntry::getTournamentEntryId).toList()
-                ).stream()
-                .collect(Collectors.groupingBy(TournamentEntryMember::getTournamentEntryId));
     }
 
     private TournamentViewerState resolveViewerState(
             ClubAccessResolver.ClubAccess access,
             TournamentRecord tournament,
-            List<TournamentApplication> applications,
-            Map<Long, List<TournamentEntryMember>> entryMembersByEntryId
+            List<TournamentApplication> applications
     ) {
         Long viewerClubProfileId = access.clubProfile().getClubProfileId();
         TournamentApplication myApplication = applications.stream()
                 .filter(application -> application.getClubProfileId().equals(viewerClubProfileId))
                 .findFirst()
                 .orElse(null);
-        boolean participating = entryMembersByEntryId.values().stream()
-                .flatMap(Collection::stream)
-                .anyMatch(member -> member.getClubProfileId().equals(viewerClubProfileId))
-                || (myApplication != null && !APPLICATION_REJECTED.equals(myApplication.getApplicationStatus()) && !APPLICATION_CANCELLED.equals(myApplication.getApplicationStatus()));
+        boolean participating = myApplication != null
+                && !APPLICATION_REJECTED.equals(myApplication.getApplicationStatus())
+                && !APPLICATION_CANCELLED.equals(myApplication.getApplicationStatus());
         return new TournamentViewerState(
                 access.clubProfile().getClubProfileId().equals(tournament.getAuthorClubProfileId()),
                 myApplication != null,
@@ -775,6 +735,7 @@ public class ClubTournamentService {
                 tournament.getTitle(),
                 formatDate(tournament.getStartDate()),
                 formatDate(tournament.getEndDate()),
+                tournament.getApprovalStatus(),
                 resolveTournamentStatus(tournament)
         );
     }
@@ -835,125 +796,19 @@ public class ClubTournamentService {
         );
     }
 
-    private void validateEntryRequests(TournamentRecord tournament, List<UpsertTournamentEntryDraftRequest> entries) {
-        Set<Long> approvedProfileIds = tournamentApplicationRepository
-                .findByTournamentRecordIdAndApplicationStatusOrderByCreateDateAscTournamentApplicationIdAsc(
-                        tournament.getTournamentRecordId(),
-                        APPLICATION_APPROVED
-                ).stream()
-                .map(TournamentApplication::getClubProfileId)
-                .collect(Collectors.toSet());
-        Set<Long> usedProfileIds = new HashSet<>();
-        for (UpsertTournamentEntryDraftRequest entry : entries) {
-            if (!StringUtils.hasText(entry.displayName())) {
-                throw new SemoException.ValidationException("엔트리 이름은 비어 있을 수 없습니다.");
-            }
-            List<TournamentEntryDraftMemberRequest> members = entry.members() == null ? List.of() : entry.members();
-            if (members.isEmpty()) {
-                throw new SemoException.ValidationException("엔트리 멤버는 한 명 이상 필요합니다.");
-            }
-            validateEntryMemberCount(tournament, members.size());
-            for (TournamentEntryDraftMemberRequest member : members) {
-                if (!approvedProfileIds.contains(member.clubProfileId())) {
-                    throw new SemoException.ValidationException("승인되지 않은 신청자는 엔트리에 포함할 수 없습니다.");
-                }
-                if (!usedProfileIds.add(member.clubProfileId())) {
-                    throw new SemoException.ValidationException("같은 멤버를 여러 엔트리에 중복 배치할 수 없습니다.");
-                }
-            }
-        }
-    }
-
-    private void validateEntryMemberCount(TournamentRecord tournament, int memberCount) {
-        switch (normalizeMatchFormat(tournament.getMatchFormat())) {
-            case MATCH_FORMAT_SINGLE -> {
-                if (memberCount != 1) {
-                    throw new SemoException.ValidationException("개인전 엔트리는 1명이어야 합니다.");
-                }
-            }
-            case MATCH_FORMAT_DOUBLE -> {
-                if (memberCount != 2) {
-                    throw new SemoException.ValidationException("복식 엔트리는 2명이어야 합니다.");
-                }
-            }
-            case MATCH_FORMAT_TEAM -> {
-                if (memberCount < 3) {
-                    throw new SemoException.ValidationException("단체전 엔트리는 3명 이상이어야 합니다.");
-                }
-                if (tournament.getTeamMemberLimit() != null && memberCount != tournament.getTeamMemberLimit()) {
-                    throw new SemoException.ValidationException("단체전 엔트리 인원은 설정된 팀 인원과 같아야 합니다.");
-                }
-            }
-            default -> throw new SemoException.ValidationException("지원하지 않는 경기 형식입니다.");
-        }
-    }
-
-    private Long resolveSourceApplicationId(Long tournamentRecordId, List<TournamentEntryDraftMemberRequest> members) {
-        if (members == null || members.isEmpty()) {
-            return null;
-        }
-        if (members.size() != 1) {
-            return null;
-        }
-        return tournamentApplicationRepository.findByTournamentRecordIdAndClubProfileId(
-                        tournamentRecordId,
-                        members.get(0).clubProfileId()
-                )
-                .map(TournamentApplication::getTournamentApplicationId)
-                .orElse(null);
-    }
-
-    private void removeEntriesBySourceApplicationIds(List<Long> applicationIds) {
-        if (applicationIds.isEmpty()) {
-            return;
-        }
-        List<TournamentEntry> entries = tournamentEntryRepository.findAll().stream()
-                .filter(entry -> entry.getSourceApplicationId() != null && applicationIds.contains(entry.getSourceApplicationId()))
-                .toList();
-        if (entries.isEmpty()) {
-            return;
-        }
-        List<Long> entryIds = entries.stream().map(TournamentEntry::getTournamentEntryId).toList();
-        tournamentEntryMemberRepository.deleteByTournamentEntryIdIn(entryIds);
-        tournamentEntryRepository.deleteAll(entries);
-    }
-
-    private void clearEntries(Long tournamentRecordId) {
-        List<TournamentEntry> entries = tournamentEntryRepository.findByTournamentRecordIdOrderBySortOrderAscTournamentEntryIdAsc(tournamentRecordId);
-        if (entries.isEmpty()) {
-            return;
-        }
-        List<Long> entryIds = entries.stream().map(TournamentEntry::getTournamentEntryId).toList();
-        tournamentEntryMemberRepository.deleteByTournamentEntryIdIn(entryIds);
-        tournamentEntryRepository.deleteByTournamentRecordId(tournamentRecordId);
-    }
-
-    private void clearBracket(Long tournamentRecordId) {
-        List<TournamentRound> rounds = tournamentRoundRepository.findByTournamentRecordIdOrderBySortOrderAscTournamentRoundIdAsc(tournamentRecordId);
-        if (rounds.isEmpty()) {
-            return;
-        }
-        List<Long> roundIds = rounds.stream().map(TournamentRound::getTournamentRoundId).toList();
-        List<TournamentMatch> matches = tournamentMatchRepository.findByTournamentRoundIdInOrderBySortOrderAscTournamentMatchIdAsc(roundIds);
-        if (!matches.isEmpty()) {
-            tournamentMatchSideRepository.deleteByTournamentMatchIdIn(matches.stream().map(TournamentMatch::getTournamentMatchId).toList());
-            tournamentMatchRepository.deleteByTournamentRecordId(tournamentRecordId);
-        }
-        tournamentRoundRepository.deleteByTournamentRecordId(tournamentRecordId);
-    }
-
     private void syncTournamentShares(TournamentRecord tournament) {
+        boolean visible = isTournamentApproved(tournament) && !tournament.isDeleted();
         clubContentShareService.syncBoardShare(
                 tournament.getClubId(),
                 CONTENT_TOURNAMENT,
                 tournament.getTournamentRecordId(),
-                tournament.isSharedToBoard()
+                visible && tournament.isSharedToBoard()
         );
         clubContentShareService.syncCalendarShare(
                 tournament.getClubId(),
                 CONTENT_TOURNAMENT,
                 tournament.getTournamentRecordId(),
-                tournament.isSharedToCalendar()
+                visible && tournament.isSharedToCalendar()
         );
     }
 
@@ -978,6 +833,9 @@ public class ClubTournamentService {
     }
 
     private boolean isApplicationOpen(TournamentRecord tournament) {
+        if (!isTournamentApproved(tournament)) {
+            return false;
+        }
         String status = resolveTournamentStatus(tournament);
         return STATUS_APPLICATION_OPEN.equals(status);
     }
@@ -987,6 +845,9 @@ public class ClubTournamentService {
     }
 
     private String resolveTournamentStatus(TournamentRecord tournament) {
+        if (!isTournamentApproved(tournament) && tournament.getCancelledAt() == null) {
+            return STATUS_DRAFT;
+        }
         return resolveTournamentStatus(
                 tournament.getApplicationStartAt(),
                 tournament.getApplicationEndAt(),
@@ -1046,6 +907,10 @@ public class ClubTournamentService {
         return dateTime == null ? null : DATE_TIME_FORMATTER.format(dateTime);
     }
 
+    private String formatDateTimeLabel(LocalDateTime dateTime) {
+        return dateTime == null ? null : DATE_TIME_LABEL_FORMATTER.format(dateTime);
+    }
+
     private String resolveDisplayName(ClubProfile profile) {
         return profile == null ? "알 수 없음" : profile.getDisplayName();
     }
@@ -1091,25 +956,17 @@ public class ClubTournamentService {
         return normalized;
     }
 
+    private String normalizeTournamentApprovalStatus(String value) {
+        String normalized = normalizeRequiredKey(value);
+        if (!Set.of(APPROVAL_APPROVED, APPROVAL_REJECTED).contains(normalized)) {
+            throw new SemoException.ValidationException("대회 검토 상태는 APPROVED 또는 REJECTED만 가능합니다.");
+        }
+        return normalized;
+    }
+
     private String normalizeCurrencyCode(String value) {
         if (!StringUtils.hasText(value)) {
             return "KRW";
-        }
-        return value.trim().toUpperCase(Locale.ROOT);
-    }
-
-    private String resolveEntryType(String matchFormat) {
-        return switch (normalizeMatchFormat(matchFormat)) {
-            case MATCH_FORMAT_SINGLE -> ENTRY_INDIVIDUAL;
-            case MATCH_FORMAT_DOUBLE -> ENTRY_PAIR;
-            case MATCH_FORMAT_TEAM -> ENTRY_TEAM;
-            default -> throw new SemoException.ValidationException("지원하지 않는 경기 형식입니다.");
-        };
-    }
-
-    private String normalizeMemberRole(String value) {
-        if (!StringUtils.hasText(value)) {
-            return "PLAYER";
         }
         return value.trim().toUpperCase(Locale.ROOT);
     }
@@ -1142,6 +999,27 @@ public class ClubTournamentService {
             return null;
         }
         return value.trim();
+    }
+
+    private boolean isTournamentApproved(TournamentRecord tournament) {
+        return tournament != null && APPROVAL_APPROVED.equals(tournament.getApprovalStatus());
+    }
+
+    private boolean canViewTournament(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
+        return isTournamentApproved(tournament)
+                || access.isAdmin()
+                || access.clubProfile().getClubProfileId().equals(tournament.getAuthorClubProfileId());
+    }
+
+    private void validateTournamentVisible(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
+        if (!canViewTournament(access, tournament)) {
+            throw new SemoException.ForbiddenException("해당 대회를 조회할 수 없습니다.");
+        }
+    }
+
+    private boolean canManageApplications(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
+        return access.isAdmin()
+                || access.clubProfile().getClubProfileId().equals(tournament.getAuthorClubProfileId());
     }
 
     private record TournamentDraft(

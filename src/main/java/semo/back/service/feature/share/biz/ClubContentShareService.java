@@ -5,7 +5,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.database.pub.entity.ClubBoardItem;
 import semo.back.service.database.pub.entity.ClubCalendarItem;
+import semo.back.service.database.pub.repository.ClubBoardItemReadRepository;
 import semo.back.service.database.pub.repository.ClubBoardItemRepository;
+import semo.back.service.database.pub.repository.ClubCalendarItemReadRepository;
 import semo.back.service.database.pub.repository.ClubCalendarItemRepository;
 
 import java.util.List;
@@ -20,7 +22,9 @@ public class ClubContentShareService {
     public static final String CONTENT_TOURNAMENT = "TOURNAMENT";
 
     private final ClubBoardItemRepository clubBoardItemRepository;
+    private final ClubBoardItemReadRepository clubBoardItemReadRepository;
     private final ClubCalendarItemRepository clubCalendarItemRepository;
+    private final ClubCalendarItemReadRepository clubCalendarItemReadRepository;
 
     @Transactional(transactionManager = "pubTransactionManager")
     public void syncBoardShare(Long clubId, String contentType, Long contentId, boolean shared) {
@@ -28,7 +32,7 @@ public class ClubContentShareService {
             upsertBoardItem(clubId, contentType, contentId);
             return;
         }
-        clubBoardItemRepository.deleteByClubIdAndContentTypeAndContentId(clubId, contentType, contentId);
+        removeBoardShares(clubId, contentType, contentId);
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
@@ -37,13 +41,13 @@ public class ClubContentShareService {
             upsertCalendarItem(clubId, contentType, contentId);
             return;
         }
-        clubCalendarItemRepository.deleteByClubIdAndContentTypeAndContentId(clubId, contentType, contentId);
+        removeCalendarShares(clubId, contentType, contentId);
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
     public void removeAllShares(Long clubId, String contentType, Long contentId) {
-        clubBoardItemRepository.deleteByClubIdAndContentTypeAndContentId(clubId, contentType, contentId);
-        clubCalendarItemRepository.deleteByClubIdAndContentTypeAndContentId(clubId, contentType, contentId);
+        removeBoardShares(clubId, contentType, contentId);
+        removeCalendarShares(clubId, contentType, contentId);
     }
 
     public List<Long> getBoardContentIds(Long clubId, String contentType) {
@@ -88,5 +92,21 @@ public class ClubContentShareService {
                 .contentType(contentType)
                 .contentId(contentId)
                 .build());
+    }
+
+    private void removeBoardShares(Long clubId, String contentType, Long contentId) {
+        List<ClubBoardItem> boardItems = clubBoardItemRepository.findAllByClubIdAndContentTypeAndContentId(clubId, contentType, contentId);
+        for (ClubBoardItem boardItem : boardItems) {
+            clubBoardItemReadRepository.deleteByBoardItemId(boardItem.getBoardItemId());
+        }
+        clubBoardItemRepository.deleteAll(boardItems);
+    }
+
+    private void removeCalendarShares(Long clubId, String contentType, Long contentId) {
+        List<ClubCalendarItem> calendarItems = clubCalendarItemRepository.findAllByClubIdAndContentTypeAndContentId(clubId, contentType, contentId);
+        for (ClubCalendarItem calendarItem : calendarItems) {
+            clubCalendarItemReadRepository.deleteByCalendarItemId(calendarItem.getCalendarItemId());
+        }
+        clubCalendarItemRepository.deleteAll(calendarItems);
     }
 }

@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ClubCalendarItemReadRepository extends JpaRepository<ClubCalendarItemRead, Long> {
     Optional<ClubCalendarItemRead> findByCalendarItemIdAndClubProfileId(Long calendarItemId, Long clubProfileId);
 
+    void deleteByCalendarItemId(Long calendarItemId);
+
     long countByCalendarItemId(Long calendarItemId);
 
     List<ClubCalendarItemRead> findAllByCalendarItemIdOrderByLastReadAtDescClubCalendarItemReadIdDesc(Long calendarItemId);

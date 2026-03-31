@@ -62,7 +62,7 @@ public final class TestCatalogSeeder {
                 FeatureCatalog.builder()
                         .featureKey("TOURNAMENT_RECORD")
                         .displayName("대회기록")
-                        .description("대회를 생성하고 참가신청과 엔트리를 운영합니다.")
+                        .description("대회를 작성하고 관리자 승인 이후 참가신청과 참가 선수를 운영합니다.")
                         .iconName("emoji_events")
                         .navigationScope("USER_AND_ADMIN")
                         .active(true)

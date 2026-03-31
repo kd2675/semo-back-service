@@ -5,6 +5,7 @@ public record TournamentUpsertResponse(
         String title,
         String startDate,
         String endDate,
+        String approvalStatus,
         String tournamentStatus
 ) {
 }

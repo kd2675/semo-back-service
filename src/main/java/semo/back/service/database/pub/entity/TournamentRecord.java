@@ -46,6 +46,18 @@ public class TournamentRecord extends CommonDateEntity {
     @Column(name = "tournament_status", nullable = false, length = 30)
     private String tournamentStatus;
 
+    @Column(name = "approval_status", nullable = false, length = 20)
+    private String approvalStatus;
+
+    @Column(name = "reviewed_by_club_profile_id")
+    private Long reviewedByClubProfileId;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
     @Column(name = "application_start_at", nullable = false)
     private LocalDateTime applicationStartAt;
 
@@ -87,12 +99,6 @@ public class TournamentRecord extends CommonDateEntity {
 
     @Column(name = "pinned", nullable = false)
     private boolean pinned;
-
-    @Column(name = "bracket_mode", nullable = false, length = 20)
-    private String bracketMode;
-
-    @Column(name = "bracket_confirmed", nullable = false)
-    private boolean bracketConfirmed;
 
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;

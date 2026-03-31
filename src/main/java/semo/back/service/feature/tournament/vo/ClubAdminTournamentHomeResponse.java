@@ -6,11 +6,10 @@ public record ClubAdminTournamentHomeResponse(
         Long clubId,
         String clubName,
         boolean admin,
-        boolean canCreate,
         int totalTournamentCount,
-        int activeTournamentCount,
-        int completedTournamentCount,
-        int recruitingTournamentCount,
+        int pendingTournamentCount,
+        int approvedTournamentCount,
+        int rejectedTournamentCount,
         List<TournamentSummaryResponse> tournaments
 ) {
 }

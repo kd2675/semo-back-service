@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ClubBoardItemReadRepository extends JpaRepository<ClubBoardItemRead, Long> {
     Optional<ClubBoardItemRead> findByBoardItemIdAndClubProfileId(Long boardItemId, Long clubProfileId);
 
+    void deleteByBoardItemId(Long boardItemId);
+
     long countByBoardItemId(Long boardItemId);
 
     List<ClubBoardItemRead> findAllByBoardItemIdOrderByLastReadAtDescClubBoardItemReadIdDesc(Long boardItemId);

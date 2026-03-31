@@ -201,6 +201,58 @@ class ClubContentReadServiceTest {
                 .contains(1);
     }
 
+    @Test
+    void deletingSharedNoticeAlsoRemovesBoardAndCalendarReadHistory() {
+        String userKey = "read-owner-delete-001";
+        Long clubId = clubService.createClub(
+                userKey,
+                "삭제 회장",
+                new CreateClubRequest(
+                        "Delete Read Club",
+                        "공유 삭제 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+        enableNoticeFeature(clubId, userKey);
+
+        var notice = clubNoticeService.createNotice(
+                clubId,
+                userKey,
+                new UpsertClubNoticeRequest(
+                        "삭제 테스트 공지",
+                        "읽음 기록이 있어도 안전하게 삭제되어야 합니다.",
+                        null,
+                        "잠실",
+                        "2030-08-15T18:00",
+                        "2030-08-15T20:00",
+                        true,
+                        true,
+                        false,
+                        false
+                )
+        );
+
+        ClubBoardItem boardItem = clubBoardItemRepository
+                .findByClubIdAndContentTypeAndContentId(clubId, "NOTICE", notice.noticeId())
+                .orElseThrow();
+        ClubCalendarItem calendarItem = clubCalendarItemRepository
+                .findByClubIdAndContentTypeAndContentId(clubId, "NOTICE", notice.noticeId())
+                .orElseThrow();
+
+        clubContentReadService.recordBoardItemRead(clubId, boardItem.getBoardItemId(), userKey);
+        clubContentReadService.recordCalendarItemRead(clubId, calendarItem.getCalendarItemId(), userKey);
+
+        clubNoticeService.deleteNotice(clubId, notice.noticeId(), userKey);
+
+        assertThat(clubBoardItemRepository.findByClubIdAndContentTypeAndContentId(clubId, "NOTICE", notice.noticeId())).isEmpty();
+        assertThat(clubCalendarItemRepository.findByClubIdAndContentTypeAndContentId(clubId, "NOTICE", notice.noticeId())).isEmpty();
+        assertThat(clubBoardItemReadRepository.countByBoardItemId(boardItem.getBoardItemId())).isZero();
+        assertThat(clubCalendarItemReadRepository.countByCalendarItemId(calendarItem.getCalendarItemId())).isZero();
+    }
+
     private void enableNoticeFeature(Long clubId, String userKey) {
         clubFeatureService.updateClubFeatures(
                 clubId,

@@ -1,10 +1,10 @@
 package semo.back.service.feature.tournament.vo;
 
-public record TournamentEntryMemberResponse(
+public record TournamentParticipantSummaryResponse(
         Long clubProfileId,
         String displayName,
         String avatarImageUrl,
         String avatarThumbnailUrl,
-        String memberRole
+        String approvedAtLabel
 ) {
 }
