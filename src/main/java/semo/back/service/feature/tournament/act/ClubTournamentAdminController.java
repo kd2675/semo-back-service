@@ -15,10 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.tournament.biz.ClubTournamentService;
 import semo.back.service.feature.tournament.vo.ClubAdminTournamentHomeResponse;
-import semo.back.service.feature.tournament.vo.GenerateTournamentBracketRequest;
 import semo.back.service.feature.tournament.vo.ReviewTournamentApplicationRequest;
 import semo.back.service.feature.tournament.vo.TournamentDetailResponse;
-import semo.back.service.feature.tournament.vo.UpdateTournamentBracketDraftRequest;
 import semo.back.service.feature.tournament.vo.UpdateTournamentEntriesRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
@@ -72,47 +70,6 @@ public class ClubTournamentAdminController {
         return ResponseDataDTO.of(
                 clubTournamentService.updateEntries(clubId, tournamentRecordId, requireUserKey(userContext), request),
                 "엔트리 편성 저장 성공"
-        );
-    }
-
-    @PostMapping("/admin/more/tournaments/{tournamentRecordId}/bracket/generate")
-    public ResponseDataDTO<TournamentDetailResponse> generateBracket(
-            @PathVariable Long clubId,
-            @PathVariable Long tournamentRecordId,
-            @Valid @RequestBody(required = false) GenerateTournamentBracketRequest request,
-            UserContext userContext
-    ) {
-        requireUserRole(userContext);
-        return ResponseDataDTO.of(
-                clubTournamentService.generateBracket(clubId, tournamentRecordId, requireUserKey(userContext), request),
-                "대진표 생성 성공"
-        );
-    }
-
-    @PutMapping("/admin/more/tournaments/{tournamentRecordId}/bracket/draft")
-    public ResponseDataDTO<TournamentDetailResponse> updateBracketDraft(
-            @PathVariable Long clubId,
-            @PathVariable Long tournamentRecordId,
-            @Valid @RequestBody UpdateTournamentBracketDraftRequest request,
-            UserContext userContext
-    ) {
-        requireUserRole(userContext);
-        return ResponseDataDTO.of(
-                clubTournamentService.updateBracketDraft(clubId, tournamentRecordId, requireUserKey(userContext), request),
-                "대진표 초안 수정 성공"
-        );
-    }
-
-    @PutMapping("/admin/more/tournaments/{tournamentRecordId}/bracket/confirm")
-    public ResponseDataDTO<TournamentDetailResponse> confirmBracket(
-            @PathVariable Long clubId,
-            @PathVariable Long tournamentRecordId,
-            UserContext userContext
-    ) {
-        requireUserRole(userContext);
-        return ResponseDataDTO.of(
-                clubTournamentService.confirmBracket(clubId, tournamentRecordId, requireUserKey(userContext)),
-                "대진표 확정 성공"
         );
     }
 

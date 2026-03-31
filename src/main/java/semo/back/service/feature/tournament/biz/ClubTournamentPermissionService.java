@@ -17,7 +17,6 @@ public class ClubTournamentPermissionService {
     public static final String PERMISSION_TOURNAMENT_PIN = "TOURNAMENT_RECORD_PIN";
     public static final String PERMISSION_TOURNAMENT_APPLICATION_REVIEW = "TOURNAMENT_RECORD_APPLICATION_REVIEW";
     public static final String PERMISSION_TOURNAMENT_ENTRY_MANAGE = "TOURNAMENT_RECORD_ENTRY_MANAGE";
-    public static final String PERMISSION_TOURNAMENT_BRACKET_MANAGE = "TOURNAMENT_RECORD_BRACKET_MANAGE";
     public static final String PERMISSION_TOURNAMENT_DELETE_ANY = "TOURNAMENT_RECORD_DELETE_ANY";
 
     private final ClubFeatureService clubFeatureService;
@@ -71,13 +70,6 @@ public class ClubTournamentPermissionService {
             return true;
         }
         return hasRolePermission(access, PERMISSION_TOURNAMENT_ENTRY_MANAGE);
-    }
-
-    public boolean canManageBracket(ClubAccessResolver.ClubAccess access) {
-        if (access.isAdmin()) {
-            return true;
-        }
-        return hasRolePermission(access, PERMISSION_TOURNAMENT_BRACKET_MANAGE);
     }
 
     public boolean canDeleteTournament(ClubAccessResolver.ClubAccess access) {

@@ -30,8 +30,6 @@ public record TournamentDetailResponse(
         boolean postedToBoard,
         boolean postedToCalendar,
         boolean pinned,
-        String bracketMode,
-        boolean bracketConfirmed,
         String cancelledAtLabel,
         String cancelReason,
         int applicantCount,
@@ -47,9 +45,7 @@ public record TournamentDetailResponse(
         boolean canDelete,
         boolean canReviewApplications,
         boolean canManageEntries,
-        boolean canManageBracket,
         List<TournamentApplicationSummaryResponse> applications,
-        List<TournamentEntrySummaryResponse> entries,
-        List<TournamentBracketRoundResponse> rounds
+        List<TournamentEntrySummaryResponse> entries
 ) {
 }

@@ -11,7 +11,6 @@ public record ClubAdminTournamentHomeResponse(
         int activeTournamentCount,
         int completedTournamentCount,
         int recruitingTournamentCount,
-        int bracketConfirmedCount,
         List<TournamentSummaryResponse> tournaments
 ) {
 }

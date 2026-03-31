@@ -157,7 +157,7 @@ INSERT INTO feature_catalog (
 SELECT
     'TOURNAMENT_RECORD',
     '대회기록',
-    '대회를 생성하고 참가신청, 엔트리, 브래킷을 운영합니다.',
+    '대회를 생성하고 참가신청과 엔트리를 운영합니다.',
     'emoji_events',
     'USER_AND_ADMIN',
     1,
@@ -406,9 +406,6 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'TOURNAMENT_RECORD_BRACKET_MANAGE', 'TOURNAMENT_RECORD', '대진표 관리', '브래킷 초안 생성, 수정, 확정을 처리합니다.', 'CLUB', 1, 60, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_BRACKET_MANAGE');
-
 INSERT INTO feature_permission_catalog (
     permission_key,
     feature_key,
@@ -420,7 +417,7 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'TOURNAMENT_RECORD_DELETE_ANY', 'TOURNAMENT_RECORD', '대회 삭제', '운영자 화면에서 대회를 삭제합니다.', 'CLUB', 1, 70, NOW(), NOW()
+SELECT 'TOURNAMENT_RECORD_DELETE_ANY', 'TOURNAMENT_RECORD', '대회 삭제', '운영자 화면에서 대회를 삭제합니다.', 'CLUB', 1, 60, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_DELETE_ANY');
 
 INSERT INTO feature_permission_catalog (

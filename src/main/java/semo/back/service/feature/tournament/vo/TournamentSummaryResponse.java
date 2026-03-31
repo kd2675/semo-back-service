@@ -24,8 +24,6 @@ public record TournamentSummaryResponse(
         boolean postedToBoard,
         boolean postedToCalendar,
         boolean pinned,
-        String bracketMode,
-        boolean bracketConfirmed,
         boolean mine,
         boolean participating,
         boolean canEdit,

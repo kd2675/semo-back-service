@@ -21,7 +21,6 @@ public record UpsertTournamentRequest(
         @Size(max = 10) String feeCurrencyCode,
         Boolean postToBoard,
         Boolean postToCalendar,
-        Boolean pinned,
-        @NotBlank @Size(max = 20) String bracketMode
+        Boolean pinned
 ) {
 }
