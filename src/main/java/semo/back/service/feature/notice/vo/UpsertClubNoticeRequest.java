@@ -13,6 +13,7 @@ public record UpsertClubNoticeRequest(
         String locationLabel,
         String scheduleAt,
         String scheduleEndAt,
+        Boolean scheduleTimeEnabled,
         Boolean postToBoard,
         Boolean postToCalendar,
         Boolean postToSchedule,

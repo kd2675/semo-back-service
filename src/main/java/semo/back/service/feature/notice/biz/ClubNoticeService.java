@@ -26,6 +26,7 @@ import semo.back.service.feature.share.biz.ClubContentShareService;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
@@ -41,6 +42,7 @@ public class ClubNoticeService {
     private static final int MAX_PAGE_SIZE = 30;
     private static final DateTimeFormatter DATE_TIME_REQUEST_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm");
+    private static final DateTimeFormatter DATE_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd");
 
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubRepository clubRepository;
@@ -78,9 +80,10 @@ public class ClubNoticeService {
                 notice.isPinned(),
                 notice.getLocationLabel(),
                 formatDateTimeValue(notice.getScheduleAt()),
-                formatDateTime(notice.getScheduleAt()),
+                formatScheduleDateTime(notice.getScheduleAt(), notice.isScheduleTimeEnabled()),
                 formatDateTimeValue(notice.getScheduleEndAt()),
-                formatDateTime(notice.getScheduleEndAt()),
+                formatScheduleDateTime(notice.getScheduleEndAt(), notice.isScheduleTimeEnabled()),
+                notice.isScheduleTimeEnabled(),
                 notice.isSharedToBoard(),
                 notice.isSharedToCalendar(),
                 actionPermission.canManage(),
@@ -104,6 +107,10 @@ public class ClubNoticeService {
         );
         boolean postToBoard = resolvePostToBoard(request.postToBoard());
         boolean postToCalendar = resolvePostToCalendar(request.postToCalendar(), request.postToSchedule());
+        LocalDateTime rawScheduleAt = postToCalendar ? parseOptionalDateTime(request.scheduleAt()) : null;
+        LocalDateTime rawScheduleEndAt = postToCalendar ? parseOptionalDateTime(request.scheduleEndAt()) : null;
+        boolean scheduleTimeEnabled = postToCalendar
+                && resolveScheduleTimeEnabled(request.scheduleTimeEnabled(), rawScheduleAt, rawScheduleEndAt);
         ClubNotice notice = clubNoticeRepository.save(ClubNotice.builder()
                 .clubId(clubId)
                 .authorClubProfileId(access.clubProfile().getClubProfileId())
@@ -111,8 +118,9 @@ public class ClubNoticeService {
                 .content(request.content().trim())
                 .imageFileName(finalizeNoticeImageFileName(request.fileName(), null))
                 .locationLabel(trimToNull(request.locationLabel()))
-                .scheduleAt(postToCalendar ? parseOptionalDateTime(request.scheduleAt()) : null)
-                .scheduleEndAt(postToCalendar ? parseOptionalDateTime(request.scheduleEndAt()) : null)
+                .scheduleAt(postToCalendar ? normalizeScheduleStart(rawScheduleAt, scheduleTimeEnabled) : null)
+                .scheduleEndAt(postToCalendar ? normalizeScheduleEnd(rawScheduleEndAt, scheduleTimeEnabled) : null)
+                .scheduleTimeEnabled(scheduleTimeEnabled)
                 .sharedToBoard(postToBoard)
                 .sharedToCalendar(postToCalendar)
                 .pinned(Boolean.TRUE.equals(request.pinned()))
@@ -137,6 +145,10 @@ public class ClubNoticeService {
         );
         boolean postToBoard = resolvePostToBoard(request.postToBoard());
         boolean postToCalendar = resolvePostToCalendar(request.postToCalendar(), request.postToSchedule());
+        LocalDateTime rawScheduleAt = postToCalendar ? parseOptionalDateTime(request.scheduleAt()) : null;
+        LocalDateTime rawScheduleEndAt = postToCalendar ? parseOptionalDateTime(request.scheduleEndAt()) : null;
+        boolean scheduleTimeEnabled = postToCalendar
+                && resolveScheduleTimeEnabled(request.scheduleTimeEnabled(), rawScheduleAt, rawScheduleEndAt);
         ClubNotice updated = clubNoticeRepository.save(ClubNotice.builder()
                 .noticeId(current.getNoticeId())
                 .clubId(current.getClubId())
@@ -145,8 +157,9 @@ public class ClubNoticeService {
                 .content(request.content().trim())
                 .imageFileName(finalizeNoticeImageFileName(request.fileName(), current.getImageFileName()))
                 .locationLabel(trimToNull(request.locationLabel()))
-                .scheduleAt(postToCalendar ? parseOptionalDateTime(request.scheduleAt()) : null)
-                .scheduleEndAt(postToCalendar ? parseOptionalDateTime(request.scheduleEndAt()) : null)
+                .scheduleAt(postToCalendar ? normalizeScheduleStart(rawScheduleAt, scheduleTimeEnabled) : null)
+                .scheduleEndAt(postToCalendar ? normalizeScheduleEnd(rawScheduleEndAt, scheduleTimeEnabled) : null)
+                .scheduleTimeEnabled(scheduleTimeEnabled)
                 .sharedToBoard(postToBoard)
                 .sharedToCalendar(postToCalendar)
                 .pinned(Boolean.TRUE.equals(request.pinned()))
@@ -178,6 +191,7 @@ public class ClubNoticeService {
                 .locationLabel(current.getLocationLabel())
                 .scheduleAt(current.getScheduleAt())
                 .scheduleEndAt(current.getScheduleEndAt())
+                .scheduleTimeEnabled(current.isScheduleTimeEnabled())
                 .sharedToBoard(current.isSharedToBoard())
                 .sharedToCalendar(current.isSharedToCalendar())
                 .pinned(current.isPinned())
@@ -235,7 +249,8 @@ public class ClubNoticeService {
                 imageFileUrlResolver.resolveImageUrl(notice.getImageFileName()),
                 imageFileUrlResolver.resolveThumbnailUrl(notice.getImageFileName()),
                 formatDateTimeValue(notice.getScheduleAt()),
-                formatDateTime(notice.getScheduleAt()),
+                formatScheduleDateTime(notice.getScheduleAt(), notice.isScheduleTimeEnabled()),
+                notice.isScheduleTimeEnabled(),
                 notice.getLocationLabel()
         );
     }
@@ -285,7 +300,8 @@ public class ClubNoticeService {
                 notice.isPinned(),
                 formatDateTimeValue(notice.getScheduleAt()),
                 formatDateTimeValue(notice.getScheduleEndAt()),
-                formatDateTime(notice.getScheduleAt()),
+                formatScheduleDateTime(notice.getScheduleAt(), notice.isScheduleTimeEnabled()),
+                notice.isScheduleTimeEnabled(),
                 notice.getLocationLabel(),
                 notice.isSharedToBoard(),
                 notice.isSharedToCalendar(),
@@ -332,8 +348,15 @@ public class ClubNoticeService {
         }
         LocalDateTime startAt = parseOptionalDateTime(request.scheduleAt());
         LocalDateTime endAt = parseOptionalDateTime(request.scheduleEndAt());
-        if (startAt != null && endAt != null && endAt.isBefore(startAt)) {
+        if (startAt == null || endAt == null) {
+            throw new SemoException.ValidationException("캘린더 공유 공지는 시작 날짜와 종료 날짜를 모두 입력해야 합니다.");
+        }
+        boolean scheduleTimeEnabled = resolveScheduleTimeEnabled(request.scheduleTimeEnabled(), startAt, endAt);
+        if (scheduleTimeEnabled && endAt.isBefore(startAt)) {
             throw new SemoException.ValidationException("종료 시간은 시작 시간보다 빠를 수 없습니다.");
+        }
+        if (!scheduleTimeEnabled && endAt.toLocalDate().isBefore(startAt.toLocalDate())) {
+            throw new SemoException.ValidationException("종료 날짜는 시작 날짜보다 빠를 수 없습니다.");
         }
     }
 
@@ -348,7 +371,39 @@ public class ClubNoticeService {
         if (postToSchedule != null) {
             return postToSchedule;
         }
-        return false;
+        return true;
+    }
+
+    private boolean resolveScheduleTimeEnabled(
+            Boolean scheduleTimeEnabled,
+            LocalDateTime scheduleAt,
+            LocalDateTime scheduleEndAt
+    ) {
+        if (scheduleTimeEnabled != null) {
+            return scheduleTimeEnabled;
+        }
+        return hasExplicitTime(scheduleAt) || hasExplicitTime(scheduleEndAt);
+    }
+
+    private boolean hasExplicitTime(LocalDateTime value) {
+        if (value == null) {
+            return false;
+        }
+        return !value.toLocalTime().equals(LocalTime.MIDNIGHT);
+    }
+
+    private LocalDateTime normalizeScheduleStart(LocalDateTime value, boolean scheduleTimeEnabled) {
+        if (value == null) {
+            return null;
+        }
+        return scheduleTimeEnabled ? value : value.toLocalDate().atStartOfDay();
+    }
+
+    private LocalDateTime normalizeScheduleEnd(LocalDateTime value, boolean scheduleTimeEnabled) {
+        if (value == null) {
+            return null;
+        }
+        return scheduleTimeEnabled ? value : value.toLocalDate().atTime(23, 59);
     }
 
     private String formatDateTime(LocalDateTime value) {
@@ -356,6 +411,16 @@ public class ClubNoticeService {
             return null;
         }
         return value.format(DATE_TIME_LABEL_FORMATTER);
+    }
+
+    private String formatScheduleDateTime(LocalDateTime value, boolean scheduleTimeEnabled) {
+        if (value == null) {
+            return null;
+        }
+        if (!scheduleTimeEnabled) {
+            return value.toLocalDate().format(DATE_LABEL_FORMATTER);
+        }
+        return formatDateTime(value);
     }
 
     private String formatDateTimeValue(LocalDateTime value) {

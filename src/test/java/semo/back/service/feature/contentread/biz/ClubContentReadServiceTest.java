@@ -9,7 +9,6 @@ import semo.back.service.database.pub.entity.ClubBoardItem;
 import semo.back.service.database.pub.entity.ClubCalendarItem;
 import semo.back.service.database.pub.repository.ClubBoardItemReadRepository;
 import semo.back.service.database.pub.repository.ClubBoardItemRepository;
-import semo.back.service.database.pub.repository.ClubCalendarItemReadRepository;
 import semo.back.service.database.pub.repository.ClubCalendarItemRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
@@ -61,9 +60,6 @@ class ClubContentReadServiceTest {
     private ClubBoardItemReadRepository clubBoardItemReadRepository;
 
     @Autowired
-    private ClubCalendarItemReadRepository clubCalendarItemReadRepository;
-
-    @Autowired
     private ClubBoardItemRepository clubBoardItemRepository;
 
     @Autowired
@@ -108,7 +104,6 @@ class ClubContentReadServiceTest {
     @BeforeEach
     void setUp() {
         clubBoardItemReadRepository.deleteAll();
-        clubCalendarItemReadRepository.deleteAll();
         clubScheduleVoteSelectionRepository.deleteAll();
         clubScheduleVoteOptionRepository.deleteAll();
         clubScheduleVoteRepository.deleteAll();
@@ -155,6 +150,7 @@ class ClubContentReadServiceTest {
                         true,
                         true,
                         true,
+                        true,
                         false
                 )
         );
@@ -168,16 +164,10 @@ class ClubContentReadServiceTest {
 
         var firstBoardRead = clubContentReadService.recordBoardItemRead(clubId, boardItem.getBoardItemId(), userKey);
         var secondBoardRead = clubContentReadService.recordBoardItemRead(clubId, boardItem.getBoardItemId(), userKey);
-        var firstCalendarRead = clubContentReadService.recordCalendarItemRead(clubId, calendarItem.getCalendarItemId(), userKey);
-        var secondCalendarRead = clubContentReadService.recordCalendarItemRead(clubId, calendarItem.getCalendarItemId(), userKey);
-
         assertThat(firstBoardRead.readCount()).isEqualTo(1);
         assertThat(secondBoardRead.readCount()).isEqualTo(1);
-        assertThat(firstCalendarRead.readCount()).isEqualTo(1);
-        assertThat(secondCalendarRead.readCount()).isEqualTo(1);
 
         var boardStatus = clubContentReadService.getBoardItemReadStatus(clubId, boardItem.getBoardItemId(), userKey);
-        var calendarStatus = clubContentReadService.getCalendarItemReadStatus(clubId, calendarItem.getCalendarItemId(), userKey);
         var boardFeed = clubBoardFeedService.getBoardFeed(clubId, userKey, null, false, null, 10);
         var schedule = clubScheduleService.getClubSchedule(clubId, userKey, 2030, 7);
 
@@ -187,22 +177,16 @@ class ClubContentReadServiceTest {
         assertThat(boardStatus.readers()).hasSize(1);
         assertThat(boardStatus.readers().getFirst().displayName()).isEqualTo("읽음 회장");
 
-        assertThat(calendarStatus.readCount()).isEqualTo(1);
-        assertThat(calendarStatus.activeMemberCount()).isEqualTo(1);
-        assertThat(calendarStatus.unreadCount()).isZero();
-        assertThat(calendarStatus.readers()).hasSize(1);
-        assertThat(calendarStatus.readers().getFirst().displayName()).isEqualTo("읽음 회장");
-
         assertThat(boardFeed.items())
                 .extracting(item -> item.readCount())
                 .contains(1);
         assertThat(schedule.items())
-                .extracting(item -> item.readCount())
-                .contains(1);
+                .extracting(item -> item.calendarItemId())
+                .contains(calendarItem.getCalendarItemId());
     }
 
     @Test
-    void deletingSharedNoticeAlsoRemovesBoardAndCalendarReadHistory() {
+    void deletingSharedNoticeAlsoRemovesBoardReadHistoryAndCalendarShare() {
         String userKey = "read-owner-delete-001";
         Long clubId = clubService.createClub(
                 userKey,
@@ -230,6 +214,7 @@ class ClubContentReadServiceTest {
                         "2030-08-15T20:00",
                         true,
                         true,
+                        true,
                         false,
                         false
                 )
@@ -243,14 +228,11 @@ class ClubContentReadServiceTest {
                 .orElseThrow();
 
         clubContentReadService.recordBoardItemRead(clubId, boardItem.getBoardItemId(), userKey);
-        clubContentReadService.recordCalendarItemRead(clubId, calendarItem.getCalendarItemId(), userKey);
-
         clubNoticeService.deleteNotice(clubId, notice.noticeId(), userKey);
 
         assertThat(clubBoardItemRepository.findByClubIdAndContentTypeAndContentId(clubId, "NOTICE", notice.noticeId())).isEmpty();
         assertThat(clubCalendarItemRepository.findByClubIdAndContentTypeAndContentId(clubId, "NOTICE", notice.noticeId())).isEmpty();
         assertThat(clubBoardItemReadRepository.countByBoardItemId(boardItem.getBoardItemId())).isZero();
-        assertThat(clubCalendarItemReadRepository.countByCalendarItemId(calendarItem.getCalendarItemId())).isZero();
     }
 
     private void enableNoticeFeature(Long clubId, String userKey) {

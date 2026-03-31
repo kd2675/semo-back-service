@@ -721,9 +721,11 @@ public class ClubTournamentService {
         boolean participating = myApplication != null
                 && !APPLICATION_REJECTED.equals(myApplication.getApplicationStatus())
                 && !APPLICATION_CANCELLED.equals(myApplication.getApplicationStatus());
+        boolean applied = myApplication != null
+                && !APPLICATION_CANCELLED.equals(myApplication.getApplicationStatus());
         return new TournamentViewerState(
                 access.clubProfile().getClubProfileId().equals(tournament.getAuthorClubProfileId()),
-                myApplication != null,
+                applied,
                 myApplication == null ? null : myApplication.getApplicationStatus(),
                 participating
         );
@@ -790,7 +792,7 @@ public class ClubTournamentService {
                 feeRequired,
                 feeAmount,
                 normalizeCurrencyCode(request.feeCurrencyCode()),
-                request.postToBoard() != null && request.postToBoard(),
+                request.postToBoard() == null || request.postToBoard(),
                 request.postToCalendar() == null || request.postToCalendar(),
                 pinned
         );

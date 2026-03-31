@@ -8,6 +8,7 @@ public record ClubNoticeUpsertResponse(
         String thumbnailUrl,
         String scheduleAt,
         String scheduleAtLabel,
+        boolean scheduleTimeEnabled,
         String locationLabel
 ) {
 }

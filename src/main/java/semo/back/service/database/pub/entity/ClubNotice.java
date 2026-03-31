@@ -51,6 +51,9 @@ public class ClubNotice extends CommonDateEntity {
     @Column(name = "schedule_end_at")
     private LocalDateTime scheduleEndAt;
 
+    @Column(name = "schedule_time_enabled", nullable = false)
+    private boolean scheduleTimeEnabled;
+
     @Column(name = "shared_to_board", nullable = false)
     private boolean sharedToBoard;
 

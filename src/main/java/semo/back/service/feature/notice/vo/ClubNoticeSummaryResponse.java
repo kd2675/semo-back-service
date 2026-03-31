@@ -17,6 +17,7 @@ public record ClubNoticeSummaryResponse(
         String scheduleAt,
         String scheduleEndAt,
         String scheduleAtLabel,
+        boolean scheduleTimeEnabled,
         String locationLabel,
         boolean postedToBoard,
         boolean postedToCalendar,

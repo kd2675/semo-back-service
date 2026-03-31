@@ -7,7 +7,6 @@ import semo.back.service.database.pub.entity.ClubBoardItem;
 import semo.back.service.database.pub.entity.ClubCalendarItem;
 import semo.back.service.database.pub.repository.ClubBoardItemReadRepository;
 import semo.back.service.database.pub.repository.ClubBoardItemRepository;
-import semo.back.service.database.pub.repository.ClubCalendarItemReadRepository;
 import semo.back.service.database.pub.repository.ClubCalendarItemRepository;
 
 import java.util.List;
@@ -24,7 +23,6 @@ public class ClubContentShareService {
     private final ClubBoardItemRepository clubBoardItemRepository;
     private final ClubBoardItemReadRepository clubBoardItemReadRepository;
     private final ClubCalendarItemRepository clubCalendarItemRepository;
-    private final ClubCalendarItemReadRepository clubCalendarItemReadRepository;
 
     @Transactional(transactionManager = "pubTransactionManager")
     public void syncBoardShare(Long clubId, String contentType, Long contentId, boolean shared) {
@@ -104,9 +102,6 @@ public class ClubContentShareService {
 
     private void removeCalendarShares(Long clubId, String contentType, Long contentId) {
         List<ClubCalendarItem> calendarItems = clubCalendarItemRepository.findAllByClubIdAndContentTypeAndContentId(clubId, contentType, contentId);
-        for (ClubCalendarItem calendarItem : calendarItems) {
-            clubCalendarItemReadRepository.deleteByCalendarItemId(calendarItem.getCalendarItemId());
-        }
         clubCalendarItemRepository.deleteAll(calendarItems);
     }
 }

@@ -235,6 +235,7 @@ CREATE TABLE IF NOT EXISTS club_notice (
     location_label VARCHAR(200) NULL,
     schedule_at DATETIME NULL,
     schedule_end_at DATETIME NULL,
+    schedule_time_enabled TINYINT(1) NOT NULL DEFAULT 1,
     shared_to_board TINYINT(1) NOT NULL DEFAULT 1,
     shared_to_calendar TINYINT(1) NOT NULL DEFAULT 0,
     pinned TINYINT(1) NOT NULL DEFAULT 0,
@@ -298,22 +299,6 @@ CREATE TABLE IF NOT EXISTS club_board_item_read (
 
 CREATE INDEX idx_club_board_item_read_item
     ON club_board_item_read (board_item_id, club_profile_id);
-
-CREATE TABLE IF NOT EXISTS club_calendar_item_read (
-    club_calendar_item_read_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    calendar_item_id BIGINT NOT NULL,
-    club_profile_id BIGINT NOT NULL,
-    first_read_at DATETIME NOT NULL,
-    last_read_at DATETIME NOT NULL,
-    create_date DATETIME NOT NULL,
-    update_date DATETIME NOT NULL,
-    CONSTRAINT uk_club_calendar_item_read UNIQUE (calendar_item_id, club_profile_id),
-    CONSTRAINT fk_club_calendar_item_read_item FOREIGN KEY (calendar_item_id) REFERENCES club_calendar_item(calendar_item_id),
-    CONSTRAINT fk_club_calendar_item_read_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE INDEX idx_club_calendar_item_read_item
-    ON club_calendar_item_read (calendar_item_id, club_profile_id);
 
 -- ============================================================
 -- Tournament

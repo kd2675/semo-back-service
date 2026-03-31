@@ -246,6 +246,7 @@ class ClubNoticePermissionServiceTest {
                 false,
                 false,
                 false,
+                false,
                 false
         );
     }

@@ -12,8 +12,6 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.contentread.biz.ClubContentReadService;
 import semo.back.service.feature.contentread.vo.BoardItemReadResponse;
 import semo.back.service.feature.contentread.vo.BoardItemReadStatusResponse;
-import semo.back.service.feature.contentread.vo.CalendarItemReadResponse;
-import semo.back.service.feature.contentread.vo.CalendarItemReadStatusResponse;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
 @RestController
@@ -45,32 +43,6 @@ public class ClubContentReadController {
         return ResponseDataDTO.of(
                 clubContentReadService.getBoardItemReadStatus(clubId, boardItemId, requireUserKey(userContext)),
                 "게시판 읽음 현황 조회 성공"
-        );
-    }
-
-    @PostMapping("/schedule/items/{calendarItemId}/read")
-    public ResponseDataDTO<CalendarItemReadResponse> recordCalendarItemRead(
-            @PathVariable Long clubId,
-            @PathVariable Long calendarItemId,
-            UserContext userContext
-    ) {
-        requireUserRole(userContext);
-        return ResponseDataDTO.of(
-                clubContentReadService.recordCalendarItemRead(clubId, calendarItemId, requireUserKey(userContext)),
-                "캘린더 읽음 기록 성공"
-        );
-    }
-
-    @GetMapping("/schedule/items/{calendarItemId}/read-status")
-    public ResponseDataDTO<CalendarItemReadStatusResponse> getCalendarItemReadStatus(
-            @PathVariable Long clubId,
-            @PathVariable Long calendarItemId,
-            UserContext userContext
-    ) {
-        requireUserRole(userContext);
-        return ResponseDataDTO.of(
-                clubContentReadService.getCalendarItemReadStatus(clubId, calendarItemId, requireUserKey(userContext)),
-                "캘린더 읽음 현황 조회 성공"
         );
     }
 

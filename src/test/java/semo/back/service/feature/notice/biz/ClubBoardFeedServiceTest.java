@@ -146,6 +146,7 @@ class ClubBoardFeedServiceTest {
                         false,
                         false,
                         false,
+                        false,
                         false
                 )
         );
@@ -207,6 +208,7 @@ class ClubBoardFeedServiceTest {
                         null,
                         null,
                         null,
+                        false,
                         true,
                         false,
                         false,
@@ -267,6 +269,7 @@ class ClubBoardFeedServiceTest {
                         null,
                         null,
                         null,
+                        false,
                         true,
                         false,
                         false,
