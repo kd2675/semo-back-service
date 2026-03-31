@@ -157,7 +157,7 @@ INSERT INTO feature_catalog (
 SELECT
     'TOURNAMENT_RECORD',
     '대회기록',
-    '대회를 생성하고 참가신청과 엔트리를 운영합니다.',
+    '대회를 작성하고 관리자 승인 이후 참가신청과 참가 선수를 운영합니다.',
     'emoji_events',
     'USER_AND_ADMIN',
     1,
@@ -378,22 +378,8 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'TOURNAMENT_RECORD_APPLICATION_REVIEW', 'TOURNAMENT_RECORD', '참가신청 검토', '참가신청 승인 및 반려를 처리합니다.', 'CLUB', 1, 40, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_APPLICATION_REVIEW');
-
-INSERT INTO feature_permission_catalog (
-    permission_key,
-    feature_key,
-    display_name,
-    description,
-    ownership_scope,
-    active,
-    sort_order,
-    create_date,
-    update_date
-)
-SELECT 'TOURNAMENT_RECORD_ENTRY_MANAGE', 'TOURNAMENT_RECORD', '엔트리 편성', '승인된 참가자를 엔트리로 편성합니다.', 'CLUB', 1, 50, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_ENTRY_MANAGE');
+SELECT 'TOURNAMENT_RECORD_REVIEW', 'TOURNAMENT_RECORD', '대회 승인 검토', '작성된 대회를 승인 또는 거절합니다.', 'CLUB', 1, 40, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_REVIEW');
 
 INSERT INTO feature_permission_catalog (
     permission_key,
@@ -417,7 +403,7 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'TOURNAMENT_RECORD_DELETE_ANY', 'TOURNAMENT_RECORD', '대회 삭제', '운영자 화면에서 대회를 삭제합니다.', 'CLUB', 1, 60, NOW(), NOW()
+SELECT 'TOURNAMENT_RECORD_DELETE_ANY', 'TOURNAMENT_RECORD', '대회 삭제', '운영자 화면에서 대회를 삭제합니다.', 'CLUB', 1, 50, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_DELETE_ANY');
 
 INSERT INTO feature_permission_catalog (
