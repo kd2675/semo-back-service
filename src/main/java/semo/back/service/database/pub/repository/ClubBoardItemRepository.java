@@ -28,11 +28,16 @@ public interface ClubBoardItemRepository extends JpaRepository<ClubBoardItem, Lo
               on bi.contentType = 'SCHEDULE_VOTE'
              and v.voteId = bi.contentId
              and v.clubId = bi.clubId
+            left join TournamentRecord t
+              on bi.contentType = 'TOURNAMENT'
+             and t.tournamentRecordId = bi.contentId
+             and t.clubId = bi.clubId
             where bi.clubId = :clubId
               and (
                     (bi.contentType = 'NOTICE' and n.noticeId is not null and n.deleted = false)
                     or (bi.contentType = 'SCHEDULE_EVENT' and e.eventId is not null and e.eventStatus <> 'CANCELLED')
                     or (bi.contentType = 'SCHEDULE_VOTE' and v.voteId is not null)
+                    or (bi.contentType = 'TOURNAMENT' and t.tournamentRecordId is not null and t.deleted = false)
                   )
               and (
                     :queryText is null
@@ -42,12 +47,17 @@ public interface ClubBoardItemRepository extends JpaRepository<ClubBoardItem, Lo
                     ))
                     or (bi.contentType = 'SCHEDULE_EVENT' and lower(e.title) like lower(concat('%', :queryText, '%')))
                     or (bi.contentType = 'SCHEDULE_VOTE' and lower(v.title) like lower(concat('%', :queryText, '%')))
+                    or (bi.contentType = 'TOURNAMENT' and (
+                        lower(t.title) like lower(concat('%', :queryText, '%'))
+                        or lower(coalesce(t.summaryText, '')) like lower(concat('%', :queryText, '%'))
+                    ))
                   )
               and (
                     :pinnedOnly = false
                     or (bi.contentType = 'NOTICE' and n.pinned = true)
                     or (bi.contentType = 'SCHEDULE_EVENT' and e.pinned = true)
                     or (bi.contentType = 'SCHEDULE_VOTE' and v.pinned = true)
+                    or (bi.contentType = 'TOURNAMENT' and t.pinned = true)
                   )
               and (
                     :cursorBoardItemId is null

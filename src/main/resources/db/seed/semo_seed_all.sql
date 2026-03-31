@@ -155,6 +155,34 @@ INSERT INTO feature_catalog (
     update_date
 )
 SELECT
+    'TOURNAMENT_RECORD',
+    '대회기록',
+    '대회를 생성하고 참가신청, 엔트리, 브래킷을 운영합니다.',
+    'emoji_events',
+    'USER_AND_ADMIN',
+    1,
+    55,
+    NOW(),
+    NOW()
+FROM dual
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM feature_catalog
+    WHERE feature_key = 'TOURNAMENT_RECORD'
+);
+
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    navigation_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
     'ROLE_MANAGEMENT',
     '직책관리',
     '직책을 생성하고 하위 권한을 연결해 멤버 권한을 세밀하게 관리합니다.',
@@ -296,6 +324,104 @@ INSERT INTO feature_permission_catalog (
 )
 SELECT 'SCHEDULE_DELETE_SELF', 'SCHEDULE_MANAGE', '일정 삭제', '본인이 작성한 일정을 삭제합니다.', 'SELF', 1, 30, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'SCHEDULE_DELETE_SELF');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TOURNAMENT_RECORD_CREATE', 'TOURNAMENT_RECORD', '대회 작성', '대회를 새로 생성합니다.', 'CLUB', 1, 10, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_CREATE');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TOURNAMENT_RECORD_UPDATE_SELF', 'TOURNAMENT_RECORD', '대회 수정', '본인이 작성한 대회를 수정합니다.', 'SELF', 1, 20, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_UPDATE_SELF');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TOURNAMENT_RECORD_PIN', 'TOURNAMENT_RECORD', '대회 고정', '대회를 게시판 상단에 고정합니다.', 'SELF', 1, 30, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_PIN');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TOURNAMENT_RECORD_APPLICATION_REVIEW', 'TOURNAMENT_RECORD', '참가신청 검토', '참가신청 승인 및 반려를 처리합니다.', 'CLUB', 1, 40, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_APPLICATION_REVIEW');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TOURNAMENT_RECORD_ENTRY_MANAGE', 'TOURNAMENT_RECORD', '엔트리 편성', '승인된 참가자를 엔트리로 편성합니다.', 'CLUB', 1, 50, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_ENTRY_MANAGE');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TOURNAMENT_RECORD_BRACKET_MANAGE', 'TOURNAMENT_RECORD', '대진표 관리', '브래킷 초안 생성, 수정, 확정을 처리합니다.', 'CLUB', 1, 60, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_BRACKET_MANAGE');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TOURNAMENT_RECORD_DELETE_ANY', 'TOURNAMENT_RECORD', '대회 삭제', '운영자 화면에서 대회를 삭제합니다.', 'CLUB', 1, 70, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_DELETE_ANY');
 
 INSERT INTO feature_permission_catalog (
     permission_key,
@@ -465,6 +591,23 @@ INSERT INTO dashboard_widget_catalog (
 )
 SELECT 'ATTENDANCE_STATUS', 'Attendance Check', 'Check in and review attendance status.', 'fact_check', 'ATTENDANCE', 'USER_HOME', 1, 1, 40, 1, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'ATTENDANCE_STATUS');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'TOURNAMENT_RECORD_LATEST', 'Tournament Center', 'Featured tournament and my closest tournament.', 'emoji_events', 'TOURNAMENT_RECORD', 'USER_HOME', 2, 1, 35, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'TOURNAMENT_RECORD_LATEST');
 
 -- ------------------------------------------------------------
 -- Optional example: enable attendance for specific clubs.

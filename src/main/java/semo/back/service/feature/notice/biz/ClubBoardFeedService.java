@@ -10,10 +10,12 @@ import semo.back.service.database.pub.entity.ClubBoardItem;
 import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.entity.ClubScheduleVote;
+import semo.back.service.database.pub.entity.TournamentRecord;
 import semo.back.service.database.pub.repository.ClubBoardItemRepository;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
+import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.notice.vo.ClubBoardFeedItemResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
@@ -21,10 +23,13 @@ import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.schedule.biz.ClubScheduleService;
 import semo.back.service.feature.schedule.vo.ScheduleEventSummaryResponse;
 import semo.back.service.feature.schedule.vo.ScheduleVoteSummaryResponse;
+import semo.back.service.feature.tournament.biz.ClubTournamentService;
+import semo.back.service.feature.tournament.vo.TournamentSummaryResponse;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -37,14 +42,17 @@ public class ClubBoardFeedService {
     private static final String CONTENT_NOTICE = "NOTICE";
     private static final String CONTENT_SCHEDULE_EVENT = "SCHEDULE_EVENT";
     private static final String CONTENT_SCHEDULE_VOTE = "SCHEDULE_VOTE";
+    private static final String CONTENT_TOURNAMENT = "TOURNAMENT";
 
     private final ClubAccessResolver clubAccessResolver;
     private final ClubBoardItemRepository clubBoardItemRepository;
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
+    private final TournamentRecordRepository tournamentRecordRepository;
     private final ClubNoticeService clubNoticeService;
     private final ClubScheduleService clubScheduleService;
+    private final ClubTournamentService clubTournamentService;
 
     public ClubNoticeFeedResponse getBoardFeed(
             Long clubId,
@@ -70,9 +78,10 @@ public class ClubBoardFeedService {
         Map<Long, ClubNoticeSummaryResponse> noticeById = loadNoticeSummaries(access, pageRows);
         Map<Long, ScheduleEventSummaryResponse> eventById = loadEventSummaries(access, pageRows);
         Map<Long, ScheduleVoteSummaryResponse> voteById = loadVoteSummaries(access, pageRows);
+        Map<Long, TournamentSummaryResponse> tournamentById = loadTournamentSummaries(access, pageRows);
 
         List<ClubBoardFeedItemResponse> items = pageRows.stream()
-                .map(row -> toBoardFeedItemResponse(row, noticeById, eventById, voteById))
+                .map(row -> toBoardFeedItemResponse(row, noticeById, eventById, voteById, tournamentById))
                 .filter(item -> item != null)
                 .toList();
 
@@ -158,11 +167,35 @@ public class ClubBoardFeedService {
                 .collect(Collectors.toMap(ScheduleVoteSummaryResponse::voteId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
     }
 
+    private Map<Long, TournamentSummaryResponse> loadTournamentSummaries(
+            ClubAccessResolver.ClubAccess access,
+            List<ClubBoardItem> rows
+    ) {
+        List<Long> tournamentIds = rows.stream()
+                .filter(row -> CONTENT_TOURNAMENT.equals(row.getContentType()))
+                .map(ClubBoardItem::getContentId)
+                .toList();
+        if (tournamentIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, TournamentRecord> tournamentById = tournamentRecordRepository.findAllByTournamentRecordIdIn(tournamentIds).stream()
+                .filter(tournament -> !tournament.isDeleted())
+                .collect(Collectors.toMap(TournamentRecord::getTournamentRecordId, Function.identity()));
+        List<TournamentRecord> tournamentsInOrder = tournamentIds.stream()
+                .map(tournamentById::get)
+                .filter(Objects::nonNull)
+                .toList();
+        return clubTournamentService.getTournamentSummariesForDisplay(access, tournamentsInOrder).stream()
+                .collect(Collectors.toMap(TournamentSummaryResponse::tournamentRecordId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+    }
+
     private ClubBoardFeedItemResponse toBoardFeedItemResponse(
             ClubBoardItem row,
             Map<Long, ClubNoticeSummaryResponse> noticeById,
             Map<Long, ScheduleEventSummaryResponse> eventById,
-            Map<Long, ScheduleVoteSummaryResponse> voteById
+            Map<Long, ScheduleVoteSummaryResponse> voteById,
+            Map<Long, TournamentSummaryResponse> tournamentById
     ) {
         return switch (row.getContentType()) {
             case CONTENT_NOTICE -> {
@@ -171,6 +204,7 @@ public class ClubBoardFeedService {
                         row.getBoardItemId(),
                         row.getContentType(),
                         notice,
+                        null,
                         null,
                         null
                 );
@@ -182,6 +216,7 @@ public class ClubBoardFeedService {
                         row.getContentType(),
                         null,
                         event,
+                        null,
                         null
                 );
             }
@@ -192,7 +227,19 @@ public class ClubBoardFeedService {
                         row.getContentType(),
                         null,
                         null,
-                        vote
+                        vote,
+                        null
+                );
+            }
+            case CONTENT_TOURNAMENT -> {
+                TournamentSummaryResponse tournament = tournamentById.get(row.getContentId());
+                yield tournament == null ? null : new ClubBoardFeedItemResponse(
+                        row.getBoardItemId(),
+                        row.getContentType(),
+                        null,
+                        null,
+                        null,
+                        tournament
                 );
             }
             default -> null;

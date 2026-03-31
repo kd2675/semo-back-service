@@ -17,6 +17,7 @@ public class ClubContentShareService {
     public static final String CONTENT_NOTICE = "NOTICE";
     public static final String CONTENT_SCHEDULE_EVENT = "SCHEDULE_EVENT";
     public static final String CONTENT_SCHEDULE_VOTE = "SCHEDULE_VOTE";
+    public static final String CONTENT_TOURNAMENT = "TOURNAMENT";
 
     private final ClubBoardItemRepository clubBoardItemRepository;
     private final ClubCalendarItemRepository clubCalendarItemRepository;

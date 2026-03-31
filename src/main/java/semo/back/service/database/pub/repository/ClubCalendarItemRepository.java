@@ -29,6 +29,10 @@ public interface ClubCalendarItemRepository extends JpaRepository<ClubCalendarIt
               on ci.contentType = 'SCHEDULE_VOTE'
              and v.voteId = ci.contentId
              and v.clubId = ci.clubId
+            left join TournamentRecord t
+              on ci.contentType = 'TOURNAMENT'
+             and t.tournamentRecordId = ci.contentId
+             and t.clubId = ci.clubId
             where ci.clubId = :clubId
               and (
                     (ci.contentType = 'NOTICE'
@@ -52,6 +56,11 @@ public interface ClubCalendarItemRepository extends JpaRepository<ClubCalendarIt
                         and v.voteId is not null
                         and v.voteStartDate <= :monthEndDate
                         and v.voteEndDate >= :monthStartDate)
+                    or (ci.contentType = 'TOURNAMENT'
+                        and t.tournamentRecordId is not null
+                        and t.deleted = false
+                        and t.startDate <= :monthEndDate
+                        and t.endDate >= :monthStartDate)
                   )
             order by ci.calendarItemId desc
             """)

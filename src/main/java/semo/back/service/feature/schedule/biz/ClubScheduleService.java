@@ -15,6 +15,7 @@ import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.entity.ClubScheduleVote;
 import semo.back.service.database.pub.entity.ClubScheduleVoteOption;
 import semo.back.service.database.pub.entity.ClubScheduleVoteSelection;
+import semo.back.service.database.pub.entity.TournamentRecord;
 import semo.back.service.database.pub.repository.ClubCalendarItemRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
@@ -23,6 +24,7 @@ import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
+import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
@@ -45,6 +47,8 @@ import semo.back.service.feature.schedule.vo.SubmitScheduleVoteSelectionRequest;
 import semo.back.service.feature.schedule.vo.UpdateScheduleEventParticipationRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleEventRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleVoteRequest;
+import semo.back.service.feature.tournament.biz.ClubTournamentService;
+import semo.back.service.feature.tournament.vo.TournamentSummaryResponse;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -72,6 +76,7 @@ public class ClubScheduleService {
     private static final String CONTENT_NOTICE = ClubContentShareService.CONTENT_NOTICE;
     private static final String CONTENT_SCHEDULE_EVENT = ClubContentShareService.CONTENT_SCHEDULE_EVENT;
     private static final String CONTENT_SCHEDULE_VOTE = ClubContentShareService.CONTENT_SCHEDULE_VOTE;
+    private static final String CONTENT_TOURNAMENT = ClubContentShareService.CONTENT_TOURNAMENT;
     private static final DateTimeFormatter DATE_REQUEST_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DateTimeFormatter DATE_LABEL_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy.MM.dd (E)", Locale.KOREAN);
@@ -86,11 +91,13 @@ public class ClubScheduleService {
     private final ClubCalendarItemRepository clubCalendarItemRepository;
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubProfileRepository clubProfileRepository;
+    private final TournamentRecordRepository tournamentRecordRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubSchedulePermissionService clubSchedulePermissionService;
     private final ClubPollPermissionService clubPollPermissionService;
     private final ClubNoticeService clubNoticeService;
     private final ClubContentShareService clubContentShareService;
+    private final ClubTournamentService clubTournamentService;
     private final ImageFileUrlResolver imageFileUrlResolver;
 
     public ClubScheduleResponse getClubSchedule(Long clubId, String userKey, Integer year, Integer month) {
@@ -112,9 +119,10 @@ public class ClubScheduleService {
         Map<Long, ClubNoticeSummaryResponse> noticeById = loadCalendarNoticeSummaries(access, calendarItems);
         Map<Long, ScheduleEventSummaryResponse> eventById = loadCalendarEventSummaries(access, calendarItems);
         Map<Long, ScheduleVoteSummaryResponse> voteById = loadCalendarVoteSummaries(access, calendarItems);
+        Map<Long, TournamentSummaryResponse> tournamentById = loadCalendarTournamentSummaries(access, calendarItems);
 
         List<ClubCalendarFeedItemResponse> items = calendarItems.stream()
-                .map(item -> toCalendarFeedItemResponse(item, noticeById, eventById, voteById))
+                .map(item -> toCalendarFeedItemResponse(item, noticeById, eventById, voteById, tournamentById))
                 .filter(Objects::nonNull)
                 .toList();
 
@@ -1236,11 +1244,35 @@ public class ClubScheduleService {
                 .collect(Collectors.toMap(ScheduleVoteSummaryResponse::voteId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
     }
 
+    private Map<Long, TournamentSummaryResponse> loadCalendarTournamentSummaries(
+            ClubAccessResolver.ClubAccess access,
+            List<ClubCalendarItem> calendarItems
+    ) {
+        List<Long> tournamentIds = calendarItems.stream()
+                .filter(item -> CONTENT_TOURNAMENT.equals(item.getContentType()))
+                .map(ClubCalendarItem::getContentId)
+                .toList();
+        if (tournamentIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, TournamentRecord> tournamentById = tournamentRecordRepository.findAllByTournamentRecordIdIn(tournamentIds).stream()
+                .filter(tournament -> !tournament.isDeleted())
+                .collect(Collectors.toMap(TournamentRecord::getTournamentRecordId, Function.identity()));
+        List<TournamentRecord> tournamentsInOrder = tournamentIds.stream()
+                .map(tournamentById::get)
+                .filter(Objects::nonNull)
+                .toList();
+        return clubTournamentService.getTournamentSummariesForDisplay(access, tournamentsInOrder).stream()
+                .collect(Collectors.toMap(TournamentSummaryResponse::tournamentRecordId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+    }
+
     private ClubCalendarFeedItemResponse toCalendarFeedItemResponse(
             ClubCalendarItem calendarItem,
             Map<Long, ClubNoticeSummaryResponse> noticeById,
             Map<Long, ScheduleEventSummaryResponse> eventById,
-            Map<Long, ScheduleVoteSummaryResponse> voteById
+            Map<Long, ScheduleVoteSummaryResponse> voteById,
+            Map<Long, TournamentSummaryResponse> tournamentById
     ) {
         return switch (calendarItem.getContentType()) {
             case CONTENT_NOTICE -> {
@@ -1249,6 +1281,7 @@ public class ClubScheduleService {
                         calendarItem.getCalendarItemId(),
                         calendarItem.getContentType(),
                         notice,
+                        null,
                         null,
                         null
                 );
@@ -1260,6 +1293,7 @@ public class ClubScheduleService {
                         calendarItem.getContentType(),
                         null,
                         event,
+                        null,
                         null
                 );
             }
@@ -1270,7 +1304,19 @@ public class ClubScheduleService {
                         calendarItem.getContentType(),
                         null,
                         null,
-                        vote
+                        vote,
+                        null
+                );
+            }
+            case CONTENT_TOURNAMENT -> {
+                TournamentSummaryResponse tournament = tournamentById.get(calendarItem.getContentId());
+                yield tournament == null ? null : new ClubCalendarFeedItemResponse(
+                        calendarItem.getCalendarItemId(),
+                        calendarItem.getContentType(),
+                        null,
+                        null,
+                        null,
+                        tournament
                 );
             }
             default -> null;
