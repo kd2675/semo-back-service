@@ -10,6 +10,7 @@ import semo.back.service.common.util.ImageFileUrlResolver;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.TournamentApplication;
 import semo.back.service.database.pub.entity.TournamentRecord;
+import semo.back.service.database.pub.repository.BracketParticipantRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.TournamentApplicationRepository;
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
@@ -82,6 +83,7 @@ public class ClubTournamentService {
 
     private final TournamentRecordRepository tournamentRecordRepository;
     private final TournamentApplicationRepository tournamentApplicationRepository;
+    private final BracketParticipantRepository bracketParticipantRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubTournamentPermissionService clubTournamentPermissionService;
@@ -394,6 +396,13 @@ public class ClubTournamentService {
                 "대회 '" + current.getTitle() + "' 삭제에 실패했습니다."
         );
         clubContentShareService.removeAllShares(clubId, CONTENT_TOURNAMENT, tournamentRecordId);
+        List<Long> tournamentApplicationIds = tournamentApplicationRepository
+                .findByTournamentRecordIdOrderByCreateDateAscTournamentApplicationIdAsc(tournamentRecordId).stream()
+                .map(TournamentApplication::getTournamentApplicationId)
+                .toList();
+        if (!tournamentApplicationIds.isEmpty()) {
+            bracketParticipantRepository.clearSourceTournamentApplicationIds(tournamentApplicationIds);
+        }
         tournamentApplicationRepository.deleteByTournamentRecordId(tournamentRecordId);
         tournamentRecordRepository.save(TournamentRecord.builder()
                 .tournamentRecordId(current.getTournamentRecordId())

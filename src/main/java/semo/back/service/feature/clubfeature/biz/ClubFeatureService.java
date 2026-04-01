@@ -194,6 +194,7 @@ public class ClubFeatureService {
             case "POLL" -> "/clubs/%d/more/polls".formatted(clubId);
             case "SCHEDULE_MANAGE" -> "/clubs/%d/more/schedules".formatted(clubId);
             case "TOURNAMENT_RECORD" -> "/clubs/%d/more/tournaments".formatted(clubId);
+            case "BRACKET" -> "/clubs/%d/more/brackets".formatted(clubId);
             case "ROLE_MANAGEMENT" -> "/clubs/%d/admin/more/roles".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
@@ -207,6 +208,7 @@ public class ClubFeatureService {
             case "POLL" -> "/clubs/%d/admin/more/polls".formatted(clubId);
             case "SCHEDULE_MANAGE" -> "/clubs/%d/admin/more/schedules".formatted(clubId);
             case "TOURNAMENT_RECORD" -> "/clubs/%d/admin/more/tournaments".formatted(clubId);
+            case "BRACKET" -> "/clubs/%d/admin/more/brackets".formatted(clubId);
             case "ROLE_MANAGEMENT" -> "/clubs/%d/admin/more/roles".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
