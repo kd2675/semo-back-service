@@ -10,7 +10,8 @@ public record ClubDuesHomeResponse(
         int paidInvoiceCount,
         int overdueInvoiceCount,
         String totalPendingAmountLabel,
-        ClubDuesSummaryResponse nextInvoice,
-        List<ClubDuesSummaryResponse> myInvoices
+        ClubDuesUserChargeResponse nextPayableCharge,
+        List<ClubDuesUserChargeResponse> openCharges,
+        List<ClubDuesUserChargeResponse> chargeHistory
 ) {
 }

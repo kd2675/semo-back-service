@@ -10,12 +10,14 @@ public record ClubAdminDuesHomeResponse(
         boolean canMarkPaid,
         boolean canMarkWaive,
         int activeMemberCount,
+        int totalChargeCount,
         int totalInvoiceCount,
         int pendingInvoiceCount,
         int paidInvoiceCount,
         int waivedInvoiceCount,
         int overdueInvoiceCount,
         int collectionRate,
-        List<ClubDuesSummaryResponse> invoices
+        List<ClubDuesMemberOptionResponse> availableMembers,
+        List<ClubAdminDuesChargeResponse> charges
 ) {
 }

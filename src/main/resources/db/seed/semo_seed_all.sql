@@ -213,7 +213,7 @@ INSERT INTO feature_catalog (
 SELECT
     'DUES',
     '회비관리',
-    '멤버별 월 회비를 청구하고 납부 상태를 운영합니다.',
+    '커스텀 회비 항목을 발행하고 납부 상태를 운영합니다.',
     'payments',
     'USER_AND_ADMIN',
     1,
@@ -543,7 +543,7 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'DUES_ISSUE', 'DUES', '회비 발행', '특정 월의 회비 청구서를 일괄 발행합니다.', 'CLUB', 1, 20, NOW(), NOW()
+SELECT 'DUES_ISSUE', 'DUES', '회비 발행', '회비 항목을 생성하고 대상 멤버에게 청구합니다.', 'CLUB', 1, 20, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'DUES_ISSUE');
 
 INSERT INTO feature_permission_catalog (

@@ -620,27 +620,45 @@ CREATE TABLE IF NOT EXISTS club_attendance_record (
 CREATE INDEX idx_club_attendance_record_profile_date
     ON club_attendance_record (club_profile_id, attendance_date);
 
-CREATE TABLE IF NOT EXISTS club_dues_invoice (
-    club_dues_invoice_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS dues_charge (
+    dues_charge_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    issued_by_club_profile_id BIGINT NULL,
+    title VARCHAR(150) NOT NULL,
+    target_scope VARCHAR(30) NOT NULL DEFAULT 'ALL_ACTIVE_MEMBERS',
+    amount DECIMAL(10,2) NOT NULL,
+    currency_code VARCHAR(10) NOT NULL DEFAULT 'KRW',
+    due_at DATETIME NULL,
+    note VARCHAR(500) NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_dues_charge_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_dues_charge_issued_by FOREIGN KEY (issued_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_dues_charge_club_sort
+    ON dues_charge (club_id, create_date, dues_charge_id);
+
+CREATE TABLE IF NOT EXISTS dues_invoice (
+    dues_invoice_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    dues_charge_id BIGINT NOT NULL,
     club_id BIGINT NOT NULL,
     club_profile_id BIGINT NOT NULL,
-    billing_year SMALLINT NOT NULL,
-    billing_month TINYINT NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
     currency_code VARCHAR(10) NOT NULL DEFAULT 'KRW',
     payment_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    due_at DATETIME NULL,
     paid_at DATETIME NULL,
     note VARCHAR(500) NULL,
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
-    CONSTRAINT uk_club_dues_invoice_period UNIQUE (club_id, club_profile_id, billing_year, billing_month),
-    CONSTRAINT fk_club_dues_invoice_club FOREIGN KEY (club_id) REFERENCES club(club_id),
-    CONSTRAINT fk_club_dues_invoice_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id)
+    CONSTRAINT uk_dues_invoice_charge_profile UNIQUE (dues_charge_id, club_profile_id),
+    CONSTRAINT fk_dues_invoice_charge FOREIGN KEY (dues_charge_id) REFERENCES dues_charge(dues_charge_id),
+    CONSTRAINT fk_dues_invoice_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_dues_invoice_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_club_dues_invoice_status
-    ON club_dues_invoice (club_id, billing_year, billing_month, payment_status);
+CREATE INDEX idx_dues_invoice_status
+    ON dues_invoice (club_id, payment_status, dues_charge_id);
 
 -- ============================================================
 -- Dashboard widget catalog / layout

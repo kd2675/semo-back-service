@@ -3,6 +3,7 @@ package semo.back.service.feature.dues.act;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,9 +16,9 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.dues.biz.ClubDuesService;
 import semo.back.service.feature.dues.vo.ClubAdminDuesHomeResponse;
 import semo.back.service.feature.dues.vo.ClubDuesHomeResponse;
-import semo.back.service.feature.dues.vo.ClubDuesSummaryResponse;
-import semo.back.service.feature.dues.vo.IssueClubDuesInvoicesRequest;
-import semo.back.service.feature.dues.vo.IssueClubDuesInvoicesResponse;
+import semo.back.service.feature.dues.vo.ClubDuesInvoiceResponse;
+import semo.back.service.feature.dues.vo.CreateClubDuesChargeRequest;
+import semo.back.service.feature.dues.vo.CreateClubDuesChargeResponse;
 import semo.back.service.feature.dues.vo.UpdateClubDuesPaymentStatusRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
@@ -51,21 +52,21 @@ public class ClubDuesController {
         );
     }
 
-    @PostMapping("/admin/more/dues/invoices")
-    public ResponseDataDTO<IssueClubDuesInvoicesResponse> issueMonthlyInvoices(
+    @PostMapping("/admin/more/dues/charges")
+    public ResponseDataDTO<CreateClubDuesChargeResponse> createCharge(
             @PathVariable Long clubId,
-            @Valid @RequestBody IssueClubDuesInvoicesRequest request,
+            @Valid @RequestBody CreateClubDuesChargeRequest request,
             UserContext userContext
     ) {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
-                clubDuesService.issueMonthlyInvoices(clubId, requireUserKey(userContext), request),
-                "회비 발행 성공"
+                clubDuesService.createCharge(clubId, requireUserKey(userContext), request),
+                "회비 항목 발행 성공"
         );
     }
 
-    @PutMapping("/admin/more/dues/{invoiceId}/payment-status")
-    public ResponseDataDTO<ClubDuesSummaryResponse> updatePaymentStatus(
+    @PutMapping("/admin/more/dues/invoices/{invoiceId}/payment-status")
+    public ResponseDataDTO<ClubDuesInvoiceResponse> updatePaymentStatus(
             @PathVariable Long clubId,
             @PathVariable Long invoiceId,
             @Valid @RequestBody UpdateClubDuesPaymentStatusRequest request,
@@ -76,6 +77,17 @@ public class ClubDuesController {
                 clubDuesService.updatePaymentStatus(clubId, invoiceId, requireUserKey(userContext), request),
                 "회비 상태 변경 성공"
         );
+    }
+
+    @DeleteMapping("/admin/more/dues/charges/{chargeId}")
+    public ResponseDataDTO<Void> deleteCharge(
+            @PathVariable Long clubId,
+            @PathVariable Long chargeId,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        clubDuesService.deleteCharge(clubId, chargeId, requireUserKey(userContext));
+        return ResponseDataDTO.of(null, "회비 항목 삭제 성공");
     }
 
     private String requireUserKey(UserContext userContext) {
