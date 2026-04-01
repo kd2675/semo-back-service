@@ -348,6 +348,7 @@ public class ClubDashboardService {
             case "BRACKET_LATEST" -> "/clubs/%d/more/brackets".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
             case "ATTENDANCE_STATUS" -> "/clubs/%d/more/attendance".formatted(clubId);
+            case "DUES_STATUS" -> "/clubs/%d/more/dues".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
     }
@@ -361,6 +362,7 @@ public class ClubDashboardService {
             case "BRACKET_LATEST" -> "/clubs/%d/admin/more/brackets".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
             case "ATTENDANCE_STATUS" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
+            case "DUES_STATUS" -> "/clubs/%d/admin/more/dues".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
     }

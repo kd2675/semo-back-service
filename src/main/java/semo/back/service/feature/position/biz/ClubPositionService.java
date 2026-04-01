@@ -52,6 +52,7 @@ public class ClubPositionService {
     private static final String FEATURE_TIMELINE = "TIMELINE";
     private static final String FEATURE_TOURNAMENT_RECORD = "TOURNAMENT_RECORD";
     private static final String FEATURE_BRACKET = "BRACKET";
+    private static final String FEATURE_DUES = "DUES";
 
     private final ClubAccessResolver clubAccessResolver;
     private final ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
@@ -347,6 +348,7 @@ public class ClubPositionService {
             case FEATURE_TOURNAMENT_RECORD -> "대회관리";
             case FEATURE_BRACKET -> "대진표관리";
             case FEATURE_TIMELINE -> "타임라인관리";
+            case FEATURE_DUES -> "회비관리";
             default -> catalog.getDisplayName();
         };
     }
