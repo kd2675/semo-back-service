@@ -11,10 +11,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.dues.biz.ClubDuesService;
 import semo.back.service.feature.dues.vo.ClubAdminDuesHomeResponse;
+import semo.back.service.feature.dues.vo.ClubAdminDuesChargeDetailResponse;
+import semo.back.service.feature.dues.vo.ClubAdminDuesChargeFeedResponse;
 import semo.back.service.feature.dues.vo.ClubDuesHomeResponse;
 import semo.back.service.feature.dues.vo.ClubDuesInvoiceResponse;
 import semo.back.service.feature.dues.vo.CreateClubDuesChargeRequest;
@@ -49,6 +52,42 @@ public class ClubDuesController {
         return ResponseDataDTO.of(
                 clubDuesService.getAdminDues(clubId, requireUserKey(userContext)),
                 "관리자 회비 조회 성공"
+        );
+    }
+
+    @GetMapping("/admin/more/dues/charges")
+    public ResponseDataDTO<ClubAdminDuesChargeFeedResponse> getAdminDuesCharges(
+            @PathVariable Long clubId,
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String chargeFilter,
+            @RequestParam(required = false) Long cursorChargeId,
+            @RequestParam(required = false) Integer size,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubDuesService.getAdminDuesCharges(
+                        clubId,
+                        requireUserKey(userContext),
+                        query,
+                        chargeFilter,
+                        cursorChargeId,
+                        size
+                ),
+                "관리자 회비 항목 목록 조회 성공"
+        );
+    }
+
+    @GetMapping("/admin/more/dues/charges/{chargeId}/invoices")
+    public ResponseDataDTO<ClubAdminDuesChargeDetailResponse> getAdminDuesChargeDetail(
+            @PathVariable Long clubId,
+            @PathVariable Long chargeId,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubDuesService.getAdminDuesChargeDetail(clubId, chargeId, requireUserKey(userContext)),
+                "관리자 회비 청구 상세 조회 성공"
         );
     }
 

@@ -169,9 +169,9 @@ class ClubDuesServiceTest {
         var adminDues = clubDuesService.getAdminDues(clubId, "dues-owner-002");
         assertThat(adminDues.totalChargeCount()).isEqualTo(1);
         assertThat(adminDues.totalInvoiceCount()).isEqualTo(1);
-        assertThat(adminDues.charges()).singleElement().satisfies(charge -> {
+        assertThat(getAdminChargeFeed(clubId, "dues-owner-002").items()).singleElement().satisfies(charge -> {
             assertThat(charge.targetScope()).isEqualTo("SELECTED_MEMBERS");
-            assertThat(charge.invoices()).singleElement().satisfies(invoice -> {
+            assertThat(getAdminChargeDetail(clubId, charge.chargeId(), "dues-owner-002").invoices()).singleElement().satisfies(invoice -> {
                 assertThat(invoice.memberDisplayName()).isEqualTo("Selected Member");
             });
         });
@@ -233,13 +233,14 @@ class ClubDuesServiceTest {
                 )
         );
 
-        var charge = clubDuesService.getAdminDues(clubId, "dues-owner-004").charges().getFirst();
-        Long ownerInvoiceId = charge.invoices().stream()
+        var charge = getAdminChargeFeed(clubId, "dues-owner-004").items().getFirst();
+        var chargeDetail = getAdminChargeDetail(clubId, charge.chargeId(), "dues-owner-004");
+        Long ownerInvoiceId = chargeDetail.invoices().stream()
                 .filter(invoice -> "OWNER".equals(invoice.memberRoleCode()))
                 .findFirst()
                 .orElseThrow()
                 .invoiceId();
-        Long memberInvoiceId = charge.invoices().stream()
+        Long memberInvoiceId = chargeDetail.invoices().stream()
                 .filter(invoice -> "MEMBER".equals(invoice.memberRoleCode()))
                 .findFirst()
                 .orElseThrow()
@@ -264,7 +265,7 @@ class ClubDuesServiceTest {
         assertThat(updatedAdminDues.paidInvoiceCount()).isEqualTo(1);
         assertThat(updatedAdminDues.waivedInvoiceCount()).isEqualTo(1);
         assertThat(updatedAdminDues.collectionRate()).isEqualTo(100);
-        assertThat(updatedAdminDues.charges()).singleElement().satisfies(updatedCharge ->
+        assertThat(getAdminChargeFeed(clubId, "dues-owner-004").items()).singleElement().satisfies(updatedCharge ->
                 assertThat(updatedCharge.collectionRate()).isEqualTo(100)
         );
     }
@@ -292,7 +293,8 @@ class ClubDuesServiceTest {
         clubMemberRepository.save(dormantMember);
 
         var adminDues = clubDuesService.getAdminDues(clubId, "dues-owner-005");
-        var dormantInvoice = adminDues.charges().stream()
+        var dormantInvoice = getAdminChargeFeed(clubId, "dues-owner-005").items().stream()
+                .map(charge -> getAdminChargeDetail(clubId, charge.chargeId(), "dues-owner-005"))
                 .flatMap(charge -> charge.invoices().stream())
                 .filter(invoice -> "Dormant Member".equals(invoice.memberDisplayName()))
                 .findFirst()
@@ -321,7 +323,7 @@ class ClubDuesServiceTest {
                 )
         );
 
-        assertThat(clubDuesService.getAdminDues(clubId, "dues-owner-006").charges())
+        assertThat(getAdminChargeFeed(clubId, "dues-owner-006").items())
                 .singleElement()
                 .satisfies(charge -> assertThat(charge.canDelete()).isTrue());
 
@@ -351,7 +353,8 @@ class ClubDuesServiceTest {
                 )
         );
 
-        Long invoiceId = clubDuesService.getAdminDues(clubId, "dues-owner-007").charges().getFirst().invoices().getFirst().invoiceId();
+        Long chargeId = getAdminChargeFeed(clubId, "dues-owner-007").items().getFirst().chargeId();
+        Long invoiceId = getAdminChargeDetail(clubId, chargeId, "dues-owner-007").invoices().getFirst().invoiceId();
         clubDuesService.updatePaymentStatus(
                 clubId,
                 invoiceId,
@@ -359,12 +362,108 @@ class ClubDuesServiceTest {
                 new UpdateClubDuesPaymentStatusRequest("PAID", "납부 완료")
         );
 
-        var updatedCharge = clubDuesService.getAdminDues(clubId, "dues-owner-007").charges().getFirst();
+        var updatedCharge = getAdminChargeFeed(clubId, "dues-owner-007").items().getFirst();
         assertThat(updatedCharge.canDelete()).isFalse();
 
         assertThatThrownBy(() -> clubDuesService.deleteCharge(clubId, created.chargeId(), "dues-owner-007"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("아직 아무도 처리하지 않은 회비 항목만 삭제할 수 있습니다.");
+    }
+
+    @Test
+    void adminChargeFeedUsesCursorAndLoadsInvoicesOnlyFromDetailEndpoint() {
+        Long clubId = createEnabledClub("dues-owner-008", "Dues Owner 8", "Dues Club 8");
+        addActiveMember(clubId, "dues-member-008", "Paged Member");
+
+        for (int index = 1; index <= 12; index += 1) {
+            clubDuesService.createCharge(
+                    clubId,
+                    "dues-owner-008",
+                    new CreateClubDuesChargeRequest(
+                            "페이지 회비 " + index,
+                            new BigDecimal("1000"),
+                            null,
+                            "커서 테스트",
+                            "ALL_ACTIVE_MEMBERS",
+                            null
+                    )
+            );
+        }
+
+        var firstPage = clubDuesService.getAdminDuesCharges(clubId, "dues-owner-008", null, null, null, 10);
+        assertThat(firstPage.items()).hasSize(10);
+        assertThat(firstPage.hasNext()).isTrue();
+        assertThat(firstPage.nextCursorChargeId()).isNotNull();
+        assertThat(firstPage.items().getFirst().title()).isEqualTo("페이지 회비 12");
+
+        var secondPage = clubDuesService.getAdminDuesCharges(
+                clubId,
+                "dues-owner-008",
+                null,
+                null,
+                firstPage.nextCursorChargeId(),
+                10
+        );
+        assertThat(secondPage.items()).hasSize(2);
+        assertThat(secondPage.hasNext()).isFalse();
+
+        var detail = clubDuesService.getAdminDuesChargeDetail(
+                clubId,
+                firstPage.items().getFirst().chargeId(),
+                "dues-owner-008"
+        );
+        assertThat(detail.charge().title()).isEqualTo("페이지 회비 12");
+        assertThat(detail.invoices()).hasSize(2);
+    }
+
+    @Test
+    void adminChargeFeedCanSearchMemberNameAndFilterSettledCharges() {
+        Long clubId = createEnabledClub("dues-owner-009", "Dues Owner 9", "Dues Club 9");
+        addActiveMember(clubId, "dues-member-009a", "Alpha Member");
+        addActiveMember(clubId, "dues-member-009b", "Beta Member");
+
+        clubDuesService.createCharge(
+                clubId,
+                "dues-owner-009",
+                new CreateClubDuesChargeRequest(
+                        "열린 회비",
+                        new BigDecimal("5000"),
+                        null,
+                        "미납 유지",
+                        "ALL_ACTIVE_MEMBERS",
+                        null
+                )
+        );
+        var settledCharge = clubDuesService.createCharge(
+                clubId,
+                "dues-owner-009",
+                new CreateClubDuesChargeRequest(
+                        "정산 회비",
+                        new BigDecimal("7000"),
+                        null,
+                        "전원 완료",
+                        "ALL_ACTIVE_MEMBERS",
+                        null
+                )
+        );
+        var settledDetail = clubDuesService.getAdminDuesChargeDetail(clubId, settledCharge.chargeId(), "dues-owner-009");
+        settledDetail.invoices().forEach(invoice ->
+                clubDuesService.updatePaymentStatus(
+                        clubId,
+                        invoice.invoiceId(),
+                        "dues-owner-009",
+                        new UpdateClubDuesPaymentStatusRequest("PAID", "일괄 완료")
+                )
+        );
+
+        var searched = clubDuesService.getAdminDuesCharges(clubId, "dues-owner-009", "beta", null, null, 10);
+        assertThat(searched.items()).extracting(charge -> charge.title()).containsExactly("정산 회비", "열린 회비");
+
+        var settledOnly = clubDuesService.getAdminDuesCharges(clubId, "dues-owner-009", null, "SETTLED", null, 10);
+        assertThat(settledOnly.items()).singleElement().satisfies(charge -> {
+            assertThat(charge.title()).isEqualTo("정산 회비");
+            assertThat(charge.pendingInvoiceCount()).isZero();
+        });
     }
 
     private Long createEnabledClub(String ownerUserKey, String ownerDisplayName, String clubName) {
@@ -400,5 +499,17 @@ class ClubDuesServiceTest {
                 .lastActivityAt(LocalDateTime.now())
                 .build());
         return profileId;
+    }
+
+    private semo.back.service.feature.dues.vo.ClubAdminDuesChargeFeedResponse getAdminChargeFeed(Long clubId, String userKey) {
+        return clubDuesService.getAdminDuesCharges(clubId, userKey, null, null, null, 10);
+    }
+
+    private semo.back.service.feature.dues.vo.ClubAdminDuesChargeDetailResponse getAdminChargeDetail(
+            Long clubId,
+            Long chargeId,
+            String userKey
+    ) {
+        return clubDuesService.getAdminDuesChargeDetail(clubId, chargeId, userKey);
     }
 }

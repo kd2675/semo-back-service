@@ -17,7 +17,6 @@ public record ClubAdminDuesHomeResponse(
         int waivedInvoiceCount,
         int overdueInvoiceCount,
         int collectionRate,
-        List<ClubDuesMemberOptionResponse> availableMembers,
-        List<ClubAdminDuesChargeResponse> charges
+        List<ClubDuesMemberOptionResponse> availableMembers
 ) {
 }

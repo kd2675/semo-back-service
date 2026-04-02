@@ -1,8 +1,6 @@
 package semo.back.service.feature.dues.vo;
 
 import java.math.BigDecimal;
-import java.util.List;
-
 public record ClubAdminDuesChargeResponse(
         Long chargeId,
         String title,
@@ -23,7 +21,6 @@ public record ClubAdminDuesChargeResponse(
         int paidInvoiceCount,
         int waivedInvoiceCount,
         int overdueInvoiceCount,
-        int collectionRate,
-        List<ClubDuesInvoiceResponse> invoices
+        int collectionRate
 ) {
 }

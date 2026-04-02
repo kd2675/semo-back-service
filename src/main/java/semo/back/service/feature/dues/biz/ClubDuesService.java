@@ -1,6 +1,7 @@
 package semo.back.service.feature.dues.biz;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +19,10 @@ import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.dues.vo.ClubAdminDuesChargeResponse;
+import semo.back.service.feature.dues.vo.ClubAdminDuesChargeDetailResponse;
+import semo.back.service.feature.dues.vo.ClubAdminDuesChargeFeedResponse;
 import semo.back.service.feature.dues.vo.ClubAdminDuesHomeResponse;
+import semo.back.service.feature.dues.vo.ClubAdminDuesSummaryAggregate;
 import semo.back.service.feature.dues.vo.ClubDuesHomeResponse;
 import semo.back.service.feature.dues.vo.ClubDuesInvoiceResponse;
 import semo.back.service.feature.dues.vo.ClubDuesMemberOptionResponse;
@@ -58,8 +62,15 @@ public class ClubDuesService {
             TARGET_SCOPE_ALL_ACTIVE_MEMBERS,
             TARGET_SCOPE_SELECTED_MEMBERS
     );
-
+    private static final String ADMIN_CHARGE_FILTER_OPEN = "OPEN";
+    private static final String ADMIN_CHARGE_FILTER_SETTLED = "SETTLED";
+    private static final Set<String> ALLOWED_ADMIN_CHARGE_FILTERS = Set.of(
+            ADMIN_CHARGE_FILTER_OPEN,
+            ADMIN_CHARGE_FILTER_SETTLED
+    );
     private static final Set<String> ALLOWED_UPDATE_STATUSES = Set.of(STATUS_PENDING, STATUS_PAID, STATUS_WAIVED);
+    private static final int DEFAULT_ADMIN_CHARGE_PAGE_SIZE = 10;
+    private static final int MAX_ADMIN_CHARGE_PAGE_SIZE = 50;
     private static final DateTimeFormatter DATE_TIME_VALUE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm", Locale.KOREAN);
@@ -138,32 +149,13 @@ public class ClubDuesService {
                 ))
                 .toList();
 
-        List<DuesCharge> charges = duesChargeRepository.findByClubIdOrderByDuesChargeIdDesc(clubId);
-        List<DuesInvoice> invoices = duesInvoiceRepository.findByClubIdOrderByDuesInvoiceIdDesc(clubId);
-        Map<Long, List<DuesInvoice>> invoicesByChargeId = invoices.stream()
-                .collect(Collectors.groupingBy(DuesInvoice::getDuesChargeId, LinkedHashMap::new, Collectors.toList()));
-        Map<Long, InvoiceMemberSummary> invoiceMemberSummaryByClubProfileId = resolveInvoiceMemberSummaryByClubProfileId(invoices);
-        Map<Long, String> issuerNameByClubProfileId = resolveClubProfileDisplayNameById(
-                charges.stream()
-                        .map(DuesCharge::getIssuedByClubProfileId)
-                        .filter(id -> id != null)
-                        .toList()
-        );
-
-        List<ClubAdminDuesChargeResponse> chargeResponses = charges.stream()
-                .map(charge -> toAdminChargeResponse(
-                        charge,
-                        invoicesByChargeId.getOrDefault(charge.getDuesChargeId(), List.of()),
-                        invoiceMemberSummaryByClubProfileId,
-                        issuerNameByClubProfileId
-                ))
-                .toList();
-
-        int totalInvoiceCount = chargeResponses.stream().mapToInt(ClubAdminDuesChargeResponse::totalInvoiceCount).sum();
-        int pendingInvoiceCount = chargeResponses.stream().mapToInt(ClubAdminDuesChargeResponse::pendingInvoiceCount).sum();
-        int paidInvoiceCount = chargeResponses.stream().mapToInt(ClubAdminDuesChargeResponse::paidInvoiceCount).sum();
-        int waivedInvoiceCount = chargeResponses.stream().mapToInt(ClubAdminDuesChargeResponse::waivedInvoiceCount).sum();
-        int overdueInvoiceCount = chargeResponses.stream().mapToInt(ClubAdminDuesChargeResponse::overdueInvoiceCount).sum();
+        ClubAdminDuesSummaryAggregate summary = duesInvoiceRepository.summarizeAdminDues(clubId, LocalDateTime.now());
+        int totalChargeCount = Math.toIntExact(duesChargeRepository.countByClubId(clubId));
+        int totalInvoiceCount = Math.toIntExact(summary.totalInvoiceCount());
+        int pendingInvoiceCount = Math.toIntExact(summary.pendingInvoiceCount());
+        int paidInvoiceCount = Math.toIntExact(summary.paidInvoiceCount());
+        int waivedInvoiceCount = Math.toIntExact(summary.waivedInvoiceCount());
+        int overdueInvoiceCount = Math.toIntExact(summary.overdueInvoiceCount());
         int collectibleInvoiceCount = totalInvoiceCount - waivedInvoiceCount;
 
         return new ClubAdminDuesHomeResponse(
@@ -174,15 +166,70 @@ public class ClubDuesService {
                 clubDuesPermissionService.canMarkPaid(access),
                 clubDuesPermissionService.canMarkWaived(access),
                 activeMemberSnapshots.size(),
-                chargeResponses.size(),
+                totalChargeCount,
                 totalInvoiceCount,
                 pendingInvoiceCount,
                 paidInvoiceCount,
                 waivedInvoiceCount,
                 overdueInvoiceCount,
                 collectibleInvoiceCount == 0 ? 0 : (int) Math.round((paidInvoiceCount * 100.0) / collectibleInvoiceCount),
-                availableMembers,
-                chargeResponses
+                availableMembers
+        );
+    }
+
+    public ClubAdminDuesChargeFeedResponse getAdminDuesCharges(
+            Long clubId,
+            String userKey,
+            String query,
+            String chargeFilter,
+            Long cursorChargeId,
+            Integer size
+    ) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireDuesFeature(clubId);
+        requireAdminDuesView(access);
+
+        int pageSize = normalizeAdminChargePageSize(size);
+        String normalizedQuery = normalizeSearchQuery(query);
+        String normalizedChargeFilter = normalizeAdminChargeFilter(chargeFilter);
+        List<DuesCharge> charges = duesChargeRepository.findAdminFeed(
+                clubId,
+                cursorChargeId,
+                normalizedQuery,
+                normalizedChargeFilter,
+                PageRequest.of(0, pageSize + 1)
+        );
+        boolean hasNext = charges.size() > pageSize;
+        List<DuesCharge> pageCharges = hasNext ? charges.subList(0, pageSize) : charges;
+        List<ClubAdminDuesChargeResponse> items = toAdminChargeResponses(pageCharges);
+        DuesCharge lastCharge = pageCharges.isEmpty() ? null : pageCharges.get(pageCharges.size() - 1);
+
+        return new ClubAdminDuesChargeFeedResponse(
+                access.club().getClubId(),
+                access.club().getName(),
+                items,
+                lastCharge == null ? null : lastCharge.getDuesChargeId(),
+                hasNext
+        );
+    }
+
+    public ClubAdminDuesChargeDetailResponse getAdminDuesChargeDetail(Long clubId, Long chargeId, String userKey) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireDuesFeature(clubId);
+        requireAdminDuesView(access);
+
+        DuesCharge charge = duesChargeRepository.findByDuesChargeIdAndClubId(chargeId, clubId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException("DuesCharge", "chargeId", chargeId));
+        List<DuesInvoice> invoices = duesInvoiceRepository.findByDuesChargeIdOrderByDuesInvoiceIdDesc(chargeId);
+        Map<Long, InvoiceMemberSummary> invoiceMemberSummaryByClubProfileId = resolveInvoiceMemberSummaryByClubProfileId(invoices);
+        Map<Long, String> issuerNameByClubProfileId = charge.getIssuedByClubProfileId() == null
+                ? Map.of()
+                : resolveClubProfileDisplayNameById(List.of(charge.getIssuedByClubProfileId()));
+        List<ClubDuesInvoiceResponse> invoiceResponses = toInvoiceResponses(charge, invoices, invoiceMemberSummaryByClubProfileId);
+
+        return new ClubAdminDuesChargeDetailResponse(
+                toAdminChargeResponse(charge, invoices, issuerNameByClubProfileId),
+                invoiceResponses
         );
     }
 
@@ -375,27 +422,36 @@ public class ClubDuesService {
         return targets;
     }
 
+    private List<ClubAdminDuesChargeResponse> toAdminChargeResponses(List<DuesCharge> charges) {
+        if (charges.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, List<DuesInvoice>> invoicesByChargeId = duesInvoiceRepository.findByDuesChargeIdIn(
+                        charges.stream().map(DuesCharge::getDuesChargeId).toList()
+                ).stream()
+                .collect(Collectors.groupingBy(DuesInvoice::getDuesChargeId, LinkedHashMap::new, Collectors.toList()));
+        Map<Long, String> issuerNameByClubProfileId = resolveClubProfileDisplayNameById(
+                charges.stream()
+                        .map(DuesCharge::getIssuedByClubProfileId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList()
+        );
+        return charges.stream()
+                .map(charge -> toAdminChargeResponse(
+                        charge,
+                        invoicesByChargeId.getOrDefault(charge.getDuesChargeId(), List.of()),
+                        issuerNameByClubProfileId
+                ))
+                .toList();
+    }
+
     private ClubAdminDuesChargeResponse toAdminChargeResponse(
             DuesCharge charge,
             List<DuesInvoice> invoices,
-            Map<Long, InvoiceMemberSummary> invoiceMemberSummaryByClubProfileId,
             Map<Long, String> issuerNameByClubProfileId
     ) {
-        List<ClubDuesInvoiceResponse> invoiceResponses = invoices.stream()
-                .map(invoice -> toInvoiceResponse(invoice, charge, invoiceMemberSummaryByClubProfileId.get(invoice.getClubProfileId())))
-                .sorted(Comparator
-                        .comparing((ClubDuesInvoiceResponse invoice) -> invoice.overdue() ? 0 : 1)
-                        .thenComparing(ClubDuesInvoiceResponse::paymentStatus)
-                        .thenComparing(ClubDuesInvoiceResponse::memberDisplayName, Comparator.nullsLast(String::compareTo)))
-                .toList();
-
-        int totalInvoiceCount = invoiceResponses.size();
-        int pendingInvoiceCount = (int) invoiceResponses.stream().filter(invoice -> STATUS_PENDING.equals(invoice.paymentStatus())).count();
-        int paidInvoiceCount = (int) invoiceResponses.stream().filter(invoice -> STATUS_PAID.equals(invoice.paymentStatus())).count();
-        int waivedInvoiceCount = (int) invoiceResponses.stream().filter(invoice -> STATUS_WAIVED.equals(invoice.paymentStatus())).count();
-        int overdueInvoiceCount = (int) invoiceResponses.stream().filter(ClubDuesInvoiceResponse::overdue).count();
-        int collectibleInvoiceCount = totalInvoiceCount - waivedInvoiceCount;
-        boolean canDelete = canDeleteCharge(invoices);
+        ChargeInvoiceMetrics metrics = summarizeChargeInvoices(charge, invoices);
 
         return new ClubAdminDuesChargeResponse(
                 charge.getDuesChargeId(),
@@ -411,15 +467,54 @@ public class ClubDuesService {
                 formatDateTimeLabel(charge.getCreateDate()),
                 charge.getIssuedByClubProfileId() == null ? "알 수 없는 운영자" : issuerNameByClubProfileId.getOrDefault(charge.getIssuedByClubProfileId(), "알 수 없는 운영자"),
                 charge.getNote(),
-                canDelete,
+                metrics.canDelete(),
+                metrics.totalInvoiceCount(),
+                metrics.pendingInvoiceCount(),
+                metrics.paidInvoiceCount(),
+                metrics.waivedInvoiceCount(),
+                metrics.overdueInvoiceCount(),
+                metrics.collectionRate()
+        );
+    }
+
+    private ChargeInvoiceMetrics summarizeChargeInvoices(DuesCharge charge, List<DuesInvoice> invoices) {
+        int totalInvoiceCount = invoices.size();
+        int pendingInvoiceCount = (int) invoices.stream()
+                .filter(invoice -> STATUS_PENDING.equals(invoice.getPaymentStatus()))
+                .count();
+        int paidInvoiceCount = (int) invoices.stream()
+                .filter(invoice -> STATUS_PAID.equals(invoice.getPaymentStatus()))
+                .count();
+        int waivedInvoiceCount = (int) invoices.stream()
+                .filter(invoice -> STATUS_WAIVED.equals(invoice.getPaymentStatus()))
+                .count();
+        int overdueInvoiceCount = (int) invoices.stream()
+                .filter(invoice -> isOverdue(invoice, charge))
+                .count();
+        int collectibleInvoiceCount = totalInvoiceCount - waivedInvoiceCount;
+        return new ChargeInvoiceMetrics(
                 totalInvoiceCount,
                 pendingInvoiceCount,
                 paidInvoiceCount,
                 waivedInvoiceCount,
                 overdueInvoiceCount,
                 collectibleInvoiceCount == 0 ? 0 : (int) Math.round((paidInvoiceCount * 100.0) / collectibleInvoiceCount),
-                invoiceResponses
+                canDeleteCharge(invoices)
         );
+    }
+
+    private List<ClubDuesInvoiceResponse> toInvoiceResponses(
+            DuesCharge charge,
+            List<DuesInvoice> invoices,
+            Map<Long, InvoiceMemberSummary> invoiceMemberSummaryByClubProfileId
+    ) {
+        return invoices.stream()
+                .map(invoice -> toInvoiceResponse(invoice, charge, invoiceMemberSummaryByClubProfileId.get(invoice.getClubProfileId())))
+                .sorted(Comparator
+                        .comparing((ClubDuesInvoiceResponse invoice) -> invoice.overdue() ? 0 : 1)
+                        .thenComparing(ClubDuesInvoiceResponse::paymentStatus)
+                        .thenComparing(ClubDuesInvoiceResponse::memberDisplayName, Comparator.nullsLast(String::compareTo)))
+                .toList();
     }
 
     private boolean canDeleteCharge(List<DuesInvoice> invoices) {
@@ -455,9 +550,7 @@ public class ClubDuesService {
             DuesCharge charge,
             InvoiceMemberSummary invoiceMemberSummary
     ) {
-        boolean overdue = STATUS_PENDING.equals(invoice.getPaymentStatus())
-                && charge.getDueAt() != null
-                && charge.getDueAt().isBefore(LocalDateTime.now());
+        boolean overdue = isOverdue(invoice, charge);
         String responseStatus = overdue ? STATUS_OVERDUE : invoice.getPaymentStatus();
         return new ClubDuesInvoiceResponse(
                 invoice.getDuesInvoiceId(),
@@ -474,6 +567,12 @@ public class ClubDuesService {
                 formatDateTimeLabel(invoice.getPaidAt()),
                 invoice.getNote()
         );
+    }
+
+    private boolean isOverdue(DuesInvoice invoice, DuesCharge charge) {
+        return STATUS_PENDING.equals(invoice.getPaymentStatus())
+                && charge.getDueAt() != null
+                && charge.getDueAt().isBefore(LocalDateTime.now());
     }
 
     private Map<Long, InvoiceMemberSummary> resolveInvoiceMemberSummaryByClubProfileId(List<DuesInvoice> invoices) {
@@ -558,6 +657,30 @@ public class ClubDuesService {
         return upperCased;
     }
 
+    private int normalizeAdminChargePageSize(Integer size) {
+        if (size == null || size < 1) {
+            return DEFAULT_ADMIN_CHARGE_PAGE_SIZE;
+        }
+        return Math.min(size, MAX_ADMIN_CHARGE_PAGE_SIZE);
+    }
+
+    private String normalizeSearchQuery(String query) {
+        String normalized = trimToNull(query);
+        return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeAdminChargeFilter(String chargeFilter) {
+        String normalized = trimToNull(chargeFilter);
+        if (normalized == null || "ALL".equalsIgnoreCase(normalized)) {
+            return null;
+        }
+        String upperCased = normalized.toUpperCase(Locale.ROOT);
+        if (!ALLOWED_ADMIN_CHARGE_FILTERS.contains(upperCased)) {
+            throw new SemoException.ValidationException("지원하지 않는 회비 필터입니다.");
+        }
+        return upperCased;
+    }
+
     private LocalDateTime parseDateTime(String rawValue, String errorMessage) {
         String normalized = trimToNull(rawValue);
         if (normalized == null) {
@@ -627,5 +750,16 @@ public class ClubDuesService {
     }
 
     private record InvoiceMemberSummary(String memberDisplayName, String memberRoleCode) {
+    }
+
+    private record ChargeInvoiceMetrics(
+            int totalInvoiceCount,
+            int pendingInvoiceCount,
+            int paidInvoiceCount,
+            int waivedInvoiceCount,
+            int overdueInvoiceCount,
+            int collectionRate,
+            boolean canDelete
+    ) {
     }
 }
