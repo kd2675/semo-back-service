@@ -92,7 +92,7 @@ class ClubAdminMemberServiceTest {
     }
 
     @Test
-    void getAdminMembersReturnsPendingMembersFirst() {
+    void getAdminMembersExcludesPendingApplicantsFromMemberList() {
         Long clubId = clubService.createClub(
                 "owner-members-001",
                 "Owner Member",
@@ -105,9 +105,8 @@ class ClubAdminMemberServiceTest {
 
         ClubAdminMembersResponse response = clubAdminMemberService.getAdminMembers(clubId, "owner-members-001");
 
-        assertThat(response.members()).hasSize(4);
-        assertThat(response.members().get(0).membershipStatus()).isEqualTo("PENDING");
-        assertThat(response.members().get(0).canApprove()).isTrue();
+        assertThat(response.members()).hasSize(3);
+        assertThat(response.members()).noneMatch(member -> "PENDING".equals(member.membershipStatus()));
         assertThat(response.members().stream().filter(member -> member.self()).findFirst()).isPresent();
     }
 

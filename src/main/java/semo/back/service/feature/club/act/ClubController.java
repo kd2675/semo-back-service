@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
+import semo.back.service.feature.club.biz.ClubJoinRequestService;
 import semo.back.service.feature.club.biz.ClubService;
+import semo.back.service.feature.club.vo.ClubDiscoverResponse;
 import semo.back.service.feature.club.vo.ClubCreateResponse;
 import semo.back.service.feature.club.vo.ClubBoardResponse;
 import semo.back.service.feature.club.vo.ClubProfileResponse;
@@ -28,6 +30,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ClubController {
     private final ClubService clubService;
+    private final ClubJoinRequestService clubJoinRequestService;
 
     @PostMapping
     public ResponseDataDTO<ClubCreateResponse> createClub(
@@ -49,6 +52,18 @@ public class ClubController {
         return ResponseDataDTO.of(
                 clubService.getMyClubs(userKey),
                 "내 클럽 조회 성공"
+        );
+    }
+
+    @GetMapping("/discover")
+    public ResponseDataDTO<ClubDiscoverResponse> getDiscoverClubs(
+            String query,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubJoinRequestService.getDiscoverClubs(requireUserKey(userContext), query),
+                "클럽 탐색 조회 성공"
         );
     }
 

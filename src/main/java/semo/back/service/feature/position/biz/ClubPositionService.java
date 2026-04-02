@@ -240,9 +240,27 @@ public class ClubPositionService {
             throw new SemoException.ValidationException("다른 모임의 직책은 할당할 수 없습니다.");
         }
 
-        clubMemberPositionRepository.deleteByClubMemberId(target.getClubMemberId());
+        List<ClubMemberPosition> existingAssignments = clubMemberPositionRepository.findByClubMemberId(target.getClubMemberId());
+        Set<Long> requestedPositionIds = Set.copyOf(normalizedPositionIds);
+        Set<Long> existingPositionIds = existingAssignments.stream()
+                .map(ClubMemberPosition::getClubPositionId)
+                .collect(Collectors.toSet());
+        List<ClubMemberPosition> assignmentsToRemove = existingAssignments.stream()
+                .filter(assignment -> !requestedPositionIds.contains(assignment.getClubPositionId()))
+                .toList();
+        if (!assignmentsToRemove.isEmpty()) {
+            clubMemberPositionRepository.deleteAllInBatch(assignmentsToRemove);
+        }
+
+        List<Long> positionIdsToAdd = normalizedPositionIds.stream()
+                .filter(clubPositionId -> !existingPositionIds.contains(clubPositionId))
+                .toList();
+        if (positionIdsToAdd.isEmpty()) {
+            return;
+        }
+
         LocalDateTime now = LocalDateTime.now();
-        for (Long clubPositionId : normalizedPositionIds) {
+        for (Long clubPositionId : positionIdsToAdd) {
             clubMemberPositionRepository.save(ClubMemberPosition.builder()
                     .clubMemberId(target.getClubMemberId())
                     .clubPositionId(clubPositionId)

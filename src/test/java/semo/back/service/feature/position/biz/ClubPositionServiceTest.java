@@ -26,6 +26,7 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionReposi
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.FeaturePermissionCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
+import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
@@ -36,6 +37,7 @@ import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static semo.back.service.support.TestCatalogSeeder.seedFeatureCatalogs;
 
@@ -45,6 +47,9 @@ class ClubPositionServiceTest {
 
     @Autowired
     private ClubService clubService;
+
+    @Autowired
+    private ClubAccessResolver clubAccessResolver;
 
     @Autowired
     private ClubFeatureService clubFeatureService;
@@ -254,6 +259,60 @@ class ClubPositionServiceTest {
         assertThat(clubPositionPermissionRepository.findByClubPositionId(created.position().clubPositionId()))
                 .extracting(item -> item.getPermissionKey())
                 .containsExactlyInAnyOrder("NOTICE_CREATE", "NOTICE_UPDATE_SELF", "POLL_CREATE");
+    }
+
+    @Test
+    void replaceMemberPositionsIgnoresAlreadyAssignedPositions() {
+        Long clubId = createClub("role-owner-004", "직책 재할당 검증 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-004",
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "ROLE_MANAGEMENT"))
+        );
+
+        var leader = clubPositionService.createPosition(
+                clubId,
+                "role-owner-004",
+                new CreateClubPositionRequest(
+                        "리더",
+                        "LEADER",
+                        null,
+                        "shield",
+                        "#0053dd",
+                        List.of("NOTICE_CREATE")
+                )
+        );
+        var manager = clubPositionService.createPosition(
+                clubId,
+                "role-owner-004",
+                new CreateClubPositionRequest(
+                        "매니저",
+                        "MANAGER",
+                        null,
+                        "badge",
+                        "#c76117",
+                        List.of()
+                )
+        );
+
+        var access = clubAccessResolver.requireAdmin(clubId, "role-owner-004");
+        var ownerMember = clubMemberRepository.findByClubIdOrderByClubMemberIdAsc(clubId).getFirst();
+
+        clubPositionService.replaceMemberPositions(
+                access,
+                ownerMember,
+                List.of(leader.position().clubPositionId(), manager.position().clubPositionId())
+        );
+
+        assertThatCode(() -> clubPositionService.replaceMemberPositions(
+                access,
+                ownerMember,
+                List.of(manager.position().clubPositionId(), leader.position().clubPositionId(), leader.position().clubPositionId())
+        )).doesNotThrowAnyException();
+
+        assertThat(clubMemberPositionRepository.findByClubMemberId(ownerMember.getClubMemberId()))
+                .extracting(item -> item.getClubPositionId())
+                .containsExactlyInAnyOrder(leader.position().clubPositionId(), manager.position().clubPositionId());
     }
 
     private Long createClub(String userKey, String clubName) {

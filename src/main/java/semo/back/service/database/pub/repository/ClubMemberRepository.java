@@ -30,4 +30,15 @@ public interface ClubMemberRepository extends JpaRepository<ClubMember, Long> {
     List<ClubMember> findByClubIdAndClubMemberIdInAndMembershipStatus(Long clubId, Collection<Long> clubMemberIds, String membershipStatus);
 
     List<ClubMember> findByClubIdOrderByClubMemberIdAsc(Long clubId);
+
+    List<ClubMember> findByProfileId(Long profileId);
+
+    @Query("""
+            select cm.clubId as clubId, count(cm) as memberCount
+            from ClubMember cm
+            where cm.clubId in :clubIds
+              and cm.membershipStatus = :membershipStatus
+            group by cm.clubId
+            """)
+    List<ClubMemberCountRow> countMembersByClubIdInAndMembershipStatus(Collection<Long> clubIds, String membershipStatus);
 }

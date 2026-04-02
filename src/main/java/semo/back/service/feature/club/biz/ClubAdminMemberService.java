@@ -184,22 +184,28 @@ public class ClubAdminMemberService {
         if (memberships.isEmpty()) {
             return List.of();
         }
+        List<ClubMember> actualMembers = memberships.stream()
+                .filter(member -> !STATUS_PENDING.equals(member.getMembershipStatus()))
+                .toList();
+        if (actualMembers.isEmpty()) {
+            return List.of();
+        }
         Map<Long, List<ClubPositionSummaryResponse>> positionsByMemberId = clubPositionService.getAssignedPositionSummaries(
                 clubId,
-                memberships.stream().map(ClubMember::getClubMemberId).toList()
+                actualMembers.stream().map(ClubMember::getClubMemberId).toList()
         );
 
         Map<Long, ClubProfile> clubProfileByMemberId = clubProfileRepository.findByClubMemberIdIn(
-                        memberships.stream().map(ClubMember::getClubMemberId).toList()
+                        actualMembers.stream().map(ClubMember::getClubMemberId).toList()
                 ).stream()
                 .collect(Collectors.toMap(ClubProfile::getClubMemberId, Function.identity()));
 
         Map<Long, ProfileUser> profileUserById = profileUserRepository.findAllById(
-                        memberships.stream().map(ClubMember::getProfileId).toList()
+                        actualMembers.stream().map(ClubMember::getProfileId).toList()
                 ).stream()
                 .collect(Collectors.toMap(ProfileUser::getProfileId, Function.identity()));
 
-        return memberships.stream()
+        return actualMembers.stream()
                 .map(member -> toResponse(
                         member,
                         access,
