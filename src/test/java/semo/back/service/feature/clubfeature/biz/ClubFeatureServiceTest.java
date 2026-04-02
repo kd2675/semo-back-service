@@ -112,7 +112,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("ATTENDANCE"))
         );
 
-        assertThat(responses).hasSize(10);
+        assertThat(responses).hasSize(11);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactly(
@@ -124,6 +124,7 @@ class ClubFeatureServiceTest {
                         "TOURNAMENT_RECORD:false",
                         "BRACKET:false",
                         "DUES:false",
+                        "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "ROLE_MANAGEMENT:false"
                 );
@@ -156,7 +157,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("TIMELINE"))
         );
 
-        assertThat(responses).hasSize(10);
+        assertThat(responses).hasSize(11);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -168,6 +169,7 @@ class ClubFeatureServiceTest {
                         "TOURNAMENT_RECORD:false",
                         "BRACKET:false",
                         "DUES:false",
+                        "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "ROLE_MANAGEMENT:false"
                 );
@@ -195,7 +197,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("NOTICE"))
         );
 
-        assertThat(responses).hasSize(10);
+        assertThat(responses).hasSize(11);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -207,6 +209,7 @@ class ClubFeatureServiceTest {
                         "TOURNAMENT_RECORD:false",
                         "BRACKET:false",
                         "DUES:false",
+                        "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "ROLE_MANAGEMENT:false"
                 );
@@ -234,7 +237,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("POLL"))
         );
 
-        assertThat(responses).hasSize(10);
+        assertThat(responses).hasSize(11);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -246,6 +249,7 @@ class ClubFeatureServiceTest {
                         "TOURNAMENT_RECORD:false",
                         "BRACKET:false",
                         "DUES:false",
+                        "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "ROLE_MANAGEMENT:false"
                 );
@@ -273,7 +277,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("SCHEDULE_MANAGE"))
         );
 
-        assertThat(responses).hasSize(10);
+        assertThat(responses).hasSize(11);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -285,6 +289,7 @@ class ClubFeatureServiceTest {
                         "TOURNAMENT_RECORD:false",
                         "BRACKET:false",
                         "DUES:false",
+                        "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "ROLE_MANAGEMENT:false"
                 );
@@ -312,7 +317,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("MEMBER_DIRECTORY"))
         );
 
-        assertThat(responses).hasSize(10);
+        assertThat(responses).hasSize(11);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -324,6 +329,7 @@ class ClubFeatureServiceTest {
                         "TOURNAMENT_RECORD:false",
                         "BRACKET:false",
                         "DUES:false",
+                        "FEEDBACK:false",
                         "MEMBER_DIRECTORY:true",
                         "ROLE_MANAGEMENT:false"
                 );

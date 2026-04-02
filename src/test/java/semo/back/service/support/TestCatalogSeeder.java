@@ -96,6 +96,15 @@ public final class TestCatalogSeeder {
                         .sortOrder(59)
                         .build(),
                 FeatureCatalog.builder()
+                        .featureKey("FEEDBACK")
+                        .displayName("피드백")
+                        .description("익명 또는 기명으로 건의, 불편 신고, 개선 요청을 남기고 운영 답변을 확인합니다.")
+                        .iconName("forum")
+                        .navigationScope("USER_AND_ADMIN")
+                        .active(true)
+                        .sortOrder(59)
+                        .build(),
+                FeatureCatalog.builder()
                         .featureKey("ROLE_MANAGEMENT")
                         .displayName("직책관리")
                         .description("직책을 생성하고 하위 권한을 연결해 멤버 권한을 세밀하게 관리합니다.")

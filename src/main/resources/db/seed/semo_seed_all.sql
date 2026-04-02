@@ -283,6 +283,34 @@ WHERE NOT EXISTS (
     WHERE feature_key = 'MEMBER_DIRECTORY'
 );
 
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    navigation_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'FEEDBACK',
+    '피드백',
+    '익명 또는 기명으로 건의, 불편 신고, 개선 요청을 남기고 운영 답변을 확인합니다.',
+    'forum',
+    'USER_AND_ADMIN',
+    1,
+    59,
+    NOW(),
+    NOW()
+FROM dual
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM feature_catalog
+    WHERE feature_key = 'FEEDBACK'
+);
+
 INSERT INTO feature_permission_catalog (
     permission_key,
     feature_key,
