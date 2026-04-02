@@ -268,4 +268,37 @@ class ClubDashboardServiceTest {
                     assertThat(widget.enabled()).isFalse();
                 });
     }
+
+    @Test
+    void memberDirectoryWidgetUsesMemberDirectoryPaths() {
+        String ownerUserKey = "dashboard-owner-004";
+        Long clubId = clubService.createClub(
+                ownerUserKey,
+                "Dashboard Owner 4",
+                new CreateClubRequest(
+                        "Dashboard Club 4",
+                        "회원 디렉터리 위젯 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                ownerUserKey,
+                new UpdateClubFeaturesRequest(List.of("MEMBER_DIRECTORY"))
+        );
+
+        var editor = clubDashboardService.getDashboardWidgetEditor(clubId, ownerUserKey, "USER_HOME");
+        assertThat(editor.widgets())
+                .filteredOn(widget -> widget.widgetKey().equals("MEMBER_DIRECTORY_HIGHLIGHT"))
+                .singleElement()
+                .satisfies(widget -> {
+                    assertThat(widget.available()).isTrue();
+                    assertThat(widget.userPath()).isEqualTo("/clubs/%d/more/members".formatted(clubId));
+                    assertThat(widget.adminPath()).isEqualTo("/clubs/%d/admin/more/members".formatted(clubId));
+                });
+    }
 }

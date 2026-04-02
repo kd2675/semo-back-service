@@ -346,6 +346,7 @@ public class ClubDashboardService {
             case "POLL_STATUS" -> "/clubs/%d/more/polls".formatted(clubId);
             case "TOURNAMENT_RECORD_LATEST" -> "/clubs/%d/more/tournaments".formatted(clubId);
             case "BRACKET_LATEST" -> "/clubs/%d/more/brackets".formatted(clubId);
+            case "MEMBER_DIRECTORY_HIGHLIGHT" -> "/clubs/%d/more/members".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
             case "ATTENDANCE_STATUS" -> "/clubs/%d/more/attendance".formatted(clubId);
             case "DUES_STATUS" -> "/clubs/%d/more/dues".formatted(clubId);
@@ -360,6 +361,7 @@ public class ClubDashboardService {
             case "POLL_STATUS" -> "/clubs/%d/admin/more/polls".formatted(clubId);
             case "TOURNAMENT_RECORD_LATEST" -> "/clubs/%d/admin/more/tournaments".formatted(clubId);
             case "BRACKET_LATEST" -> "/clubs/%d/admin/more/brackets".formatted(clubId);
+            case "MEMBER_DIRECTORY_HIGHLIGHT" -> "/clubs/%d/admin/more/members".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
             case "ATTENDANCE_STATUS" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
             case "DUES_STATUS" -> "/clubs/%d/admin/more/dues".formatted(clubId);

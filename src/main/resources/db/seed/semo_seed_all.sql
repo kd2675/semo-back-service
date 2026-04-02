@@ -255,6 +255,34 @@ WHERE NOT EXISTS (
     WHERE feature_key = 'ROLE_MANAGEMENT'
 );
 
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    navigation_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'MEMBER_DIRECTORY',
+    '회원 디렉터리',
+    '다른 회원의 직책, 한줄소개, 최근 활동을 한 화면에서 조회합니다.',
+    'group_search',
+    'USER_AND_ADMIN',
+    1,
+    59,
+    NOW(),
+    NOW()
+FROM dual
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM feature_catalog
+    WHERE feature_key = 'MEMBER_DIRECTORY'
+);
+
 INSERT INTO feature_permission_catalog (
     permission_key,
     feature_key,
@@ -793,6 +821,23 @@ INSERT INTO dashboard_widget_catalog (
 )
 SELECT 'BRACKET_LATEST', 'Bracket Board', 'Approved brackets and my latest draft.', 'account_tree', 'BRACKET', 'USER_HOME', 1, 1, 37, 1, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'BRACKET_LATEST');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'MEMBER_DIRECTORY_HIGHLIGHT', 'Member Directory', 'Recently active members and quick access to the member directory.', 'group_search', 'MEMBER_DIRECTORY', 'USER_HOME', 1, 1, 38, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'MEMBER_DIRECTORY_HIGHLIGHT');
 
 -- ------------------------------------------------------------
 -- Optional example: enable attendance for specific clubs.

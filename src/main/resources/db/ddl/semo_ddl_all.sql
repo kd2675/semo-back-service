@@ -198,6 +198,20 @@ CREATE TABLE IF NOT EXISTS club_profile (
 CREATE INDEX idx_club_profile_display_name
     ON club_profile (display_name);
 
+CREATE TABLE IF NOT EXISTS member_directory_setting (
+    member_directory_setting_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    show_positions TINYINT(1) NOT NULL DEFAULT 1,
+    show_tagline TINYINT(1) NOT NULL DEFAULT 1,
+    show_recent_activity TINYINT(1) NOT NULL DEFAULT 1,
+    updated_by_club_profile_id BIGINT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_member_directory_setting_club UNIQUE (club_id),
+    CONSTRAINT fk_member_directory_setting_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_member_directory_setting_updated_by FOREIGN KEY (updated_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ============================================================
 -- Join request
 -- Supports recommendation/join flows before membership is approved.
