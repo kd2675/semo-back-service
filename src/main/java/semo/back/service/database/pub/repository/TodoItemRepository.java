@@ -1,0 +1,70 @@
+package semo.back.service.database.pub.repository;
+
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import semo.back.service.database.pub.entity.TodoItem;
+
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
+public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
+    List<TodoItem> findByClubIdOrderByTodoItemIdDesc(Long clubId);
+
+    List<TodoItem> findByClubIdAndAssignedClubProfileIdOrderByTodoItemIdDesc(Long clubId, Long assignedClubProfileId);
+
+    List<TodoItem> findTop5ByClubIdAndCompletedByClubProfileIdOrderByTodoItemIdDesc(Long clubId, Long completedByClubProfileId);
+
+    Optional<TodoItem> findByTodoItemIdAndClubId(Long todoItemId, Long clubId);
+
+    @Query("""
+            select t
+            from TodoItem t
+            where t.clubId = :clubId
+              and t.assignmentMode = 'OPEN_SUPPORT'
+              and t.assignedClubProfileId is null
+              and t.statusCode = 'OPEN'
+            order by
+              case when t.dueAt is null then 1 else 0 end,
+              t.dueAt asc,
+              t.todoItemId desc
+            """)
+    List<TodoItem> findClaimableTodos(Long clubId, Pageable pageable);
+
+    @Query("""
+            select t
+            from TodoItem t
+            where t.clubId = :clubId
+              and (:cursorTodoItemId is null or t.todoItemId < :cursorTodoItemId)
+              and (
+                    :statusFilter is null
+                    or :statusFilter = 'ALL'
+                    or (
+                        :statusFilter = 'OVERDUE'
+                        and t.dueAt is not null
+                        and t.dueAt < :now
+                        and t.statusCode not in :terminalStatuses
+                    )
+                    or t.statusCode = :statusFilter
+                  )
+              and (
+                    :assignmentFilter is null
+                    or :assignmentFilter = 'ALL'
+                    or (:assignmentFilter = 'ASSIGNED' and t.assignedClubProfileId is not null)
+                    or (:assignmentFilter = 'UNASSIGNED' and t.assignedClubProfileId is null)
+                    or (:assignmentFilter = 'OPEN_SUPPORT' and t.assignmentMode = 'OPEN_SUPPORT')
+                  )
+            order by t.todoItemId desc
+            """)
+    List<TodoItem> findAdminFeed(
+            Long clubId,
+            String statusFilter,
+            String assignmentFilter,
+            Long cursorTodoItemId,
+            LocalDateTime now,
+            Collection<String> terminalStatuses,
+            Pageable pageable
+    );
+}

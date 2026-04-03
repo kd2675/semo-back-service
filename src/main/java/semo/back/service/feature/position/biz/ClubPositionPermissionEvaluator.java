@@ -42,6 +42,10 @@ public class ClubPositionPermissionEvaluator {
     public static final String PERMISSION_DUES_ISSUE = "DUES_ISSUE";
     public static final String PERMISSION_DUES_MARK_PAID = "DUES_MARK_PAID";
     public static final String PERMISSION_DUES_MARK_WAIVED = "DUES_MARK_WAIVED";
+    public static final String PERMISSION_TODO_VIEW = "TODO_VIEW";
+    public static final String PERMISSION_TODO_CREATE = "TODO_CREATE";
+    public static final String PERMISSION_TODO_ASSIGN = "TODO_ASSIGN";
+    public static final String PERMISSION_TODO_MANAGE_STATUS = "TODO_MANAGE_STATUS";
     public static final String PERMISSION_ROLE_MANAGEMENT_VIEW = "ROLE_MANAGEMENT_VIEW";
     public static final String PERMISSION_ROLE_MANAGEMENT_CREATE = "ROLE_MANAGEMENT_CREATE";
     public static final String PERMISSION_ROLE_MANAGEMENT_UPDATE = "ROLE_MANAGEMENT_UPDATE";

@@ -185,6 +185,13 @@
 - `GET /api/semo/v1/clubs/{clubId}/more/attendance`
 - `POST /api/semo/v1/clubs/{clubId}/more/attendance/check-in`
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/attendance`
+- `GET /api/semo/v1/clubs/{clubId}/more/todos`
+- `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/claim`
+- `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/complete`
+- `GET /api/semo/v1/clubs/{clubId}/admin/more/todos`
+- `POST /api/semo/v1/clubs/{clubId}/admin/more/todos`
+- `PUT /api/semo/v1/clubs/{clubId}/admin/more/todos/{todoItemId}`
+- `PUT /api/semo/v1/clubs/{clubId}/admin/more/todos/{todoItemId}/status`
 
 ### Dues / tournament / bracket / role management / activity
 - `GET /api/semo/v1/clubs/{clubId}/more/dues`

@@ -239,6 +239,35 @@ CREATE INDEX idx_club_feedback_feed
 CREATE INDEX idx_club_feedback_submitter
     ON club_feedback (club_id, submitter_club_profile_id, deleted, create_date, feedback_id);
 
+CREATE TABLE IF NOT EXISTS todo_item (
+    todo_item_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    created_by_club_profile_id BIGINT NOT NULL,
+    assigned_club_profile_id BIGINT NULL,
+    assigned_by_club_profile_id BIGINT NULL,
+    todo_type VARCHAR(30) NOT NULL,
+    assignment_mode VARCHAR(30) NOT NULL DEFAULT 'DIRECT_ASSIGN',
+    status_code VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    title VARCHAR(150) NOT NULL,
+    description VARCHAR(2000) NULL,
+    due_at DATETIME NULL,
+    completed_by_club_profile_id BIGINT NULL,
+    completed_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_todo_item_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_todo_item_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_todo_item_assigned_profile FOREIGN KEY (assigned_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_todo_item_assigned_by FOREIGN KEY (assigned_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_todo_item_completed_by FOREIGN KEY (completed_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_todo_item_status
+    ON todo_item (club_id, status_code, due_at, todo_item_id);
+
+CREATE INDEX idx_todo_item_assignment
+    ON todo_item (club_id, assignment_mode, status_code, todo_item_id);
+
 -- ============================================================
 -- Join request
 -- Supports recommendation/join flows before membership is approved.

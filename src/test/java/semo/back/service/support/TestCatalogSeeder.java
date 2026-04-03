@@ -105,6 +105,15 @@ public final class TestCatalogSeeder {
                         .sortOrder(59)
                         .build(),
                 FeatureCatalog.builder()
+                        .featureKey("TODO")
+                        .displayName("할 일")
+                        .description("담당자와 지원 가능 업무를 명확하게 관리하고 완료 상태를 추적합니다.")
+                        .iconName("assignment")
+                        .navigationScope("USER_AND_ADMIN")
+                        .active(true)
+                        .sortOrder(59)
+                        .build(),
+                FeatureCatalog.builder()
                         .featureKey("ROLE_MANAGEMENT")
                         .displayName("직책관리")
                         .description("직책을 생성하고 하위 권한을 연결해 멤버 권한을 세밀하게 관리합니다.")

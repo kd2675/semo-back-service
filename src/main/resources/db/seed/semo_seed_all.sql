@@ -311,6 +311,34 @@ WHERE NOT EXISTS (
     WHERE feature_key = 'FEEDBACK'
 );
 
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    navigation_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'TODO',
+    '할 일',
+    '담당자와 지원 가능 업무를 명확하게 관리하고 완료 상태를 추적합니다.',
+    'assignment',
+    'USER_AND_ADMIN',
+    1,
+    59,
+    NOW(),
+    NOW()
+FROM dual
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM feature_catalog
+    WHERE feature_key = 'TODO'
+);
+
 INSERT INTO feature_permission_catalog (
     permission_key,
     feature_key,
@@ -643,6 +671,62 @@ INSERT INTO feature_permission_catalog (
 )
 SELECT 'TIMELINE_VIEW', 'TIMELINE', '타임라인 조회', '타임라인 화면을 확인합니다.', 'CLUB', 1, 10, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TIMELINE_VIEW');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TODO_VIEW', 'TODO', '할 일 조회', '할 일 운영 화면과 담당 현황을 조회합니다.', 'CLUB', 1, 10, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TODO_VIEW');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TODO_CREATE', 'TODO', '할 일 생성', '새 할 일을 등록하고 기본 정보를 수정합니다.', 'CLUB', 1, 20, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TODO_CREATE');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TODO_ASSIGN', 'TODO', '할 일 배정', '담당자를 지정하거나 지원 가능 업무로 전환합니다.', 'CLUB', 1, 30, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TODO_ASSIGN');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TODO_MANAGE_STATUS', 'TODO', '할 일 상태 관리', '진행중, 완료, 취소 등 상태를 운영합니다.', 'CLUB', 1, 40, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TODO_MANAGE_STATUS');
 
 INSERT INTO feature_permission_catalog (
     permission_key,
