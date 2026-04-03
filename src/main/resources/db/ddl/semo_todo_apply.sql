@@ -35,6 +35,29 @@ CREATE INDEX idx_todo_item_status
 CREATE INDEX idx_todo_item_assignment
     ON todo_item (club_id, assignment_mode, status_code, todo_item_id);
 
+CREATE TABLE IF NOT EXISTS todo_item_application (
+    todo_item_application_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    todo_item_id BIGINT NOT NULL,
+    club_profile_id BIGINT NOT NULL,
+    application_status VARCHAR(20) NOT NULL DEFAULT 'APPLIED',
+    application_note VARCHAR(500) NULL,
+    review_note VARCHAR(500) NULL,
+    reviewed_by_club_profile_id BIGINT NULL,
+    reviewed_at DATETIME NULL,
+    create_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_todo_item_application UNIQUE (todo_item_id, club_profile_id),
+    CONSTRAINT fk_todo_item_application_todo FOREIGN KEY (todo_item_id) REFERENCES todo_item(todo_item_id),
+    CONSTRAINT fk_todo_item_application_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_todo_item_application_reviewed_by FOREIGN KEY (reviewed_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_todo_item_application_status
+    ON todo_item_application (todo_item_id, application_status, create_date, todo_item_application_id);
+
+CREATE INDEX idx_todo_item_application_profile
+    ON todo_item_application (club_profile_id, application_status, create_date, todo_item_application_id);
+
 INSERT INTO feature_catalog (
     feature_key,
     display_name,
@@ -118,3 +141,17 @@ INSERT INTO feature_permission_catalog (
 )
 SELECT 'TODO_MANAGE_STATUS', 'TODO', '할 일 상태 관리', '진행중, 완료, 취소 등 상태를 운영합니다.', 'CLUB', 1, 40, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TODO_MANAGE_STATUS');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT 'TODO_DELETE_ANY', 'TODO', '할 일 삭제', '등록된 할 일과 관련 신청 데이터를 삭제합니다.', 'CLUB', 1, 50, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TODO_DELETE_ANY');

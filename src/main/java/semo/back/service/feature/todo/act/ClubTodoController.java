@@ -4,6 +4,7 @@ import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,10 @@ import semo.back.service.feature.todo.biz.ClubTodoService;
 import semo.back.service.feature.todo.vo.ClubAdminTodoResponse;
 import semo.back.service.feature.todo.vo.ClubTodoResponse;
 import semo.back.service.feature.todo.vo.CreateClubTodoRequest;
+import semo.back.service.feature.todo.vo.CreateTodoApplicationRequest;
+import semo.back.service.feature.todo.vo.ReviewTodoItemApplicationRequest;
+import semo.back.service.feature.todo.vo.TodoItemApplicationResponse;
+import semo.back.service.feature.todo.vo.TodoItemApplicationsResponse;
 import semo.back.service.feature.todo.vo.TodoActionResponse;
 import semo.back.service.feature.todo.vo.TodoSummaryResponse;
 import semo.back.service.feature.todo.vo.UpdateClubTodoRequest;
@@ -54,6 +59,33 @@ public class ClubTodoController {
         );
     }
 
+    @PostMapping("/more/todos/{todoItemId}/apply")
+    public ResponseDataDTO<TodoItemApplicationResponse> applyTodo(
+            @PathVariable Long clubId,
+            @PathVariable Long todoItemId,
+            @Valid @RequestBody(required = false) CreateTodoApplicationRequest request,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubTodoService.applyTodo(clubId, todoItemId, requireUserKey(userContext), request),
+                "업무 신청 성공"
+        );
+    }
+
+    @DeleteMapping("/more/todos/{todoItemId}/applications/me")
+    public ResponseDataDTO<TodoItemApplicationResponse> cancelMyTodoApplication(
+            @PathVariable Long clubId,
+            @PathVariable Long todoItemId,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubTodoService.cancelMyTodoApplication(clubId, todoItemId, requireUserKey(userContext)),
+                "업무 신청 취소 성공"
+        );
+    }
+
     @PostMapping("/more/todos/{todoItemId}/complete")
     public ResponseDataDTO<TodoActionResponse> completeTodo(
             @PathVariable Long clubId,
@@ -72,6 +104,7 @@ public class ClubTodoController {
             @PathVariable Long clubId,
             @RequestParam(required = false) String statusFilter,
             @RequestParam(required = false) String assignmentFilter,
+            @RequestParam(required = false) String applicationFilter,
             @RequestParam(required = false) Long cursorTodoItemId,
             @RequestParam(required = false) Integer size,
             UserContext userContext
@@ -83,10 +116,45 @@ public class ClubTodoController {
                         requireUserKey(userContext),
                         statusFilter,
                         assignmentFilter,
+                        applicationFilter,
                         cursorTodoItemId,
                         size
                 ),
                 "할 일 운영 조회 성공"
+        );
+    }
+
+    @GetMapping("/admin/more/todos/{todoItemId}/applications")
+    public ResponseDataDTO<TodoItemApplicationsResponse> getAdminTodoApplications(
+            @PathVariable Long clubId,
+            @PathVariable Long todoItemId,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubTodoService.getAdminTodoApplications(clubId, todoItemId, requireUserKey(userContext)),
+                "업무 신청 목록 조회 성공"
+        );
+    }
+
+    @PutMapping("/admin/more/todos/{todoItemId}/applications/{todoItemApplicationId}/review")
+    public ResponseDataDTO<TodoItemApplicationResponse> reviewTodoApplication(
+            @PathVariable Long clubId,
+            @PathVariable Long todoItemId,
+            @PathVariable Long todoItemApplicationId,
+            @Valid @RequestBody ReviewTodoItemApplicationRequest request,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubTodoService.reviewTodoApplication(
+                        clubId,
+                        todoItemId,
+                        todoItemApplicationId,
+                        requireUserKey(userContext),
+                        request
+                ),
+                "업무 신청 검토 성공"
         );
     }
 
@@ -129,6 +197,17 @@ public class ClubTodoController {
                 clubTodoService.updateTodoStatus(clubId, todoItemId, requireUserKey(userContext), request),
                 "할 일 상태 변경 성공"
         );
+    }
+
+    @DeleteMapping("/admin/more/todos/{todoItemId}")
+    public ResponseDataDTO<Void> deleteTodo(
+            @PathVariable Long clubId,
+            @PathVariable Long todoItemId,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        clubTodoService.deleteTodo(clubId, todoItemId, requireUserKey(userContext));
+        return ResponseDataDTO.of(null, "할 일 삭제 성공");
     }
 
     private String requireUserKey(UserContext userContext) {

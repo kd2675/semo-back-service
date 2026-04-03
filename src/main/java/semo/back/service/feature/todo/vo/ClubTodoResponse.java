@@ -8,6 +8,7 @@ public record ClubTodoResponse(
         boolean admin,
         int myOpenCount,
         int myCompletedCount,
+        int myApplyingCount,
         int claimableOpenCount,
         int overdueCount,
         List<TodoSummaryResponse> myTodos,

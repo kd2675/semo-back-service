@@ -186,12 +186,15 @@
 - `POST /api/semo/v1/clubs/{clubId}/more/attendance/check-in`
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/attendance`
 - `GET /api/semo/v1/clubs/{clubId}/more/todos`
+- `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/apply`
 - `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/claim`
+- `DELETE /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/applications/me`
 - `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/complete`
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/todos`
 - `POST /api/semo/v1/clubs/{clubId}/admin/more/todos`
 - `PUT /api/semo/v1/clubs/{clubId}/admin/more/todos/{todoItemId}`
 - `PUT /api/semo/v1/clubs/{clubId}/admin/more/todos/{todoItemId}/status`
+- `DELETE /api/semo/v1/clubs/{clubId}/admin/more/todos/{todoItemId}`
 
 ### Dues / tournament / bracket / role management / activity
 - `GET /api/semo/v1/clubs/{clubId}/more/dues`

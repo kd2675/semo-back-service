@@ -739,6 +739,20 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
+SELECT 'TODO_DELETE_ANY', 'TODO', '할 일 삭제', '등록된 할 일과 관련 신청 데이터를 삭제합니다.', 'CLUB', 1, 50, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TODO_DELETE_ANY');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
 SELECT 'ROLE_MANAGEMENT_VIEW', 'ROLE_MANAGEMENT', '직책 조회', '직책 목록과 권한 구성을 조회합니다.', 'CLUB', 1, 10, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'ROLE_MANAGEMENT_VIEW');
 

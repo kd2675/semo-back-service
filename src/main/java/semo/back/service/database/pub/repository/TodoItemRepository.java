@@ -55,6 +55,17 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
                     or (:assignmentFilter = 'ASSIGNED' and t.assignedClubProfileId is not null)
                     or (:assignmentFilter = 'UNASSIGNED' and t.assignedClubProfileId is null)
                     or (:assignmentFilter = 'OPEN_SUPPORT' and t.assignmentMode = 'OPEN_SUPPORT')
+                    or (:assignmentFilter = 'DIRECT_ASSIGN' and t.assignmentMode = 'DIRECT_ASSIGN')
+                  )
+              and (
+                    :applicationFilter is null
+                    or :applicationFilter = 'ALL'
+                    or exists (
+                        select 1
+                        from TodoItemApplication application
+                        where application.todoItemId = t.todoItemId
+                          and application.applicationStatus = :applicationFilter
+                    )
                   )
             order by t.todoItemId desc
             """)
@@ -62,6 +73,7 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
             Long clubId,
             String statusFilter,
             String assignmentFilter,
+            String applicationFilter,
             Long cursorTodoItemId,
             LocalDateTime now,
             Collection<String> terminalStatuses,

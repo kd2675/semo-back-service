@@ -20,8 +20,15 @@ public record TodoSummaryResponse(
         String completedAt,
         String completedAtLabel,
         boolean canClaim,
+        boolean canApply,
+        boolean canCancelApplication,
         boolean canComplete,
         boolean canEdit,
-        boolean canManageStatus
+        boolean canManageStatus,
+        boolean canReviewApplications,
+        Long myApplicationId,
+        String myApplicationStatus,
+        String myApplicationStatusLabel,
+        int applicationCount
 ) {
 }

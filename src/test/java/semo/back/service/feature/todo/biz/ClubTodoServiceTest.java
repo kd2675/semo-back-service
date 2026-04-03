@@ -20,6 +20,7 @@ import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
+import semo.back.service.database.pub.repository.TodoItemApplicationRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
@@ -27,6 +28,8 @@ import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 import semo.back.service.feature.profile.biz.ProfileUserService;
 import semo.back.service.feature.todo.vo.CreateClubTodoRequest;
+import semo.back.service.feature.todo.vo.CreateTodoApplicationRequest;
+import semo.back.service.feature.todo.vo.ReviewTodoItemApplicationRequest;
 import semo.back.service.feature.todo.vo.UpdateClubTodoRequest;
 import semo.back.service.feature.todo.vo.UpdateTodoStatusRequest;
 
@@ -58,6 +61,9 @@ class ClubTodoServiceTest {
     private TodoItemRepository todoItemRepository;
 
     @Autowired
+    private TodoItemApplicationRepository todoItemApplicationRepository;
+
+    @Autowired
     private ClubFeatureRepository clubFeatureRepository;
 
     @Autowired
@@ -86,6 +92,7 @@ class ClubTodoServiceTest {
 
     @BeforeEach
     void setUp() {
+        todoItemApplicationRepository.deleteAll();
         todoItemRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();
@@ -136,7 +143,7 @@ class ClubTodoServiceTest {
     }
 
     @Test
-    void claimTodo_openSupport_unassigned_success() {
+    void claimTodo_openSupport_unassigned_createsApplication() {
         Long clubId = createEnabledClub("todo-owner-003", "Todo Owner 3", "Todo Club 3");
         addActiveMember(clubId, "todo-member-003", "Todo Member 3");
 
@@ -155,12 +162,44 @@ class ClubTodoServiceTest {
 
         var claimed = clubTodoService.claimTodo(clubId, todoItemId, "todo-member-003");
 
-        assertThat(claimed.statusCode()).isEqualTo("IN_PROGRESS");
-        assertThat(claimed.assignedDisplayName()).isEqualTo("Todo Member 3");
+        assertThat(claimed.statusCode()).isEqualTo("OPEN");
+        assertThat(claimed.assignedDisplayName()).isNull();
+        var applications = todoItemApplicationRepository.findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(
+                todoItemId
+        );
+        assertThat(applications).singleElement().satisfies(application -> {
+            assertThat(application.getApplicationStatus()).isEqualTo("APPLIED");
+        });
     }
 
     @Test
-    void claimTodo_alreadyClaimed_throwsConflict() {
+    void applyTodo_directAssign_throwsValidation() {
+        Long clubId = createEnabledClub("todo-owner-003a", "Todo Owner 3A", "Todo Club 3A");
+        Long memberClubProfileId = addActiveMember(clubId, "todo-member-003a", "Todo Member 3A");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-003a",
+                new CreateClubTodoRequest(
+                        "운영 총괄",
+                        null,
+                        "OPERATIONS",
+                        "DIRECT_ASSIGN",
+                        memberClubProfileId,
+                        null
+                )
+        ).todoItemId();
+
+        assertThatThrownBy(() -> clubTodoService.applyTodo(
+                clubId,
+                todoItemId,
+                "todo-member-003a",
+                new CreateTodoApplicationRequest("신청 불가 케이스")
+        )).hasMessageContaining("신청 가능한 업무만");
+    }
+
+    @Test
+    void claimTodo_alreadyApplied_throwsConflict() {
         Long clubId = createEnabledClub("todo-owner-004", "Todo Owner 4", "Todo Club 4");
         addActiveMember(clubId, "todo-member-004a", "Todo Member 4A");
         addActiveMember(clubId, "todo-member-004b", "Todo Member 4B");
@@ -180,8 +219,8 @@ class ClubTodoServiceTest {
 
         clubTodoService.claimTodo(clubId, todoItemId, "todo-member-004a");
 
-        assertThatThrownBy(() -> clubTodoService.claimTodo(clubId, todoItemId, "todo-member-004b"))
-                .hasMessageContaining("이미 다른 멤버가 맡은 업무");
+        assertThatThrownBy(() -> clubTodoService.claimTodo(clubId, todoItemId, "todo-member-004a"))
+                .hasMessageContaining("이미 신청한 업무");
     }
 
     @Test
@@ -260,6 +299,248 @@ class ClubTodoServiceTest {
                 "todo-owner-007",
                 new UpdateTodoStatusRequest("CANCELED")
         )).hasMessageContaining("먼저 다시 열어야");
+    }
+
+    @Test
+    void updateStatus_reopenDirectAssign_keepsAssigneeAndReturnsOpen() {
+        Long clubId = createEnabledClub("todo-owner-007a", "Todo Owner 7A", "Todo Club 7A");
+        Long assignedClubProfileId = addActiveMember(clubId, "todo-member-007a", "Todo Member 7A");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-007a",
+                new CreateClubTodoRequest(
+                        "리스트 정리",
+                        null,
+                        "OPERATIONS",
+                        "DIRECT_ASSIGN",
+                        assignedClubProfileId,
+                        null
+                )
+        ).todoItemId();
+
+        clubTodoService.completeTodo(clubId, todoItemId, "todo-member-007a");
+
+        var reopened = clubTodoService.updateTodoStatus(
+                clubId,
+                todoItemId,
+                "todo-owner-007a",
+                new UpdateTodoStatusRequest("REOPEN")
+        );
+
+        assertThat(reopened.statusCode()).isEqualTo("OPEN");
+        assertThat(reopened.assignedClubProfileId()).isEqualTo(assignedClubProfileId);
+        TodoItem updated = todoItemRepository.findById(todoItemId).orElseThrow();
+        assertThat(updated.getCompletedAt()).isNull();
+        assertThat(updated.getCompletedByClubProfileId()).isNull();
+    }
+
+    @Test
+    void updateStatus_resetOpenSupportToOpen_clearsAssignee() {
+        Long clubId = createEnabledClub("todo-owner-007aa", "Todo Owner 7AA", "Todo Club 7AA");
+        addActiveMember(clubId, "todo-member-007aa", "Todo Member 7AA");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-007aa",
+                new CreateClubTodoRequest(
+                        "행사 안내",
+                        null,
+                        "VOLUNTEER",
+                        "OPEN_SUPPORT",
+                        null,
+                        null
+                )
+        ).todoItemId();
+
+        clubTodoService.claimTodo(clubId, todoItemId, "todo-member-007aa");
+        Long applicationId = todoItemApplicationRepository
+                .findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId)
+                .get(0)
+                .getTodoItemApplicationId();
+        clubTodoService.reviewTodoApplication(
+                clubId,
+                todoItemId,
+                applicationId,
+                "todo-owner-007aa",
+                new ReviewTodoItemApplicationRequest("SELECTED", null)
+        );
+
+        var reset = clubTodoService.updateTodoStatus(
+                clubId,
+                todoItemId,
+                "todo-owner-007aa",
+                new UpdateTodoStatusRequest("OPEN")
+        );
+
+        assertThat(reset.statusCode()).isEqualTo("OPEN");
+        assertThat(reset.assignedClubProfileId()).isNull();
+        TodoItem updated = todoItemRepository.findById(todoItemId).orElseThrow();
+        assertThat(updated.getAssignedClubProfileId()).isNull();
+        assertThat(updated.getAssignedByClubProfileId()).isNull();
+        assertThat(todoItemApplicationRepository.findById(applicationId).orElseThrow().getApplicationStatus())
+                .isEqualTo("REJECTED");
+    }
+
+    @Test
+    void updateStatus_reopenOpenSupport_returnsClaimableOpenTodo() {
+        Long clubId = createEnabledClub("todo-owner-007ab", "Todo Owner 7AB", "Todo Club 7AB");
+        addActiveMember(clubId, "todo-member-007ab", "Todo Member 7AB");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-007ab",
+                new CreateClubTodoRequest(
+                        "현장 유도",
+                        null,
+                        "VOLUNTEER",
+                        "OPEN_SUPPORT",
+                        null,
+                        null
+                )
+        ).todoItemId();
+
+        clubTodoService.claimTodo(clubId, todoItemId, "todo-member-007ab");
+        Long applicationId = todoItemApplicationRepository
+                .findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId)
+                .get(0)
+                .getTodoItemApplicationId();
+        clubTodoService.reviewTodoApplication(
+                clubId,
+                todoItemId,
+                applicationId,
+                "todo-owner-007ab",
+                new ReviewTodoItemApplicationRequest("SELECTED", null)
+        );
+        clubTodoService.completeTodo(clubId, todoItemId, "todo-member-007ab");
+
+        var reopened = clubTodoService.updateTodoStatus(
+                clubId,
+                todoItemId,
+                "todo-owner-007ab",
+                new UpdateTodoStatusRequest("REOPEN")
+        );
+
+        assertThat(reopened.statusCode()).isEqualTo("OPEN");
+        assertThat(reopened.assignedClubProfileId()).isNull();
+        TodoItem updated = todoItemRepository.findById(todoItemId).orElseThrow();
+        assertThat(updated.getAssignedClubProfileId()).isNull();
+        assertThat(updated.getAssignedByClubProfileId()).isNull();
+        assertThat(updated.getCompletedAt()).isNull();
+        assertThat(updated.getCompletedByClubProfileId()).isNull();
+        var todos = clubTodoService.getTodos(clubId, "todo-member-007ab");
+        assertThat(todos.claimableTodos()).extracting("todoItemId").contains(todoItemId);
+    }
+
+    @Test
+    void reviewTodoApplication_select_assignsTodoAndRejectsOthers() {
+        Long clubId = createEnabledClub("todo-owner-007ad", "Todo Owner 7AD", "Todo Club 7AD");
+        addActiveMember(clubId, "todo-member-007ad-a", "Todo Member 7AD A");
+        addActiveMember(clubId, "todo-member-007ad-b", "Todo Member 7AD B");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-007ad",
+                new CreateClubTodoRequest(
+                        "부스 운영",
+                        null,
+                        "VOLUNTEER",
+                        "OPEN_SUPPORT",
+                        null,
+                        null
+                )
+        ).todoItemId();
+
+        clubTodoService.applyTodo(
+                clubId,
+                todoItemId,
+                "todo-member-007ad-a",
+                new CreateTodoApplicationRequest("오전 가능")
+        );
+        clubTodoService.applyTodo(
+                clubId,
+                todoItemId,
+                "todo-member-007ad-b",
+                new CreateTodoApplicationRequest("오후 가능")
+        );
+
+        Long selectedApplicationId = todoItemApplicationRepository
+                .findByTodoItemIdAndClubProfileId(todoItemId, findClubProfileId(clubId, "todo-member-007ad-a"))
+                .orElseThrow()
+                .getTodoItemApplicationId();
+
+        var reviewed = clubTodoService.reviewTodoApplication(
+                clubId,
+                todoItemId,
+                selectedApplicationId,
+                "todo-owner-007ad",
+                new ReviewTodoItemApplicationRequest("SELECTED", "현장 선발")
+        );
+
+        assertThat(reviewed.applicationStatus()).isEqualTo("SELECTED");
+        TodoItem updated = todoItemRepository.findById(todoItemId).orElseThrow();
+        assertThat(updated.getStatusCode()).isEqualTo("IN_PROGRESS");
+        assertThat(updated.getAssignedClubProfileId()).isEqualTo(findClubProfileId(clubId, "todo-member-007ad-a"));
+        assertThat(todoItemApplicationRepository.findByTodoItemIdAndClubProfileId(
+                todoItemId,
+                findClubProfileId(clubId, "todo-member-007ad-b")
+        ).orElseThrow().getApplicationStatus()).isEqualTo("REJECTED");
+    }
+
+    @Test
+    void cancelMyTodoApplication_applied_success() {
+        Long clubId = createEnabledClub("todo-owner-007ae", "Todo Owner 7AE", "Todo Club 7AE");
+        addActiveMember(clubId, "todo-member-007ae", "Todo Member 7AE");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-007ae",
+                new CreateClubTodoRequest(
+                        "배너 설치",
+                        null,
+                        "VOLUNTEER",
+                        "OPEN_SUPPORT",
+                        null,
+                        null
+                )
+        ).todoItemId();
+
+        clubTodoService.applyTodo(
+                clubId,
+                todoItemId,
+                "todo-member-007ae",
+                new CreateTodoApplicationRequest("설치 경험 있음")
+        );
+
+        var canceled = clubTodoService.cancelMyTodoApplication(clubId, todoItemId, "todo-member-007ae");
+
+        assertThat(canceled.applicationStatus()).isEqualTo("WITHDRAWN");
+    }
+
+    @Test
+    void updateStatus_reopenNonTerminal_throwsValidation() {
+        Long clubId = createEnabledClub("todo-owner-007ac", "Todo Owner 7AC", "Todo Club 7AC");
+        Long assignedClubProfileId = addActiveMember(clubId, "todo-member-007ac", "Todo Member 7AC");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-007ac",
+                new CreateClubTodoRequest(
+                        "문서 검토",
+                        null,
+                        "OPERATIONS",
+                        "DIRECT_ASSIGN",
+                        assignedClubProfileId,
+                        null
+                )
+        ).todoItemId();
+
+        assertThatThrownBy(() -> clubTodoService.updateTodoStatus(
+                clubId,
+                todoItemId,
+                "todo-owner-007ac",
+                new UpdateTodoStatusRequest("REOPEN")
+        )).hasMessageContaining("완료되거나 취소된 업무");
     }
 
     @Test
@@ -391,12 +672,81 @@ class ClubTodoServiceTest {
                 )
         );
 
-        var response = clubTodoService.getAdminTodos(clubId, "todo-viewer-009b", null, null, null, null);
+        var response = clubTodoService.getAdminTodos(clubId, "todo-viewer-009b", null, null, null, null, null);
 
         assertThat(response.items()).hasSize(1);
         assertThat(response.canCreate()).isFalse();
         assertThat(response.canAssign()).isFalse();
         assertThat(response.canManageStatus()).isFalse();
+    }
+
+    @Test
+    void getAdminTodos_applicationFilter_applied_onlyReturnsAppliedTodos() {
+        Long clubId = createEnabledClubWithRoleManagement("todo-owner-009ba", "Todo Owner 9BA", "Todo Club 9BA");
+        addActiveMember(clubId, "todo-member-009ba", "Todo Member 9BA");
+
+        Long appliedTodoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-009ba",
+                new CreateClubTodoRequest(
+                        "현장 접수",
+                        null,
+                        "VOLUNTEER",
+                        "OPEN_SUPPORT",
+                        null,
+                        null
+                )
+        ).todoItemId();
+        Long selectedTodoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-009ba",
+                new CreateClubTodoRequest(
+                        "상황실 운영",
+                        null,
+                        "VOLUNTEER",
+                        "OPEN_SUPPORT",
+                        null,
+                        null
+                )
+        ).todoItemId();
+
+        clubTodoService.applyTodo(
+                clubId,
+                appliedTodoItemId,
+                "todo-member-009ba",
+                new CreateTodoApplicationRequest("대기 신청")
+        );
+        clubTodoService.applyTodo(
+                clubId,
+                selectedTodoItemId,
+                "todo-member-009ba",
+                new CreateTodoApplicationRequest("선정 신청")
+        );
+
+        Long selectedApplicationId = todoItemApplicationRepository
+                .findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(selectedTodoItemId)
+                .get(0)
+                .getTodoItemApplicationId();
+        clubTodoService.reviewTodoApplication(
+                clubId,
+                selectedTodoItemId,
+                selectedApplicationId,
+                "todo-owner-009ba",
+                new ReviewTodoItemApplicationRequest("SELECTED", null)
+        );
+
+        var response = clubTodoService.getAdminTodos(
+                clubId,
+                "todo-owner-009ba",
+                null,
+                null,
+                "APPLIED",
+                null,
+                null
+        );
+
+        assertThat(response.items()).extracting("todoItemId").contains(appliedTodoItemId);
+        assertThat(response.items()).extracting("todoItemId").doesNotContain(selectedTodoItemId);
     }
 
     @Test
@@ -641,6 +991,84 @@ class ClubTodoServiceTest {
         TodoItem updated = todoItemRepository.findById(created.todoItemId()).orElseThrow();
 
         assertThat(updated.getAssignedByClubProfileId()).isEqualTo(ownerClubProfileId);
+    }
+
+    @Test
+    void deleteTodo_admin_success_removesTodoAndApplications() {
+        Long clubId = createEnabledClub("todo-owner-015", "Todo Owner 15", "Todo Club 15");
+        addActiveMember(clubId, "todo-member-015", "Todo Member 15");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-015",
+                new CreateClubTodoRequest(
+                        "현장 지원 정리",
+                        "삭제 테스트",
+                        "VOLUNTEER",
+                        "OPEN_SUPPORT",
+                        null,
+                        null
+                )
+        ).todoItemId();
+
+        clubTodoService.applyTodo(
+                clubId,
+                todoItemId,
+                "todo-member-015",
+                new CreateTodoApplicationRequest("삭제 전 신청")
+        );
+
+        clubTodoService.deleteTodo(clubId, todoItemId, "todo-owner-015");
+
+        assertThat(todoItemRepository.findById(todoItemId)).isEmpty();
+        assertThat(todoItemApplicationRepository.findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId))
+                .isEmpty();
+    }
+
+    @Test
+    void deleteTodo_memberWithDeletePermission_success() {
+        Long clubId = createEnabledClubWithRoleManagement("todo-owner-016", "Todo Owner 16", "Todo Club 16");
+        Long memberClubProfileId = addActiveMember(clubId, "todo-member-016", "Todo Member 16");
+        grantPermission(clubId, memberClubProfileId, "TODO_DELETE_ANY", "todo-owner-016");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-016",
+                new CreateClubTodoRequest(
+                        "운영 삭제 권한 테스트",
+                        null,
+                        "OPERATIONS",
+                        "OPEN_SUPPORT",
+                        null,
+                        null
+                )
+        ).todoItemId();
+
+        clubTodoService.deleteTodo(clubId, todoItemId, "todo-member-016");
+
+        assertThat(todoItemRepository.findById(todoItemId)).isEmpty();
+    }
+
+    @Test
+    void deleteTodo_memberWithoutDeletePermission_forbidden() {
+        Long clubId = createEnabledClubWithRoleManagement("todo-owner-017", "Todo Owner 17", "Todo Club 17");
+        addActiveMember(clubId, "todo-member-017", "Todo Member 17");
+
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-017",
+                new CreateClubTodoRequest(
+                        "삭제 권한 없는 멤버",
+                        null,
+                        "OPERATIONS",
+                        "OPEN_SUPPORT",
+                        null,
+                        null
+                )
+        ).todoItemId();
+
+        assertThatThrownBy(() -> clubTodoService.deleteTodo(clubId, todoItemId, "todo-member-017"))
+                .hasMessageContaining("삭제할 권한");
     }
 
     private Long createEnabledClub(String ownerUserKey, String ownerDisplayName, String clubName) {

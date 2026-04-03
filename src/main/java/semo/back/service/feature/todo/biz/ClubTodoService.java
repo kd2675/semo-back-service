@@ -9,7 +9,9 @@ import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.TodoItem;
+import semo.back.service.database.pub.entity.TodoItemApplication;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
+import semo.back.service.database.pub.repository.TodoItemApplicationRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
@@ -17,7 +19,11 @@ import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.todo.vo.ClubAdminTodoResponse;
 import semo.back.service.feature.todo.vo.ClubTodoResponse;
 import semo.back.service.feature.todo.vo.CreateClubTodoRequest;
+import semo.back.service.feature.todo.vo.CreateTodoApplicationRequest;
+import semo.back.service.feature.todo.vo.ReviewTodoItemApplicationRequest;
 import semo.back.service.feature.todo.vo.TodoActionResponse;
+import semo.back.service.feature.todo.vo.TodoItemApplicationResponse;
+import semo.back.service.feature.todo.vo.TodoItemApplicationsResponse;
 import semo.back.service.feature.todo.vo.TodoMemberOptionResponse;
 import semo.back.service.feature.todo.vo.TodoSummaryResponse;
 import semo.back.service.feature.todo.vo.UpdateClubTodoRequest;
@@ -59,6 +65,7 @@ public class ClubTodoService {
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_CANCELED = "CANCELED";
+    private static final String STATUS_REOPEN = "REOPEN";
     private static final Set<String> TERMINAL_STATUSES = Set.of(STATUS_COMPLETED, STATUS_CANCELED);
     private static final Set<String> ADMIN_FILTERABLE_STATUSES = Set.of(
             STATUS_OPEN,
@@ -66,17 +73,35 @@ public class ClubTodoService {
             STATUS_COMPLETED,
             "OVERDUE"
     );
-    private static final Set<String> DIRECT_FILTER_STATUSES = Set.of(
+    private static final Set<String> ALLOWED_STATUS_ACTIONS = Set.of(
             STATUS_OPEN,
             STATUS_IN_PROGRESS,
             STATUS_COMPLETED,
-            STATUS_CANCELED
+            STATUS_CANCELED,
+            STATUS_REOPEN
     );
     private static final Set<String> ALLOWED_ASSIGNMENT_FILTERS = Set.of(
             "ALL",
             "ASSIGNED",
             "UNASSIGNED",
-            "OPEN_SUPPORT"
+            "OPEN_SUPPORT",
+            "DIRECT_ASSIGN"
+    );
+
+    private static final String APPLICATION_STATUS_APPLIED = "APPLIED";
+    private static final String APPLICATION_STATUS_SELECTED = "SELECTED";
+    private static final String APPLICATION_STATUS_REJECTED = "REJECTED";
+    private static final String APPLICATION_STATUS_WITHDRAWN = "WITHDRAWN";
+    private static final Set<String> ALLOWED_APPLICATION_FILTERS = Set.of(
+            "ALL",
+            APPLICATION_STATUS_APPLIED,
+            APPLICATION_STATUS_SELECTED,
+            APPLICATION_STATUS_REJECTED,
+            APPLICATION_STATUS_WITHDRAWN
+    );
+    private static final Set<String> ALLOWED_APPLICATION_REVIEW_STATUSES = Set.of(
+            APPLICATION_STATUS_SELECTED,
+            APPLICATION_STATUS_REJECTED
     );
 
     private static final int CLAIMABLE_PAGE_SIZE = 8;
@@ -91,6 +116,7 @@ public class ClubTodoService {
     private final ClubAccessResolver clubAccessResolver;
     private final ClubTodoPermissionService clubTodoPermissionService;
     private final TodoItemRepository todoItemRepository;
+    private final TodoItemApplicationRepository todoItemApplicationRepository;
     private final ClubProfileRepository clubProfileRepository;
 
     public ClubTodoResponse getTodos(Long clubId, String userKey) {
@@ -106,18 +132,87 @@ public class ClubTodoService {
                 clubId,
                 access.clubProfile().getClubProfileId()
         );
-        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(myItems, claimableItems, recentCompletedItems));
+        List<TodoItemApplication> myAllApplications = todoItemApplicationRepository
+                .findByClubProfileId(access.clubProfile().getClubProfileId());
+        List<Long> myAppliedTodoIds = myAllApplications.stream()
+                .map(TodoItemApplication::getTodoItemId)
+                .distinct()
+                .toList();
+        Map<Long, TodoItem> appliedTodoById = myAppliedTodoIds.isEmpty()
+                ? Map.of()
+                : todoItemRepository.findAllById(myAppliedTodoIds).stream()
+                        .filter(item -> Objects.equals(item.getClubId(), clubId))
+                        .collect(Collectors.toMap(TodoItem::getTodoItemId, Function.identity()));
+        List<TodoItem> prioritizedClaimableItems = Stream.concat(
+                        myAllApplications.stream()
+                                .map(application -> appliedTodoById.get(application.getTodoItemId()))
+                                .filter(Objects::nonNull)
+                                .filter(item -> ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode()))
+                                .filter(item -> STATUS_OPEN.equals(item.getStatusCode()))
+                                .filter(item -> item.getAssignedClubProfileId() == null),
+                        claimableItems.stream()
+                )
+                .distinct()
+                .sorted(todoPriorityComparator())
+                .toList();
+        List<Long> visibleTodoIds = Stream.of(myItems, prioritizedClaimableItems, recentCompletedItems)
+                .flatMap(Collection::stream)
+                .map(TodoItem::getTodoItemId)
+                .distinct()
+                .toList();
+        List<TodoItemApplication> visibleApplications = visibleTodoIds.isEmpty()
+                ? List.of()
+                : todoItemApplicationRepository.findByTodoItemIdIn(visibleTodoIds);
+        List<TodoItemApplication> myVisibleApplications = visibleTodoIds.isEmpty()
+                ? List.of()
+                : todoItemApplicationRepository.findByTodoItemIdInAndClubProfileId(
+                        visibleTodoIds,
+                        access.clubProfile().getClubProfileId()
+                );
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(
+                List.of(myItems, prioritizedClaimableItems, recentCompletedItems),
+                List.of(visibleApplications)
+        );
+        Map<Long, Integer> applicationCountByTodoItemId = resolveApplicationCountByTodoItemId(visibleApplications);
+        Map<Long, TodoItemApplication> myApplicationByTodoItemId = myVisibleApplications.stream()
+                .collect(Collectors.toMap(
+                        TodoItemApplication::getTodoItemId,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
 
         List<TodoSummaryResponse> myTodos = myItems.stream()
                 .filter(item -> !TERMINAL_STATUSES.contains(item.getStatusCode()))
                 .sorted(todoPriorityComparator())
-                .map(item -> toSummaryResponse(item, profileById, access, false))
+                .map(item -> toSummaryResponse(
+                        item,
+                        profileById,
+                        access,
+                        false,
+                        applicationCountByTodoItemId,
+                        myApplicationByTodoItemId
+                ))
                 .toList();
-        List<TodoSummaryResponse> claimableTodos = claimableItems.stream()
-                .map(item -> toSummaryResponse(item, profileById, access, false))
+        List<TodoSummaryResponse> prioritizedClaimableTodos = prioritizedClaimableItems.stream()
+                .map(item -> toSummaryResponse(
+                        item,
+                        profileById,
+                        access,
+                        false,
+                        applicationCountByTodoItemId,
+                        myApplicationByTodoItemId
+                ))
                 .toList();
         List<TodoSummaryResponse> recentCompletedTodos = recentCompletedItems.stream()
-                .map(item -> toSummaryResponse(item, profileById, access, false))
+                .map(item -> toSummaryResponse(
+                        item,
+                        profileById,
+                        access,
+                        false,
+                        applicationCountByTodoItemId,
+                        myApplicationByTodoItemId
+                ))
                 .toList();
 
         return new ClubTodoResponse(
@@ -126,10 +221,20 @@ public class ClubTodoService {
                 access.isAdmin(),
                 myTodos.size(),
                 (int) myItems.stream().filter(item -> STATUS_COMPLETED.equals(item.getStatusCode())).count(),
-                claimableTodos.size(),
+                (int) myAllApplications.stream()
+                        .filter(application -> {
+                            TodoItem item = appliedTodoById.get(application.getTodoItemId());
+                            return item != null
+                                    && ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode())
+                                    && STATUS_OPEN.equals(item.getStatusCode())
+                                    && item.getAssignedClubProfileId() == null;
+                        })
+                        .filter(application -> APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus()))
+                        .count(),
+                prioritizedClaimableTodos.size(),
                 (int) myItems.stream().filter(this::isOverdue).count(),
                 myTodos,
-                claimableTodos,
+                prioritizedClaimableTodos,
                 recentCompletedTodos
         );
     }
@@ -137,41 +242,89 @@ public class ClubTodoService {
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     @RecordClubActivity(subject = "할 일")
     public TodoActionResponse claimTodo(Long clubId, Long todoItemId, String userKey) {
+        applyTodo(clubId, todoItemId, userKey, null);
+        TodoItem current = requireTodoItem(clubId, todoItemId);
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(current)), List.of());
+        return toActionResponse(current, profileById);
+    }
+
+    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "할 일")
+    public TodoItemApplicationResponse applyTodo(
+            Long clubId,
+            Long todoItemId,
+            String userKey,
+            CreateTodoApplicationRequest request
+    ) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireTodoFeature(clubId);
+        TodoItem current = requireTodoItem(clubId, todoItemId);
+        validateOpenSupportApplicationAvailable(current);
+
+        String applicationNote = trimToNull(request == null ? null : request.applicationNote());
+        TodoItemApplication existing = todoItemApplicationRepository
+                .findByTodoItemIdAndClubProfileId(todoItemId, access.clubProfile().getClubProfileId())
+                .orElse(null);
+
+        TodoItemApplication saved;
+        if (existing == null) {
+            saved = todoItemApplicationRepository.save(TodoItemApplication.builder()
+                    .todoItemId(todoItemId)
+                    .clubProfileId(access.clubProfile().getClubProfileId())
+                    .applicationStatus(APPLICATION_STATUS_APPLIED)
+                    .applicationNote(applicationNote)
+                    .reviewNote(null)
+                    .reviewedByClubProfileId(null)
+                    .reviewedAt(null)
+                    .build());
+        } else {
+            if (APPLICATION_STATUS_APPLIED.equals(existing.getApplicationStatus())) {
+                throw new SemoException.ConflictException("이미 신청한 업무입니다.");
+            }
+            if (APPLICATION_STATUS_SELECTED.equals(existing.getApplicationStatus())) {
+                throw new SemoException.ConflictException("이미 선정된 업무입니다.");
+            }
+            existing.markApplied(applicationNote);
+            saved = todoItemApplicationRepository.save(existing);
+        }
+
+        ClubActivityContextHolder.setDetails(
+                "'" + current.getTitle() + "' 업무에 신청했습니다.",
+                "'" + current.getTitle() + "' 업무 신청에 실패했습니다."
+        );
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(current)), List.of(List.of(saved)));
+        return toApplicationResponse(saved, profileById, access.clubProfile().getClubProfileId(), false);
+    }
+
+    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "할 일")
+    public TodoItemApplicationResponse cancelMyTodoApplication(Long clubId, Long todoItemId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireTodoFeature(clubId);
         TodoItem current = requireTodoItem(clubId, todoItemId);
         if (!ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())) {
-            throw new SemoException.ValidationException("지원 가능한 업무만 맡을 수 있습니다.");
+            throw new SemoException.ValidationException("신청형 업무만 취소할 수 있습니다.");
         }
-        if (current.getAssignedClubProfileId() != null) {
-            throw new SemoException.ConflictException("이미 다른 멤버가 맡은 업무입니다.");
-        }
-        if (!STATUS_OPEN.equals(current.getStatusCode())) {
-            throw new SemoException.ValidationException("현재 맡을 수 없는 상태의 업무입니다.");
+        TodoItemApplication application = todoItemApplicationRepository
+                .findByTodoItemIdAndClubProfileId(todoItemId, access.clubProfile().getClubProfileId())
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException(
+                        "TodoItemApplication",
+                        "todoItemId",
+                        todoItemId
+                ));
+        if (!APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus())) {
+            throw new SemoException.ValidationException("현재 취소할 수 없는 신청 상태입니다.");
         }
 
-        TodoItem updated = todoItemRepository.save(TodoItem.builder()
-                .todoItemId(current.getTodoItemId())
-                .clubId(current.getClubId())
-                .createdByClubProfileId(current.getCreatedByClubProfileId())
-                .assignedClubProfileId(access.clubProfile().getClubProfileId())
-                .assignedByClubProfileId(access.clubProfile().getClubProfileId())
-                .todoType(current.getTodoType())
-                .assignmentMode(current.getAssignmentMode())
-                .statusCode(STATUS_IN_PROGRESS)
-                .title(current.getTitle())
-                .description(current.getDescription())
-                .dueAt(current.getDueAt())
-                .completedByClubProfileId(null)
-                .completedAt(null)
-                .build());
+        application.withdraw();
+        TodoItemApplication saved = todoItemApplicationRepository.save(application);
 
         ClubActivityContextHolder.setDetails(
-                "'" + current.getTitle() + "' 업무를 맡았습니다.",
-                "'" + current.getTitle() + "' 업무를 맡지 못했습니다."
+                "'" + current.getTitle() + "' 업무 신청을 취소했습니다.",
+                "'" + current.getTitle() + "' 업무 신청 취소에 실패했습니다."
         );
-        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(updated)));
-        return toActionResponse(updated, profileById);
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(current)), List.of(List.of(saved)));
+        return toApplicationResponse(saved, profileById, access.clubProfile().getClubProfileId(), false);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -188,7 +341,7 @@ public class ClubTodoService {
         }
         if (ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())
                 && !STATUS_IN_PROGRESS.equals(current.getStatusCode())) {
-            throw new SemoException.ForbiddenException("지원 업무는 먼저 맡은 뒤 완료 처리해야 합니다.");
+            throw new SemoException.ForbiddenException("신청형 업무는 운영진 선정 이후에만 완료 처리할 수 있습니다.");
         }
 
         TodoItem updated = saveWithStatus(current, STATUS_COMPLETED, access.clubProfile().getClubProfileId());
@@ -196,7 +349,7 @@ public class ClubTodoService {
                 "'" + current.getTitle() + "' 업무를 완료했습니다.",
                 "'" + current.getTitle() + "' 업무를 완료하지 못했습니다."
         );
-        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(updated)));
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(updated)), List.of());
         return toActionResponse(updated, profileById);
     }
 
@@ -205,6 +358,7 @@ public class ClubTodoService {
             String userKey,
             String statusFilter,
             String assignmentFilter,
+            String applicationFilter,
             Long cursorTodoItemId,
             Integer size
     ) {
@@ -213,6 +367,10 @@ public class ClubTodoService {
         requireAdminTodoView(access);
 
         List<TodoItem> allItems = todoItemRepository.findByClubIdOrderByTodoItemIdDesc(clubId);
+        List<Long> allTodoIds = allItems.stream().map(TodoItem::getTodoItemId).toList();
+        List<TodoItemApplication> allApplications = allTodoIds.isEmpty()
+                ? List.of()
+                : todoItemApplicationRepository.findByTodoItemIdIn(allTodoIds);
         List<ClubAccessResolver.ClubMemberSnapshot> activeMembers = clubAccessResolver.getActiveMemberSnapshots(clubId);
         List<TodoMemberOptionResponse> availableMembers = activeMembers.stream()
                 .map(snapshot -> new TodoMemberOptionResponse(
@@ -225,11 +383,13 @@ public class ClubTodoService {
         int pageSize = normalizeAdminPageSize(size);
         String normalizedStatusFilter = normalizeStatusFilter(statusFilter);
         String normalizedAssignmentFilter = normalizeAssignmentFilter(assignmentFilter);
+        String normalizedApplicationFilter = normalizeApplicationFilter(applicationFilter);
         LocalDateTime now = LocalDateTime.now();
         List<TodoItem> feed = todoItemRepository.findAdminFeed(
                 clubId,
                 normalizedStatusFilter,
                 normalizedAssignmentFilter,
+                normalizedApplicationFilter,
                 cursorTodoItemId,
                 now,
                 TERMINAL_STATUSES,
@@ -238,7 +398,8 @@ public class ClubTodoService {
         boolean hasNext = feed.size() > pageSize;
         List<TodoItem> pageItems = hasNext ? feed.subList(0, pageSize) : feed;
         TodoItem lastItem = pageItems.isEmpty() ? null : pageItems.get(pageItems.size() - 1);
-        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(allItems, pageItems));
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(allItems, pageItems), List.of(allApplications));
+        Map<Long, Integer> applicationCountByTodoItemId = resolveApplicationCountByTodoItemId(allApplications);
 
         return new ClubAdminTodoResponse(
                 access.club().getClubId(),
@@ -247,18 +408,133 @@ public class ClubTodoService {
                 clubTodoPermissionService.canCreateTodo(access),
                 clubTodoPermissionService.canAssignTodo(access),
                 clubTodoPermissionService.canManageStatus(access),
+                clubTodoPermissionService.canDeleteTodo(access),
                 activeMembers.size(),
                 (int) allItems.stream().filter(item -> STATUS_OPEN.equals(item.getStatusCode())).count(),
                 (int) allItems.stream().filter(item -> STATUS_IN_PROGRESS.equals(item.getStatusCode())).count(),
                 (int) allItems.stream().filter(item -> STATUS_COMPLETED.equals(item.getStatusCode())).count(),
+                (int) allApplications.stream()
+                        .filter(application -> APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus()))
+                        .count(),
                 (int) allItems.stream().filter(this::isOverdue).count(),
                 availableMembers,
                 pageItems.stream()
-                        .map(item -> toSummaryResponse(item, profileById, access, true))
+                        .map(item -> toSummaryResponse(
+                                item,
+                                profileById,
+                                access,
+                                true,
+                                applicationCountByTodoItemId,
+                                Map.of()
+                        ))
                         .toList(),
                 lastItem == null ? null : lastItem.getTodoItemId(),
                 hasNext
         );
+    }
+
+    public TodoItemApplicationsResponse getAdminTodoApplications(Long clubId, Long todoItemId, String userKey) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireTodoFeature(clubId);
+        requireAdminTodoView(access);
+
+        TodoItem todoItem = requireTodoItem(clubId, todoItemId);
+        List<TodoItemApplication> applications = todoItemApplicationRepository
+                .findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId);
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(todoItem)), List.of(applications));
+        boolean canReview = clubTodoPermissionService.canAssignTodo(access)
+                && ASSIGNMENT_MODE_OPEN_SUPPORT.equals(todoItem.getAssignmentMode());
+
+        return new TodoItemApplicationsResponse(
+                todoItem.getTodoItemId(),
+                todoItem.getTitle(),
+                todoItem.getAssignmentMode(),
+                toAssignmentModeLabel(todoItem.getAssignmentMode()),
+                todoItem.getStatusCode(),
+                toStatusLabel(todoItem.getStatusCode()),
+                todoItem.getAssignedClubProfileId(),
+                resolveDisplayName(profileById, todoItem.getAssignedClubProfileId()),
+                applications.size(),
+                (int) applications.stream()
+                        .filter(application -> APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus()))
+                        .count(),
+                canReview,
+                applications.stream()
+                        .map(application -> toApplicationResponse(
+                                application,
+                                profileById,
+                                access.clubProfile().getClubProfileId(),
+                                canReview
+                        ))
+                        .toList()
+        );
+    }
+
+    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "할 일관리")
+    public TodoItemApplicationResponse reviewTodoApplication(
+            Long clubId,
+            Long todoItemId,
+            Long todoItemApplicationId,
+            String userKey,
+            ReviewTodoItemApplicationRequest request
+    ) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireTodoFeature(clubId);
+        if (!clubTodoPermissionService.canAssignTodo(access)) {
+            throw new SemoException.ForbiddenException("업무 신청을 검토할 권한이 없습니다.");
+        }
+
+        TodoItem todoItem = requireTodoItem(clubId, todoItemId);
+        if (!ASSIGNMENT_MODE_OPEN_SUPPORT.equals(todoItem.getAssignmentMode())) {
+            throw new SemoException.ValidationException("신청형 업무만 신청을 검토할 수 있습니다.");
+        }
+
+        TodoItemApplication application = requireTodoItemApplication(todoItemId, todoItemApplicationId);
+        if (!APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus())) {
+            throw new SemoException.ValidationException("대기 중인 신청만 검토할 수 있습니다.");
+        }
+
+        String nextStatus = normalizeApplicationReviewStatus(request.applicationStatus());
+        String reviewNote = trimToNull(request.reviewNote());
+        LocalDateTime reviewedAt = LocalDateTime.now();
+
+        if (APPLICATION_STATUS_SELECTED.equals(nextStatus)) {
+            if (todoItem.getAssignedClubProfileId() != null || !STATUS_OPEN.equals(todoItem.getStatusCode())) {
+                throw new SemoException.ValidationException("현재 선정할 수 없는 업무 상태입니다.");
+            }
+            todoItemRepository.save(TodoItem.builder()
+                    .todoItemId(todoItem.getTodoItemId())
+                    .clubId(todoItem.getClubId())
+                    .createdByClubProfileId(todoItem.getCreatedByClubProfileId())
+                    .assignedClubProfileId(application.getClubProfileId())
+                    .assignedByClubProfileId(access.clubProfile().getClubProfileId())
+                    .todoType(todoItem.getTodoType())
+                    .assignmentMode(todoItem.getAssignmentMode())
+                    .statusCode(STATUS_IN_PROGRESS)
+                    .title(todoItem.getTitle())
+                    .description(todoItem.getDescription())
+                    .dueAt(todoItem.getDueAt())
+                    .completedByClubProfileId(null)
+                    .completedAt(null)
+                    .build());
+            rejectOtherPendingApplications(
+                    todoItemId,
+                    todoItemApplicationId,
+                    access.clubProfile().getClubProfileId(),
+                    "다른 신청자를 선정했습니다."
+            );
+        }
+
+        application.review(nextStatus, reviewNote, access.clubProfile().getClubProfileId(), reviewedAt);
+        TodoItemApplication saved = todoItemApplicationRepository.save(application);
+
+        ClubActivityContextHolder.setDetails(
+                "'" + todoItem.getTitle() + "' 업무 신청을 처리했습니다.",
+                "'" + todoItem.getTitle() + "' 업무 신청 처리에 실패했습니다."
+        );
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(todoItem)), List.of(List.of(saved)));
+        return toApplicationResponse(saved, profileById, access.clubProfile().getClubProfileId(), true);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -306,8 +582,8 @@ public class ClubTodoService {
                 "'" + title + "' 할 일을 등록했습니다.",
                 "'" + title + "' 할 일을 등록하지 못했습니다."
         );
-        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(saved)));
-        return toSummaryResponse(saved, profileById, access, true);
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(saved)), List.of());
+        return toSummaryResponse(saved, profileById, access, true, Map.of(), Map.of());
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -376,12 +652,24 @@ public class ClubTodoService {
                 .completedAt(null)
                 .build());
 
+        if (ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())
+                && ASSIGNMENT_MODE_DIRECT_ASSIGN.equals(assignmentMode)) {
+            rejectActiveApplications(
+                    current.getTodoItemId(),
+                    access.clubProfile().getClubProfileId(),
+                    "직접 배정으로 전환되었습니다."
+            );
+        }
+
         ClubActivityContextHolder.setDetails(
                 "'" + title + "' 할 일을 수정했습니다.",
                 "'" + title + "' 할 일을 수정하지 못했습니다."
         );
-        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(updated)));
-        return toSummaryResponse(updated, profileById, access, true);
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(updated)), List.of());
+        Map<Long, Integer> applicationCountByTodoItemId = resolveApplicationCountByTodoItemId(
+                todoItemApplicationRepository.findByTodoItemIdIn(List.of(updated.getTodoItemId()))
+        );
+        return toSummaryResponse(updated, profileById, access, true, applicationCountByTodoItemId, Map.of());
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -402,13 +690,60 @@ public class ClubTodoService {
         String nextStatus = normalizeStatusCode(request.statusCode());
         validateStatusTransition(current, nextStatus);
 
-        TodoItem updated = saveWithStatus(current, nextStatus, access.clubProfile().getClubProfileId());
-        ClubActivityContextHolder.setDetails(
-                "'" + current.getTitle() + "' 상태를 " + toStatusLabel(nextStatus) + "(으)로 변경했습니다.",
-                "'" + current.getTitle() + "' 상태를 변경하지 못했습니다."
-        );
-        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(updated)));
+        TodoItem updated;
+        if (STATUS_REOPEN.equals(nextStatus)) {
+            updated = saveAsOpen(current);
+            if (ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())) {
+                rejectSelectedApplications(
+                        current.getTodoItemId(),
+                        access.clubProfile().getClubProfileId(),
+                        "업무가 다시 모집 상태로 돌아갔습니다."
+                );
+            }
+            ClubActivityContextHolder.setDetails(
+                    "'" + current.getTitle() + "' 업무를 다시 열었습니다.",
+                    "'" + current.getTitle() + "' 업무를 다시 열지 못했습니다."
+            );
+        } else if (STATUS_OPEN.equals(nextStatus)) {
+            updated = saveAsOpen(current);
+            if (ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())) {
+                rejectSelectedApplications(
+                        current.getTodoItemId(),
+                        access.clubProfile().getClubProfileId(),
+                        "업무가 다시 모집 상태로 돌아갔습니다."
+                );
+            }
+            ClubActivityContextHolder.setDetails(
+                    "'" + current.getTitle() + "' 업무를 열림 상태로 되돌렸습니다.",
+                    "'" + current.getTitle() + "' 업무를 열림 상태로 되돌리지 못했습니다."
+            );
+        } else {
+            updated = saveWithStatus(current, nextStatus, access.clubProfile().getClubProfileId());
+            ClubActivityContextHolder.setDetails(
+                    "'" + current.getTitle() + "' 상태를 " + toStatusLabel(nextStatus) + "(으)로 변경했습니다.",
+                    "'" + current.getTitle() + "' 상태를 변경하지 못했습니다."
+            );
+        }
+        Map<Long, ClubProfile> profileById = resolveClubProfiles(List.of(List.of(updated)), List.of());
         return toActionResponse(updated, profileById);
+    }
+
+    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "할 일관리")
+    public void deleteTodo(Long clubId, Long todoItemId, String userKey) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        requireTodoFeature(clubId);
+        if (!clubTodoPermissionService.canDeleteTodo(access)) {
+            throw new SemoException.ForbiddenException("할 일을 삭제할 권한이 없습니다.");
+        }
+
+        TodoItem current = requireTodoItem(clubId, todoItemId);
+        ClubActivityContextHolder.setDetails(
+                "'" + current.getTitle() + "' 할 일을 삭제했습니다.",
+                "'" + current.getTitle() + "' 할 일 삭제에 실패했습니다."
+        );
+        todoItemApplicationRepository.deleteByTodoItemId(todoItemId);
+        todoItemRepository.delete(current);
     }
 
     private void requireTodoFeature(Long clubId) {
@@ -426,6 +761,85 @@ public class ClubTodoService {
     private TodoItem requireTodoItem(Long clubId, Long todoItemId) {
         return todoItemRepository.findByTodoItemIdAndClubId(todoItemId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TodoItem", "todoItemId", todoItemId));
+    }
+
+    private TodoItemApplication requireTodoItemApplication(Long todoItemId, Long todoItemApplicationId) {
+        return todoItemApplicationRepository.findById(todoItemApplicationId)
+                .filter(application -> Objects.equals(application.getTodoItemId(), todoItemId))
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException(
+                        "TodoItemApplication",
+                        "todoItemApplicationId",
+                        todoItemApplicationId
+                ));
+    }
+
+    private void validateOpenSupportApplicationAvailable(TodoItem current) {
+        if (!ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())) {
+            throw new SemoException.ValidationException("신청 가능한 업무만 지원할 수 있습니다.");
+        }
+        if (current.getAssignedClubProfileId() != null) {
+            throw new SemoException.ConflictException("이미 다른 멤버가 선정된 업무입니다.");
+        }
+        if (!STATUS_OPEN.equals(current.getStatusCode())) {
+            throw new SemoException.ValidationException("현재 신청할 수 없는 상태의 업무입니다.");
+        }
+    }
+
+    private void rejectOtherPendingApplications(
+            Long todoItemId,
+            Long selectedApplicationId,
+            Long actorClubProfileId,
+            String reviewNote
+    ) {
+        List<TodoItemApplication> pendingApplications = todoItemApplicationRepository
+                .findByTodoItemIdAndApplicationStatusOrderByCreateDateAscTodoItemApplicationIdAsc(
+                        todoItemId,
+                        APPLICATION_STATUS_APPLIED
+                );
+        pendingApplications.stream()
+                .filter(application -> !Objects.equals(application.getTodoItemApplicationId(), selectedApplicationId))
+                .forEach(application -> application.review(
+                        APPLICATION_STATUS_REJECTED,
+                        reviewNote,
+                        actorClubProfileId,
+                        LocalDateTime.now()
+                ));
+        if (!pendingApplications.isEmpty()) {
+            todoItemApplicationRepository.saveAll(pendingApplications);
+        }
+    }
+
+    private void rejectActiveApplications(Long todoItemId, Long actorClubProfileId, String reviewNote) {
+        List<TodoItemApplication> applications = todoItemApplicationRepository
+                .findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId);
+        applications.stream()
+                .filter(application -> APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus())
+                        || APPLICATION_STATUS_SELECTED.equals(application.getApplicationStatus()))
+                .forEach(application -> application.review(
+                        APPLICATION_STATUS_REJECTED,
+                        reviewNote,
+                        actorClubProfileId,
+                        LocalDateTime.now()
+                ));
+        if (!applications.isEmpty()) {
+            todoItemApplicationRepository.saveAll(applications);
+        }
+    }
+
+    private void rejectSelectedApplications(Long todoItemId, Long actorClubProfileId, String reviewNote) {
+        List<TodoItemApplication> applications = todoItemApplicationRepository
+                .findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId);
+        applications.stream()
+                .filter(application -> APPLICATION_STATUS_SELECTED.equals(application.getApplicationStatus()))
+                .forEach(application -> application.review(
+                        APPLICATION_STATUS_REJECTED,
+                        reviewNote,
+                        actorClubProfileId,
+                        LocalDateTime.now()
+                ));
+        if (!applications.isEmpty()) {
+            todoItemApplicationRepository.saveAll(applications);
+        }
     }
 
     private Map<Long, ClubAccessResolver.ClubMemberSnapshot> resolveActiveMembersByProfileId(Long clubId) {
@@ -454,7 +868,7 @@ public class ClubTodoService {
         }
 
         if (requestedAssignedClubProfileId != null) {
-            throw new SemoException.ValidationException("지원 가능 업무는 담당자를 비워둬야 합니다.");
+            throw new SemoException.ValidationException("신청형 업무는 담당자를 비워둬야 합니다.");
         }
         return null;
     }
@@ -517,7 +931,7 @@ public class ClubTodoService {
             throw new SemoException.ValidationException("상태 코드는 필수입니다.");
         }
         normalized = normalized.toUpperCase(Locale.ROOT);
-        if (!DIRECT_FILTER_STATUSES.contains(normalized)) {
+        if (!ALLOWED_STATUS_ACTIONS.contains(normalized)) {
             throw new SemoException.ValidationException("지원하지 않는 상태 코드입니다.");
         }
         return normalized;
@@ -550,6 +964,30 @@ public class ClubTodoService {
         return normalized;
     }
 
+    private String normalizeApplicationFilter(String applicationFilter) {
+        String normalized = trimToNull(applicationFilter);
+        if (normalized == null) {
+            return "ALL";
+        }
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        if (!ALLOWED_APPLICATION_FILTERS.contains(normalized)) {
+            throw new SemoException.ValidationException("지원하지 않는 신청 필터입니다.");
+        }
+        return normalized;
+    }
+
+    private String normalizeApplicationReviewStatus(String applicationStatus) {
+        String normalized = trimToNull(applicationStatus);
+        if (normalized == null) {
+            throw new SemoException.ValidationException("신청 상태는 필수입니다.");
+        }
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        if (!ALLOWED_APPLICATION_REVIEW_STATUSES.contains(normalized)) {
+            throw new SemoException.ValidationException("신청 상태는 SELECTED 또는 REJECTED만 가능합니다.");
+        }
+        return normalized;
+    }
+
     private int normalizeAdminPageSize(Integer size) {
         if (size == null) {
             return DEFAULT_ADMIN_PAGE_SIZE;
@@ -573,7 +1011,16 @@ public class ClubTodoService {
     }
 
     private void validateStatusTransition(TodoItem current, String nextStatus) {
+        if (STATUS_REOPEN.equals(nextStatus)) {
+            if (!TERMINAL_STATUSES.contains(current.getStatusCode())) {
+                throw new SemoException.ValidationException("다시 열기는 완료되거나 취소된 업무에만 사용할 수 있습니다.");
+            }
+            return;
+        }
         if (STATUS_OPEN.equals(nextStatus)) {
+            if (TERMINAL_STATUSES.contains(current.getStatusCode())) {
+                throw new SemoException.ValidationException("종료된 업무는 다시 열기로만 복구할 수 있습니다.");
+            }
             return;
         }
         if (STATUS_IN_PROGRESS.equals(nextStatus)) {
@@ -623,15 +1070,46 @@ public class ClubTodoService {
                 .build());
     }
 
-    private Map<Long, ClubProfile> resolveClubProfiles(List<List<TodoItem>> groups) {
-        List<Long> ids = groups.stream()
-                .filter(Objects::nonNull)
-                .flatMap(Collection::stream)
-                .flatMap(item -> Stream.of(
-                        item.getCreatedByClubProfileId(),
-                        item.getAssignedClubProfileId(),
-                        item.getCompletedByClubProfileId()
-                ))
+    private TodoItem saveAsOpen(TodoItem current) {
+        boolean keepAssignment = ASSIGNMENT_MODE_DIRECT_ASSIGN.equals(current.getAssignmentMode());
+        return todoItemRepository.save(TodoItem.builder()
+                .todoItemId(current.getTodoItemId())
+                .clubId(current.getClubId())
+                .createdByClubProfileId(current.getCreatedByClubProfileId())
+                .assignedClubProfileId(keepAssignment ? current.getAssignedClubProfileId() : null)
+                .assignedByClubProfileId(keepAssignment ? current.getAssignedByClubProfileId() : null)
+                .todoType(current.getTodoType())
+                .assignmentMode(current.getAssignmentMode())
+                .statusCode(STATUS_OPEN)
+                .title(current.getTitle())
+                .description(current.getDescription())
+                .dueAt(current.getDueAt())
+                .completedByClubProfileId(null)
+                .completedAt(null)
+                .build());
+    }
+
+    private Map<Long, ClubProfile> resolveClubProfiles(
+            List<List<TodoItem>> itemGroups,
+            List<List<TodoItemApplication>> applicationGroups
+    ) {
+        List<Long> ids = Stream.concat(
+                        itemGroups.stream()
+                                .filter(Objects::nonNull)
+                                .flatMap(Collection::stream)
+                                .flatMap(item -> Stream.of(
+                                        item.getCreatedByClubProfileId(),
+                                        item.getAssignedClubProfileId(),
+                                        item.getCompletedByClubProfileId()
+                                )),
+                        applicationGroups.stream()
+                                .filter(Objects::nonNull)
+                                .flatMap(Collection::stream)
+                                .flatMap(application -> Stream.of(
+                                        application.getClubProfileId(),
+                                        application.getReviewedByClubProfileId()
+                                ))
+                )
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
@@ -640,6 +1118,17 @@ public class ClubTodoService {
         }
         return clubProfileRepository.findAllById(ids).stream()
                 .collect(Collectors.toMap(ClubProfile::getClubProfileId, Function.identity()));
+    }
+
+    private Map<Long, Integer> resolveApplicationCountByTodoItemId(List<TodoItemApplication> applications) {
+        return applications.stream()
+                .filter(application -> !APPLICATION_STATUS_WITHDRAWN.equals(application.getApplicationStatus()))
+                .collect(Collectors.toMap(
+                        TodoItemApplication::getTodoItemId,
+                        application -> 1,
+                        Integer::sum,
+                        LinkedHashMap::new
+                ));
     }
 
     private Comparator<TodoItem> todoPriorityComparator() {
@@ -670,18 +1159,31 @@ public class ClubTodoService {
             TodoItem item,
             Map<Long, ClubProfile> profileById,
             ClubAccessResolver.ClubAccess access,
-            boolean adminView
+            boolean adminView,
+            Map<Long, Integer> applicationCountByTodoItemId,
+            Map<Long, TodoItemApplication> myApplicationByTodoItemId
     ) {
+        TodoItemApplication myApplication = myApplicationByTodoItemId.get(item.getTodoItemId());
+        String myApplicationStatus = myApplication == null ? null : myApplication.getApplicationStatus();
         boolean assignedToViewer = Objects.equals(item.getAssignedClubProfileId(), access.clubProfile().getClubProfileId());
-        boolean canClaim = ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode())
+        boolean canApply = ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode())
                 && item.getAssignedClubProfileId() == null
-                && STATUS_OPEN.equals(item.getStatusCode());
+                && STATUS_OPEN.equals(item.getStatusCode())
+                && (myApplication == null
+                    || APPLICATION_STATUS_REJECTED.equals(myApplicationStatus)
+                    || APPLICATION_STATUS_WITHDRAWN.equals(myApplicationStatus));
+        boolean canCancelApplication = ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode())
+                && STATUS_OPEN.equals(item.getStatusCode())
+                && APPLICATION_STATUS_APPLIED.equals(myApplicationStatus);
         boolean canComplete = assignedToViewer
                 && !TERMINAL_STATUSES.contains(item.getStatusCode())
                 && (!ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode())
                     || STATUS_IN_PROGRESS.equals(item.getStatusCode()));
         boolean canEdit = adminView && clubTodoPermissionService.canCreateTodo(access);
         boolean canManageStatus = adminView && clubTodoPermissionService.canManageStatus(access);
+        boolean canReviewApplications = adminView
+                && clubTodoPermissionService.canAssignTodo(access)
+                && ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode());
 
         return new TodoSummaryResponse(
                 item.getTodoItemId(),
@@ -702,10 +1204,17 @@ public class ClubTodoService {
                 resolveDisplayName(profileById, item.getCompletedByClubProfileId()),
                 formatDateTime(item.getCompletedAt()),
                 formatDateTimeLabel(item.getCompletedAt()),
-                canClaim,
+                false,
+                canApply,
+                canCancelApplication,
                 canComplete,
                 canEdit,
-                canManageStatus
+                canManageStatus,
+                canReviewApplications,
+                myApplication == null ? null : myApplication.getTodoItemApplicationId(),
+                myApplicationStatus,
+                toApplicationStatusLabel(myApplicationStatus),
+                applicationCountByTodoItemId.getOrDefault(item.getTodoItemId(), 0)
         );
     }
 
@@ -720,6 +1229,28 @@ public class ClubTodoService {
                 resolveDisplayName(profileById, item.getCompletedByClubProfileId()),
                 formatDateTime(item.getCompletedAt()),
                 formatDateTimeLabel(item.getCompletedAt())
+        );
+    }
+
+    private TodoItemApplicationResponse toApplicationResponse(
+            TodoItemApplication application,
+            Map<Long, ClubProfile> profileById,
+            Long viewerClubProfileId,
+            boolean canReview
+    ) {
+        return new TodoItemApplicationResponse(
+                application.getTodoItemApplicationId(),
+                application.getTodoItemId(),
+                application.getClubProfileId(),
+                resolveDisplayName(profileById, application.getClubProfileId()),
+                application.getApplicationStatus(),
+                toApplicationStatusLabel(application.getApplicationStatus()),
+                application.getApplicationNote(),
+                application.getReviewNote(),
+                formatDateTimeLabel(application.getCreateDate()),
+                formatDateTimeLabel(application.getReviewedAt()),
+                Objects.equals(application.getClubProfileId(), viewerClubProfileId),
+                canReview && APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus())
         );
     }
 
@@ -742,7 +1273,7 @@ public class ClubTodoService {
     private String toAssignmentModeLabel(String assignmentMode) {
         return switch (assignmentMode) {
             case ASSIGNMENT_MODE_DIRECT_ASSIGN -> "직접 배정";
-            case ASSIGNMENT_MODE_OPEN_SUPPORT -> "지원 가능";
+            case ASSIGNMENT_MODE_OPEN_SUPPORT -> "신청 모집";
             default -> assignmentMode;
         };
     }
@@ -754,6 +1285,19 @@ public class ClubTodoService {
             case STATUS_COMPLETED -> "완료";
             case STATUS_CANCELED -> "취소";
             default -> statusCode;
+        };
+    }
+
+    private String toApplicationStatusLabel(String applicationStatus) {
+        if (applicationStatus == null) {
+            return null;
+        }
+        return switch (applicationStatus) {
+            case APPLICATION_STATUS_APPLIED -> "신청 대기";
+            case APPLICATION_STATUS_SELECTED -> "선정";
+            case APPLICATION_STATUS_REJECTED -> "반려";
+            case APPLICATION_STATUS_WITHDRAWN -> "취소";
+            default -> applicationStatus;
         };
     }
 

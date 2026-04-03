@@ -48,6 +48,13 @@ public class ClubTodoPermissionService {
         return hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_TODO_MANAGE_STATUS);
     }
 
+    public boolean canDeleteTodo(ClubAccessResolver.ClubAccess access) {
+        if (access.isAdmin()) {
+            return true;
+        }
+        return hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_TODO_DELETE_ANY);
+    }
+
     private boolean hasRolePermission(ClubAccessResolver.ClubAccess access, String permissionKey) {
         return clubPositionPermissionEvaluator.isRoleManagementEnabled(access.club().getClubId())
                 && clubPositionPermissionEvaluator.hasPermission(access, permissionKey);
