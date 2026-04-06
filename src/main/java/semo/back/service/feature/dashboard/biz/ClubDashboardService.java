@@ -349,7 +349,7 @@ public class ClubDashboardService {
             case "MEMBER_DIRECTORY_HIGHLIGHT" -> "/clubs/%d/more/members".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
             case "ATTENDANCE_STATUS" -> "/clubs/%d/more/attendance".formatted(clubId);
-            case "DUES_STATUS" -> "/clubs/%d/more/dues".formatted(clubId);
+            case "FINANCE_STATUS" -> "/clubs/%d/more/finance".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
     }
@@ -364,7 +364,7 @@ public class ClubDashboardService {
             case "MEMBER_DIRECTORY_HIGHLIGHT" -> "/clubs/%d/admin/more/members".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
             case "ATTENDANCE_STATUS" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
-            case "DUES_STATUS" -> "/clubs/%d/admin/more/dues".formatted(clubId);
+            case "FINANCE_STATUS" -> "/clubs/%d/admin/more/finance".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
     }

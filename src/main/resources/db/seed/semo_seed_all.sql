@@ -211,9 +211,9 @@ INSERT INTO feature_catalog (
     update_date
 )
 SELECT
-    'DUES',
-    '회비관리',
-    '커스텀 회비 항목을 발행하고 납부 상태를 운영합니다.',
+    'FINANCE',
+    '재정관리',
+    '커스텀 재정 항목을 발행하고 멤버별 납부 상태를 운영합니다.',
     'payments',
     'USER_AND_ADMIN',
     1,
@@ -224,7 +224,7 @@ FROM dual
 WHERE NOT EXISTS (
     SELECT 1
     FROM feature_catalog
-    WHERE feature_key = 'DUES'
+    WHERE feature_key = 'FINANCE'
 );
 
 INSERT INTO feature_catalog (
@@ -613,8 +613,8 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'DUES_VIEW', 'DUES', '회비 조회', '회비 운영 화면과 청구 현황을 조회합니다.', 'CLUB', 1, 10, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'DUES_VIEW');
+SELECT 'FINANCE_VIEW', 'FINANCE', '재정 조회', '재정 운영 화면과 납부 현황을 조회합니다.', 'CLUB', 1, 10, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_VIEW');
 
 INSERT INTO feature_permission_catalog (
     permission_key,
@@ -627,8 +627,8 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'DUES_ISSUE', 'DUES', '회비 발행', '회비 항목을 생성하고 대상 멤버에게 청구합니다.', 'CLUB', 1, 20, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'DUES_ISSUE');
+SELECT 'FINANCE_ISSUE', 'FINANCE', '재정 항목 발행', '재정 항목을 생성하고 대상 멤버에게 발행합니다.', 'CLUB', 1, 20, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_ISSUE');
 
 INSERT INTO feature_permission_catalog (
     permission_key,
@@ -641,8 +641,8 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'DUES_MARK_PAID', 'DUES', '회비 납부 처리', '회비를 납부 완료 상태로 변경합니다.', 'CLUB', 1, 30, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'DUES_MARK_PAID');
+SELECT 'FINANCE_MARK_PAID', 'FINANCE', '재정 납부 처리', '재정 항목을 납부 완료 상태로 변경합니다.', 'CLUB', 1, 30, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_MARK_PAID');
 
 INSERT INTO feature_permission_catalog (
     permission_key,
@@ -655,8 +655,8 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'DUES_MARK_WAIVED', 'DUES', '회비 면제 처리', '회비를 면제 상태로 변경합니다.', 'CLUB', 1, 40, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'DUES_MARK_WAIVED');
+SELECT 'FINANCE_MARK_WAIVED', 'FINANCE', '재정 면제 처리', '재정 항목을 면제 상태로 변경합니다.', 'CLUB', 1, 40, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_MARK_WAIVED');
 
 INSERT INTO feature_permission_catalog (
     permission_key,
@@ -911,8 +911,8 @@ INSERT INTO dashboard_widget_catalog (
     create_date,
     update_date
 )
-SELECT 'DUES_STATUS', 'Dues Status', 'My pending dues and latest payment status.', 'payments', 'DUES', 'USER_HOME', 1, 1, 42, 1, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'DUES_STATUS');
+SELECT 'FINANCE_STATUS', 'Finance Status', 'My pending finance items and latest payment status.', 'payments', 'FINANCE', 'USER_HOME', 1, 1, 42, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'FINANCE_STATUS');
 
 INSERT INTO dashboard_widget_catalog (
     widget_key,

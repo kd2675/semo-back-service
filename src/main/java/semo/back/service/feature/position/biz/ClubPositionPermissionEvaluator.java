@@ -38,10 +38,10 @@ public class ClubPositionPermissionEvaluator {
     public static final String PERMISSION_BRACKET_UPDATE_SELF = "BRACKET_UPDATE_SELF";
     public static final String PERMISSION_BRACKET_REVIEW = "BRACKET_REVIEW";
     public static final String PERMISSION_BRACKET_DELETE_ANY = "BRACKET_DELETE_ANY";
-    public static final String PERMISSION_DUES_VIEW = "DUES_VIEW";
-    public static final String PERMISSION_DUES_ISSUE = "DUES_ISSUE";
-    public static final String PERMISSION_DUES_MARK_PAID = "DUES_MARK_PAID";
-    public static final String PERMISSION_DUES_MARK_WAIVED = "DUES_MARK_WAIVED";
+    public static final String PERMISSION_FINANCE_VIEW = "FINANCE_VIEW";
+    public static final String PERMISSION_FINANCE_ISSUE = "FINANCE_ISSUE";
+    public static final String PERMISSION_FINANCE_MARK_PAID = "FINANCE_MARK_PAID";
+    public static final String PERMISSION_FINANCE_MARK_WAIVED = "FINANCE_MARK_WAIVED";
     public static final String PERMISSION_TODO_VIEW = "TODO_VIEW";
     public static final String PERMISSION_TODO_CREATE = "TODO_CREATE";
     public static final String PERMISSION_TODO_ASSIGN = "TODO_ASSIGN";
