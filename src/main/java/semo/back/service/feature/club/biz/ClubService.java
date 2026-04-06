@@ -28,12 +28,14 @@ import semo.back.service.feature.club.vo.ClubBoardResponse;
 import semo.back.service.feature.club.vo.ClubProfileDetailResponse;
 import semo.back.service.feature.club.vo.ClubProfileRecordResponse;
 import semo.back.service.feature.club.vo.ClubProfileResponse;
+import semo.back.service.feature.club.vo.ClubRegionScope;
 import semo.back.service.feature.club.vo.ClubScheduleDayEventsResponse;
 import semo.back.service.feature.club.vo.ClubScheduleEventResponse;
 import semo.back.service.feature.club.vo.ClubScheduleMonthResponse;
 import semo.back.service.feature.club.vo.ClubScheduleResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
+import semo.back.service.feature.club.vo.UpdateClubSettingsRequest;
 import semo.back.service.feature.club.vo.UpdateClubProfileRequest;
 import semo.back.service.feature.profile.biz.ProfileUserService;
 import semo.back.service.feature.profile.vo.ProfileSummaryResponse;
@@ -80,6 +82,8 @@ public class ClubService {
     private final ProfileUserService profileUserService;
     private final ImageFinalizeClient imageFinalizeClient;
     private final ImageFileUrlResolver imageFileUrlResolver;
+    private final ClubRegionCatalog clubRegionCatalog;
+    private final ClubAccessResolver clubAccessResolver;
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ClubCreateResponse createClub(String userKey, String userName, CreateClubRequest request) {
@@ -88,6 +92,13 @@ public class ClubService {
         Long profileId = profileUserService.resolveProfileId(userKey, userName);
         LocalDateTime now = LocalDateTime.now();
         String finalImageFileName = finalizeImageFileName(request.fileName());
+        ClubRegionCatalog.ResolvedClubRegion resolvedRegion = clubRegionCatalog.resolve(
+                request.regionScope(),
+                request.regionDepth1Code(),
+                request.regionDepth2Code(),
+                request.regionDepth1Name(),
+                request.regionDepth2Name()
+        );
 
         Club club = clubRepository.save(Club.builder()
                 .name(request.name().trim())
@@ -96,6 +107,12 @@ public class ClubService {
                 .categoryKey(normalizeCategoryKey(request.categoryKey()))
                 .visibilityStatus(normalizeVisibilityStatus(request.visibilityStatus()))
                 .membershipPolicy(normalizeMembershipPolicy(request.membershipPolicy()))
+                .regionScope(resolvedRegion.regionScope())
+                .regionDepth1Code(resolvedRegion.regionDepth1Code())
+                .regionDepth2Code(resolvedRegion.regionDepth2Code())
+                .regionDepth1Name(resolvedRegion.regionDepth1Name())
+                .regionDepth2Name(resolvedRegion.regionDepth2Name())
+                .regionLabel(resolvedRegion.regionLabel())
                 .imageFileName(finalImageFileName)
                 .active(true)
                 .build());
@@ -119,6 +136,12 @@ public class ClubService {
                 club.getCategoryKey(),
                 club.getVisibilityStatus(),
                 club.getMembershipPolicy(),
+                resolvedRegion.regionScope(),
+                resolvedRegion.regionDepth1Code(),
+                resolvedRegion.regionDepth2Code(),
+                resolvedRegion.regionDepth1Name(),
+                resolvedRegion.regionDepth2Name(),
+                resolvedRegion.regionLabel(),
                 ROLE_OWNER,
                 finalImageFileName,
                 imageFileUrlResolver.resolveImageUrl(finalImageFileName),
@@ -152,6 +175,45 @@ public class ClubService {
         ClubMember membership = pair.membership();
         Club club = pair.club();
         return toMyClubSummary(membership, club);
+    }
+
+    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "모임관리")
+    public MyClubSummaryResponse updateClubSettings(Long clubId, String userKey, UpdateClubSettingsRequest request) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        Club current = access.club();
+        ClubRegionCatalog.ResolvedClubRegion resolvedRegion = clubRegionCatalog.resolve(
+                request == null ? null : request.regionScope(),
+                request == null ? null : request.regionDepth1Code(),
+                request == null ? null : request.regionDepth2Code(),
+                request == null ? null : request.regionDepth1Name(),
+                request == null ? null : request.regionDepth2Name()
+        );
+
+        ClubActivityContextHolder.setDetails(
+                "모임 기본 정보를 수정했습니다.",
+                "모임 기본 정보 수정에 실패했습니다."
+        );
+
+        clubRepository.save(Club.builder()
+                .clubId(current.getClubId())
+                .name(current.getName())
+                .summary(current.getSummary())
+                .description(current.getDescription())
+                .categoryKey(current.getCategoryKey())
+                .visibilityStatus(current.getVisibilityStatus())
+                .membershipPolicy(current.getMembershipPolicy())
+                .regionScope(resolvedRegion.regionScope())
+                .regionDepth1Code(resolvedRegion.regionDepth1Code())
+                .regionDepth2Code(resolvedRegion.regionDepth2Code())
+                .regionDepth1Name(resolvedRegion.regionDepth1Name())
+                .regionDepth2Name(resolvedRegion.regionDepth2Name())
+                .regionLabel(resolvedRegion.regionLabel())
+                .imageFileName(current.getImageFileName())
+                .active(current.isActive())
+                .build());
+
+        return getMyClub(clubId, userKey);
     }
 
     public ClubBoardResponse getClubBoard(Long clubId, String userKey) {
@@ -218,6 +280,7 @@ public class ClubService {
                 appProfile.tagline(),
                 null
         );
+        ClubRegionCatalog.ResolvedClubRegion resolvedRegion = resolveStoredRegion(pair.club());
 
         return new ClubProfileResponse(
                 pair.club().getClubId(),
@@ -238,6 +301,7 @@ public class ClubService {
                 ),
                 List.of(
                         new ClubProfileRecordResponse("club-name", "Club Name", pair.club().getName(), "현재 활동 중인 모임"),
+                        new ClubProfileRecordResponse("club-region", "Region", resolvedRegion.regionLabel(), "대표 활동 권역"),
                         new ClubProfileRecordResponse("club-status", "Membership", membership.getMembershipStatus(), "가입 상태"),
                         new ClubProfileRecordResponse("club-role", "Club Role", membership.getRoleCode(), "현재 클럽에서의 역할"),
                         new ClubProfileRecordResponse("club-joined", "Joined", formatJoinedLabel(membership.getJoinedAt()), "클럽 가입 시점")
@@ -392,17 +456,34 @@ public class ClubService {
         }
         String roleCode = membership.getRoleCode();
         String fileName = club.getImageFileName();
+        ClubRegionCatalog.ResolvedClubRegion resolvedRegion = resolveStoredRegion(club);
         return new MyClubSummaryResponse(
                 club.getClubId(),
                 club.getName(),
                 club.getSummary(),
                 club.getDescription(),
                 club.getCategoryKey(),
+                resolvedRegion.regionScope(),
+                resolvedRegion.regionDepth1Code(),
+                resolvedRegion.regionDepth2Code(),
+                resolvedRegion.regionDepth1Name(),
+                resolvedRegion.regionDepth2Name(),
+                resolvedRegion.regionLabel(),
                 roleCode,
                 isAdminRole(roleCode),
                 fileName,
                 imageFileUrlResolver.resolveImageUrl(fileName),
                 imageFileUrlResolver.resolveThumbnailUrl(fileName)
+        );
+    }
+
+    private ClubRegionCatalog.ResolvedClubRegion resolveStoredRegion(Club club) {
+        return clubRegionCatalog.resolve(
+                club.getRegionScope() == null ? ClubRegionScope.NATIONWIDE.name() : club.getRegionScope(),
+                club.getRegionDepth1Code(),
+                club.getRegionDepth2Code(),
+                club.getRegionDepth1Name(),
+                club.getRegionDepth2Name()
         );
     }
 

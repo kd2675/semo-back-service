@@ -22,6 +22,7 @@ import semo.back.service.feature.club.vo.ClubCreateResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
 import semo.back.service.feature.club.vo.ClubProfileResponse;
+import semo.back.service.feature.club.vo.UpdateClubSettingsRequest;
 import semo.back.service.feature.club.vo.UpdateClubProfileRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -96,6 +97,11 @@ class ClubServiceTest {
                         "TENNIS",
                         "PUBLIC",
                         "APPROVAL",
+                        "OFFLINE",
+                        "11",
+                        "11710",
+                        "서울특별시",
+                        "송파구",
                         null
                 )
         );
@@ -103,6 +109,12 @@ class ClubServiceTest {
         assertThat(response.clubId()).isNotNull();
         assertThat(response.roleCode()).isEqualTo("OWNER");
         assertThat(response.summary()).isEqualTo("서울대 테니스 멤버를 위한 클럽입니다.");
+        assertThat(response.regionScope()).isEqualTo("OFFLINE");
+        assertThat(response.regionDepth1Code()).isEqualTo("11");
+        assertThat(response.regionDepth2Code()).isEqualTo("11710");
+        assertThat(response.regionDepth1Name()).isEqualTo("서울특별시");
+        assertThat(response.regionDepth2Name()).isEqualTo("송파구");
+        assertThat(response.regionLabel()).isEqualTo("서울특별시 송파구");
         assertThat(response.fileName()).isNull();
         assertThat(profileUserRepository.count()).isOne();
         assertThat(clubRepository.count()).isOne();
@@ -241,5 +253,40 @@ class ClubServiceTest {
 
         assertThat(response.clubProfile().displayName()).isEqualTo("테니스왕");
         assertThat(clubProfileRepository.findAll().getFirst().getDisplayName()).isEqualTo("테니스왕");
+    }
+
+    @Test
+    void updateClubSettingsCanChangeRegion() {
+        ClubCreateResponse created = clubService.createClub(
+                "user-club-013",
+                "Region Owner",
+                new CreateClubRequest(
+                        "Semo Region Club",
+                        "지역 변경 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        "NATIONWIDE",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                )
+        );
+
+        MyClubSummaryResponse response = clubService.updateClubSettings(
+                created.clubId(),
+                "user-club-013",
+                new UpdateClubSettingsRequest("OFFLINE", "26", "26350", null, null)
+        );
+
+        assertThat(response.regionScope()).isEqualTo("OFFLINE");
+        assertThat(response.regionDepth1Code()).isEqualTo("26");
+        assertThat(response.regionDepth2Code()).isEqualTo("26350");
+        assertThat(response.regionDepth1Name()).isEqualTo("부산광역시");
+        assertThat(response.regionDepth2Name()).isEqualTo("해운대구");
+        assertThat(response.regionLabel()).isEqualTo("부산광역시 해운대구");
+        assertThat(clubRepository.findById(created.clubId()).orElseThrow().getRegionLabel()).isEqualTo("부산광역시 해운대구");
     }
 }

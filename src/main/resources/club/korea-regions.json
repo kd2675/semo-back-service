@@ -1,0 +1,333 @@
+[
+  {
+    "depth1Code": "51",
+    "depth1Name": "강원특별자치도",
+    "depth2List": [
+      { "depth2Code": "51150", "depth2Name": "강릉시" },
+      { "depth2Code": "51820", "depth2Name": "고성군" },
+      { "depth2Code": "51170", "depth2Name": "동해시" },
+      { "depth2Code": "51230", "depth2Name": "삼척시" },
+      { "depth2Code": "51210", "depth2Name": "속초시" },
+      { "depth2Code": "51800", "depth2Name": "양구군" },
+      { "depth2Code": "51830", "depth2Name": "양양군" },
+      { "depth2Code": "51750", "depth2Name": "영월군" },
+      { "depth2Code": "51130", "depth2Name": "원주시" },
+      { "depth2Code": "51810", "depth2Name": "인제군" },
+      { "depth2Code": "51770", "depth2Name": "정선군" },
+      { "depth2Code": "51780", "depth2Name": "철원군" },
+      { "depth2Code": "51110", "depth2Name": "춘천시" },
+      { "depth2Code": "51190", "depth2Name": "태백시" },
+      { "depth2Code": "51760", "depth2Name": "평창군" },
+      { "depth2Code": "51720", "depth2Name": "홍천군" },
+      { "depth2Code": "51790", "depth2Name": "화천군" },
+      { "depth2Code": "51730", "depth2Name": "횡성군" }
+    ]
+  },
+  {
+    "depth1Code": "41",
+    "depth1Name": "경기도",
+    "depth2List": [
+      { "depth2Code": "41820", "depth2Name": "가평군" },
+      { "depth2Code": "41280", "depth2Name": "고양시" },
+      { "depth2Code": "41290", "depth2Name": "과천시" },
+      { "depth2Code": "41210", "depth2Name": "광명시" },
+      { "depth2Code": "41610", "depth2Name": "광주시" },
+      { "depth2Code": "41310", "depth2Name": "구리시" },
+      { "depth2Code": "41410", "depth2Name": "군포시" },
+      { "depth2Code": "41570", "depth2Name": "김포시" },
+      { "depth2Code": "41360", "depth2Name": "남양주시" },
+      { "depth2Code": "41250", "depth2Name": "동두천시" },
+      { "depth2Code": "41190", "depth2Name": "부천시" },
+      { "depth2Code": "41130", "depth2Name": "성남시" },
+      { "depth2Code": "41110", "depth2Name": "수원시" },
+      { "depth2Code": "41390", "depth2Name": "시흥시" },
+      { "depth2Code": "41270", "depth2Name": "안산시" },
+      { "depth2Code": "41550", "depth2Name": "안성시" },
+      { "depth2Code": "41170", "depth2Name": "안양시" },
+      { "depth2Code": "41630", "depth2Name": "양주시" },
+      { "depth2Code": "41830", "depth2Name": "양평군" },
+      { "depth2Code": "41670", "depth2Name": "여주시" },
+      { "depth2Code": "41800", "depth2Name": "연천군" },
+      { "depth2Code": "41370", "depth2Name": "오산시" },
+      { "depth2Code": "41460", "depth2Name": "용인시" },
+      { "depth2Code": "41430", "depth2Name": "의왕시" },
+      { "depth2Code": "41150", "depth2Name": "의정부시" },
+      { "depth2Code": "41500", "depth2Name": "이천시" },
+      { "depth2Code": "41480", "depth2Name": "파주시" },
+      { "depth2Code": "41220", "depth2Name": "평택시" },
+      { "depth2Code": "41650", "depth2Name": "포천시" },
+      { "depth2Code": "41450", "depth2Name": "하남시" },
+      { "depth2Code": "41590", "depth2Name": "화성시" }
+    ]
+  },
+  {
+    "depth1Code": "48",
+    "depth1Name": "경상남도",
+    "depth2List": [
+      { "depth2Code": "48310", "depth2Name": "거제시" },
+      { "depth2Code": "48880", "depth2Name": "거창군" },
+      { "depth2Code": "48820", "depth2Name": "고성군" },
+      { "depth2Code": "48250", "depth2Name": "김해시" },
+      { "depth2Code": "48840", "depth2Name": "남해군" },
+      { "depth2Code": "48270", "depth2Name": "밀양시" },
+      { "depth2Code": "48240", "depth2Name": "사천시" },
+      { "depth2Code": "48860", "depth2Name": "산청군" },
+      { "depth2Code": "48330", "depth2Name": "양산시" },
+      { "depth2Code": "48720", "depth2Name": "의령군" },
+      { "depth2Code": "48170", "depth2Name": "진주시" },
+      { "depth2Code": "48740", "depth2Name": "창녕군" },
+      { "depth2Code": "48120", "depth2Name": "창원시" },
+      { "depth2Code": "48220", "depth2Name": "통영시" },
+      { "depth2Code": "48850", "depth2Name": "하동군" },
+      { "depth2Code": "48730", "depth2Name": "함안군" },
+      { "depth2Code": "48870", "depth2Name": "함양군" },
+      { "depth2Code": "48890", "depth2Name": "합천군" }
+    ]
+  },
+  {
+    "depth1Code": "47",
+    "depth1Name": "경상북도",
+    "depth2List": [
+      { "depth2Code": "47290", "depth2Name": "경산시" },
+      { "depth2Code": "47130", "depth2Name": "경주시" },
+      { "depth2Code": "47830", "depth2Name": "고령군" },
+      { "depth2Code": "47190", "depth2Name": "구미시" },
+      { "depth2Code": "47150", "depth2Name": "김천시" },
+      { "depth2Code": "47280", "depth2Name": "문경시" },
+      { "depth2Code": "47920", "depth2Name": "봉화군" },
+      { "depth2Code": "47250", "depth2Name": "상주시" },
+      { "depth2Code": "47840", "depth2Name": "성주군" },
+      { "depth2Code": "47170", "depth2Name": "안동시" },
+      { "depth2Code": "47770", "depth2Name": "영덕군" },
+      { "depth2Code": "47760", "depth2Name": "영양군" },
+      { "depth2Code": "47210", "depth2Name": "영주시" },
+      { "depth2Code": "47230", "depth2Name": "영천시" },
+      { "depth2Code": "47900", "depth2Name": "예천군" },
+      { "depth2Code": "47940", "depth2Name": "울릉군" },
+      { "depth2Code": "47930", "depth2Name": "울진군" },
+      { "depth2Code": "47730", "depth2Name": "의성군" },
+      { "depth2Code": "47820", "depth2Name": "청도군" },
+      { "depth2Code": "47750", "depth2Name": "청송군" },
+      { "depth2Code": "47850", "depth2Name": "칠곡군" },
+      { "depth2Code": "47110", "depth2Name": "포항시" }
+    ]
+  },
+  {
+    "depth1Code": "29",
+    "depth1Name": "광주광역시",
+    "depth2List": [
+      { "depth2Code": "29200", "depth2Name": "광산구" },
+      { "depth2Code": "29155", "depth2Name": "남구" },
+      { "depth2Code": "29110", "depth2Name": "동구" },
+      { "depth2Code": "29170", "depth2Name": "북구" },
+      { "depth2Code": "29140", "depth2Name": "서구" }
+    ]
+  },
+  {
+    "depth1Code": "27",
+    "depth1Name": "대구광역시",
+    "depth2List": [
+      { "depth2Code": "27720", "depth2Name": "군위군" },
+      { "depth2Code": "27200", "depth2Name": "남구" },
+      { "depth2Code": "27290", "depth2Name": "달서구" },
+      { "depth2Code": "27710", "depth2Name": "달성군" },
+      { "depth2Code": "27140", "depth2Name": "동구" },
+      { "depth2Code": "27230", "depth2Name": "북구" },
+      { "depth2Code": "27170", "depth2Name": "서구" },
+      { "depth2Code": "27260", "depth2Name": "수성구" },
+      { "depth2Code": "27110", "depth2Name": "중구" }
+    ]
+  },
+  {
+    "depth1Code": "30",
+    "depth1Name": "대전광역시",
+    "depth2List": [
+      { "depth2Code": "30230", "depth2Name": "대덕구" },
+      { "depth2Code": "30110", "depth2Name": "동구" },
+      { "depth2Code": "30170", "depth2Name": "서구" },
+      { "depth2Code": "30200", "depth2Name": "유성구" },
+      { "depth2Code": "30140", "depth2Name": "중구" }
+    ]
+  },
+  {
+    "depth1Code": "26",
+    "depth1Name": "부산광역시",
+    "depth2List": [
+      { "depth2Code": "26440", "depth2Name": "강서구" },
+      { "depth2Code": "26410", "depth2Name": "금정구" },
+      { "depth2Code": "26710", "depth2Name": "기장군" },
+      { "depth2Code": "26290", "depth2Name": "남구" },
+      { "depth2Code": "26170", "depth2Name": "동구" },
+      { "depth2Code": "26260", "depth2Name": "동래구" },
+      { "depth2Code": "26230", "depth2Name": "부산진구" },
+      { "depth2Code": "26320", "depth2Name": "북구" },
+      { "depth2Code": "26530", "depth2Name": "사상구" },
+      { "depth2Code": "26380", "depth2Name": "사하구" },
+      { "depth2Code": "26140", "depth2Name": "서구" },
+      { "depth2Code": "26500", "depth2Name": "수영구" },
+      { "depth2Code": "26470", "depth2Name": "연제구" },
+      { "depth2Code": "26200", "depth2Name": "영도구" },
+      { "depth2Code": "26110", "depth2Name": "중구" },
+      { "depth2Code": "26350", "depth2Name": "해운대구" }
+    ]
+  },
+  {
+    "depth1Code": "11",
+    "depth1Name": "서울특별시",
+    "depth2List": [
+      { "depth2Code": "11680", "depth2Name": "강남구" },
+      { "depth2Code": "11740", "depth2Name": "강동구" },
+      { "depth2Code": "11305", "depth2Name": "강북구" },
+      { "depth2Code": "11500", "depth2Name": "강서구" },
+      { "depth2Code": "11620", "depth2Name": "관악구" },
+      { "depth2Code": "11215", "depth2Name": "광진구" },
+      { "depth2Code": "11530", "depth2Name": "구로구" },
+      { "depth2Code": "11545", "depth2Name": "금천구" },
+      { "depth2Code": "11350", "depth2Name": "노원구" },
+      { "depth2Code": "11320", "depth2Name": "도봉구" },
+      { "depth2Code": "11230", "depth2Name": "동대문구" },
+      { "depth2Code": "11590", "depth2Name": "동작구" },
+      { "depth2Code": "11440", "depth2Name": "마포구" },
+      { "depth2Code": "11410", "depth2Name": "서대문구" },
+      { "depth2Code": "11650", "depth2Name": "서초구" },
+      { "depth2Code": "11200", "depth2Name": "성동구" },
+      { "depth2Code": "11290", "depth2Name": "성북구" },
+      { "depth2Code": "11710", "depth2Name": "송파구" },
+      { "depth2Code": "11470", "depth2Name": "양천구" },
+      { "depth2Code": "11560", "depth2Name": "영등포구" },
+      { "depth2Code": "11170", "depth2Name": "용산구" },
+      { "depth2Code": "11380", "depth2Name": "은평구" },
+      { "depth2Code": "11110", "depth2Name": "종로구" },
+      { "depth2Code": "11140", "depth2Name": "중구" },
+      { "depth2Code": "11260", "depth2Name": "중랑구" }
+    ]
+  },
+  {
+    "depth1Code": "36",
+    "depth1Name": "세종특별자치시",
+    "depth2List": [
+      { "depth2Code": "36110", "depth2Name": "세종특별자치시" }
+    ]
+  },
+  {
+    "depth1Code": "31",
+    "depth1Name": "울산광역시",
+    "depth2List": [
+      { "depth2Code": "31140", "depth2Name": "남구" },
+      { "depth2Code": "31170", "depth2Name": "동구" },
+      { "depth2Code": "31200", "depth2Name": "북구" },
+      { "depth2Code": "31710", "depth2Name": "울주군" },
+      { "depth2Code": "31110", "depth2Name": "중구" }
+    ]
+  },
+  {
+    "depth1Code": "28",
+    "depth1Name": "인천광역시",
+    "depth2List": [
+      { "depth2Code": "28710", "depth2Name": "강화군" },
+      { "depth2Code": "28245", "depth2Name": "계양구" },
+      { "depth2Code": "28200", "depth2Name": "남동구" },
+      { "depth2Code": "28140", "depth2Name": "동구" },
+      { "depth2Code": "28177", "depth2Name": "미추홀구" },
+      { "depth2Code": "28237", "depth2Name": "부평구" },
+      { "depth2Code": "28260", "depth2Name": "서구" },
+      { "depth2Code": "28185", "depth2Name": "연수구" },
+      { "depth2Code": "28720", "depth2Name": "옹진군" },
+      { "depth2Code": "28110", "depth2Name": "중구" }
+    ]
+  },
+  {
+    "depth1Code": "46",
+    "depth1Name": "전라남도",
+    "depth2List": [
+      { "depth2Code": "46810", "depth2Name": "강진군" },
+      { "depth2Code": "46770", "depth2Name": "고흥군" },
+      { "depth2Code": "46720", "depth2Name": "곡성군" },
+      { "depth2Code": "46230", "depth2Name": "광양시" },
+      { "depth2Code": "46730", "depth2Name": "구례군" },
+      { "depth2Code": "46170", "depth2Name": "나주시" },
+      { "depth2Code": "46710", "depth2Name": "담양군" },
+      { "depth2Code": "46110", "depth2Name": "목포시" },
+      { "depth2Code": "46840", "depth2Name": "무안군" },
+      { "depth2Code": "46780", "depth2Name": "보성군" },
+      { "depth2Code": "46150", "depth2Name": "순천시" },
+      { "depth2Code": "46910", "depth2Name": "신안군" },
+      { "depth2Code": "46130", "depth2Name": "여수시" },
+      { "depth2Code": "46870", "depth2Name": "영광군" },
+      { "depth2Code": "46830", "depth2Name": "영암군" },
+      { "depth2Code": "46890", "depth2Name": "완도군" },
+      { "depth2Code": "46880", "depth2Name": "장성군" },
+      { "depth2Code": "46800", "depth2Name": "장흥군" },
+      { "depth2Code": "46900", "depth2Name": "진도군" },
+      { "depth2Code": "46860", "depth2Name": "함평군" },
+      { "depth2Code": "46820", "depth2Name": "해남군" },
+      { "depth2Code": "46790", "depth2Name": "화순군" }
+    ]
+  },
+  {
+    "depth1Code": "52",
+    "depth1Name": "전북특별자치도",
+    "depth2List": [
+      { "depth2Code": "52790", "depth2Name": "고창군" },
+      { "depth2Code": "52130", "depth2Name": "군산시" },
+      { "depth2Code": "52210", "depth2Name": "김제시" },
+      { "depth2Code": "52190", "depth2Name": "남원시" },
+      { "depth2Code": "52730", "depth2Name": "무주군" },
+      { "depth2Code": "52800", "depth2Name": "부안군" },
+      { "depth2Code": "52770", "depth2Name": "순창군" },
+      { "depth2Code": "52710", "depth2Name": "완주군" },
+      { "depth2Code": "52140", "depth2Name": "익산시" },
+      { "depth2Code": "52750", "depth2Name": "임실군" },
+      { "depth2Code": "52740", "depth2Name": "장수군" },
+      { "depth2Code": "52110", "depth2Name": "전주시" },
+      { "depth2Code": "52180", "depth2Name": "정읍시" },
+      { "depth2Code": "52720", "depth2Name": "진안군" }
+    ]
+  },
+  {
+    "depth1Code": "50",
+    "depth1Name": "제주특별자치도",
+    "depth2List": [
+      { "depth2Code": "50130", "depth2Name": "서귀포시" },
+      { "depth2Code": "50110", "depth2Name": "제주시" }
+    ]
+  },
+  {
+    "depth1Code": "44",
+    "depth1Name": "충청남도",
+    "depth2List": [
+      { "depth2Code": "44250", "depth2Name": "계룡시" },
+      { "depth2Code": "44150", "depth2Name": "공주시" },
+      { "depth2Code": "44710", "depth2Name": "금산군" },
+      { "depth2Code": "44230", "depth2Name": "논산시" },
+      { "depth2Code": "44270", "depth2Name": "당진시" },
+      { "depth2Code": "44180", "depth2Name": "보령시" },
+      { "depth2Code": "44760", "depth2Name": "부여군" },
+      { "depth2Code": "44210", "depth2Name": "서산시" },
+      { "depth2Code": "44770", "depth2Name": "서천군" },
+      { "depth2Code": "44200", "depth2Name": "아산시" },
+      { "depth2Code": "44810", "depth2Name": "예산군" },
+      { "depth2Code": "44130", "depth2Name": "천안시" },
+      { "depth2Code": "44790", "depth2Name": "청양군" },
+      { "depth2Code": "44825", "depth2Name": "태안군" },
+      { "depth2Code": "44800", "depth2Name": "홍성군" }
+    ]
+  },
+  {
+    "depth1Code": "43",
+    "depth1Name": "충청북도",
+    "depth2List": [
+      { "depth2Code": "43760", "depth2Name": "괴산군" },
+      { "depth2Code": "43800", "depth2Name": "단양군" },
+      { "depth2Code": "43720", "depth2Name": "보은군" },
+      { "depth2Code": "43740", "depth2Name": "영동군" },
+      { "depth2Code": "43730", "depth2Name": "옥천군" },
+      { "depth2Code": "43770", "depth2Name": "음성군" },
+      { "depth2Code": "43150", "depth2Name": "제천시" },
+      { "depth2Code": "43745", "depth2Name": "증평군" },
+      { "depth2Code": "43750", "depth2Name": "진천군" },
+      { "depth2Code": "43110", "depth2Name": "청주시" },
+      { "depth2Code": "43130", "depth2Name": "충주시" }
+    ]
+  }
+]

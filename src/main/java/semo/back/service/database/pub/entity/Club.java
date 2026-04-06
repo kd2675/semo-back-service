@@ -43,6 +43,24 @@ public class Club extends CommonDateEntity {
     @Column(name = "membership_policy", nullable = false, length = 20)
     private String membershipPolicy;
 
+    @Column(name = "region_scope", nullable = false, length = 20)
+    private String regionScope;
+
+    @Column(name = "region_depth1_code", length = 10)
+    private String regionDepth1Code;
+
+    @Column(name = "region_depth2_code", length = 10)
+    private String regionDepth2Code;
+
+    @Column(name = "region_depth1_name", length = 60)
+    private String regionDepth1Name;
+
+    @Column(name = "region_depth2_name", length = 60)
+    private String regionDepth2Name;
+
+    @Column(name = "region_label", nullable = false, length = 140)
+    private String regionLabel;
+
     @Column(name = "image_file_name", length = 255)
     private String imageFileName;
 

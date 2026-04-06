@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,6 +21,7 @@ import semo.back.service.feature.club.vo.ClubBoardResponse;
 import semo.back.service.feature.club.vo.ClubProfileResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
+import semo.back.service.feature.club.vo.UpdateClubSettingsRequest;
 import semo.back.service.feature.club.vo.UpdateClubProfileRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
@@ -77,6 +79,20 @@ public class ClubController {
         return ResponseDataDTO.of(
                 clubService.getMyClub(clubId, userKey),
                 "내 클럽 상세 조회 성공"
+        );
+    }
+
+    @PatchMapping("/{clubId}/admin/settings")
+    public ResponseDataDTO<MyClubSummaryResponse> updateClubSettings(
+            @PathVariable Long clubId,
+            @Valid @RequestBody UpdateClubSettingsRequest request,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        String userKey = requireUserKey(userContext);
+        return ResponseDataDTO.of(
+                clubService.updateClubSettings(clubId, userKey, request),
+                "클럽 기본 정보 수정 성공"
         );
     }
 

@@ -241,6 +241,37 @@ class ClubJoinRequestServiceTest {
         assertThat(response.clubs().stream().anyMatch(club -> club.clubId().equals(openClubId) && "NONE".equals(club.joinStatus()))).isTrue();
     }
 
+    @Test
+    void getDiscoverClubsCanSearchByRegionLabel() {
+        clubService.createClub(
+                "owner-discover-101",
+                "Region Owner",
+                new CreateClubRequest(
+                        "Han River Runners",
+                        "서울 동남권 러닝 모임",
+                        "RUNNING",
+                        "PUBLIC",
+                        "APPROVAL",
+                        "OFFLINE",
+                        "11",
+                        "11710",
+                        "서울특별시",
+                        "송파구",
+                        null
+                )
+        );
+        createProfileUser("discover-user-101", "지역 검색 사용자");
+
+        ClubDiscoverResponse response = clubJoinRequestService.getDiscoverClubs("discover-user-101", "서울");
+
+        assertThat(response.query()).isEqualTo("서울");
+        assertThat(response.clubs()).hasSize(1);
+        assertThat(response.clubs().getFirst().name()).isEqualTo("Han River Runners");
+        assertThat(response.clubs().getFirst().regionDepth1Code()).isEqualTo("11");
+        assertThat(response.clubs().getFirst().regionDepth2Code()).isEqualTo("11710");
+        assertThat(response.clubs().getFirst().regionLabel()).isEqualTo("서울특별시 송파구");
+    }
+
     private void cleanup() {
         clubJoinRequestRepository.deleteAll();
         clubScheduleVoteSelectionRepository.deleteAll();

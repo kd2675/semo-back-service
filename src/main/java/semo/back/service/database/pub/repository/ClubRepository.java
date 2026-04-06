@@ -20,6 +20,7 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
                     or lower(c.name) like lower(concat('%', :query, '%'))
                     or lower(coalesce(c.summary, '')) like lower(concat('%', :query, '%'))
                     or lower(coalesce(c.description, '')) like lower(concat('%', :query, '%'))
+                    or lower(coalesce(c.regionLabel, '')) like lower(concat('%', :query, '%'))
                   )
             order by c.createDate desc, c.clubId desc
             """)

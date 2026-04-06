@@ -294,13 +294,21 @@ public class ClubJoinRequestService {
     private int queryMatchPriority(Club club, String query) {
         String normalizedQuery = query.toLowerCase(Locale.ROOT);
         String clubName = club.getName().toLowerCase(Locale.ROOT);
+        String regionLabel = trimToNull(club.getRegionLabel());
+        String normalizedRegionLabel = regionLabel == null ? null : regionLabel.toLowerCase(Locale.ROOT);
         if (clubName.equals(normalizedQuery)) {
             return 0;
         }
         if (clubName.startsWith(normalizedQuery)) {
             return 1;
         }
-        return 2;
+        if (normalizedRegionLabel != null && normalizedRegionLabel.equals(normalizedQuery)) {
+            return 2;
+        }
+        if (normalizedRegionLabel != null && normalizedRegionLabel.startsWith(normalizedQuery)) {
+            return 3;
+        }
+        return 4;
     }
 
     private ClubDiscoverSummaryResponse toDiscoverSummary(
@@ -318,6 +326,12 @@ public class ClubJoinRequestService {
                 club.getCategoryKey(),
                 club.getVisibilityStatus(),
                 club.getMembershipPolicy(),
+                club.getRegionScope(),
+                club.getRegionDepth1Code(),
+                club.getRegionDepth2Code(),
+                club.getRegionDepth1Name(),
+                club.getRegionDepth2Name(),
+                club.getRegionLabel(),
                 activeMemberCount,
                 fileName,
                 imageFileUrlResolver.resolveImageUrl(fileName),

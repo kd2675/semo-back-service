@@ -20,7 +20,46 @@ public record CreateClubRequest(
         @Size(max = 20, message = "가입 방식 값이 올바르지 않습니다.")
         String membershipPolicy,
 
+        @Size(max = 20, message = "지역 범위 값이 올바르지 않습니다.")
+        String regionScope,
+
+        @Size(max = 10, message = "시도 코드는 10자 이하여야 합니다.")
+        String regionDepth1Code,
+
+        @Size(max = 10, message = "시군구 코드는 10자 이하여야 합니다.")
+        String regionDepth2Code,
+
+        @Size(max = 60, message = "시도명은 60자 이하여야 합니다.")
+        String regionDepth1Name,
+
+        @Size(max = 60, message = "시군구명은 60자 이하여야 합니다.")
+        String regionDepth2Name,
+
         @Size(max = 255, message = "이미지 파일 이름이 너무 깁니다.")
         String fileName
 ) {
+    public CreateClubRequest(
+            String name,
+            String description,
+            String categoryKey,
+            String visibilityStatus,
+            String membershipPolicy,
+            String fileName
+    ) {
+        this(name, description, categoryKey, visibilityStatus, membershipPolicy, null, null, null, null, null, fileName);
+    }
+
+    public CreateClubRequest(
+            String name,
+            String description,
+            String categoryKey,
+            String visibilityStatus,
+            String membershipPolicy,
+            String regionScope,
+            String regionDepth1Name,
+            String regionDepth2Name,
+            String fileName
+    ) {
+        this(name, description, categoryKey, visibilityStatus, membershipPolicy, regionScope, null, null, regionDepth1Name, regionDepth2Name, fileName);
+    }
 }

@@ -24,6 +24,7 @@ import semo.back.service.feature.club.vo.ClubProfileResponse;
 import semo.back.service.feature.club.vo.ClubCreateResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
+import semo.back.service.feature.club.vo.UpdateClubSettingsRequest;
 import semo.back.service.feature.club.vo.UpdateClubProfileRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
@@ -250,5 +251,30 @@ class ClubControllerTest {
 
         assertThat(response.getData()).isNotNull();
         assertThat(response.getData().clubProfile().displayName()).isEqualTo("러닝캡틴");
+    }
+
+    @Test
+    void updateClubSettingsChangesRegionForAdmin() {
+        UserContext userContext = UserContext.builder()
+                .userKey("user-club-014")
+                .userName("Region Admin")
+                .role("USER")
+                .build();
+
+        ResponseDataDTO<ClubCreateResponse> created = clubController.createClub(
+                new CreateClubRequest("Semo Region Club", "지역 수정 테스트", "OTHER", "PUBLIC", "APPROVAL", null),
+                userContext
+        );
+
+        ResponseDataDTO<MyClubSummaryResponse> response = clubController.updateClubSettings(
+                created.getData().clubId(),
+                new UpdateClubSettingsRequest("OFFLINE", "11", "11710", null, null),
+                userContext
+        );
+
+        assertThat(response.getData()).isNotNull();
+        assertThat(response.getData().regionDepth1Code()).isEqualTo("11");
+        assertThat(response.getData().regionDepth2Code()).isEqualTo("11710");
+        assertThat(response.getData().regionLabel()).isEqualTo("서울특별시 송파구");
     }
 }
