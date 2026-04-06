@@ -37,6 +37,12 @@ public class Club extends CommonDateEntity {
     @Column(name = "category_key", length = 40)
     private String categoryKey;
 
+    @Column(name = "activity_category", length = 30)
+    private String activityCategory;
+
+    @Column(name = "affiliation_type", length = 30)
+    private String affiliationType;
+
     @Column(name = "visibility_status", nullable = false, length = 20)
     private String visibilityStatus;
 

@@ -268,11 +268,14 @@ class ClubControllerTest {
 
         ResponseDataDTO<MyClubSummaryResponse> response = clubController.updateClubSettings(
                 created.getData().clubId(),
-                new UpdateClubSettingsRequest("OFFLINE", "11", "11710", null, null),
+                new UpdateClubSettingsRequest("SPORTS", java.util.List.of("RUNNING"), "LOCAL", "OFFLINE", "11", "11710", null, null),
                 userContext
         );
 
         assertThat(response.getData()).isNotNull();
+        assertThat(response.getData().activityCategory()).isEqualTo("SPORTS");
+        assertThat(response.getData().activityTags()).containsExactly("RUNNING");
+        assertThat(response.getData().affiliationType()).isEqualTo("LOCAL");
         assertThat(response.getData().regionDepth1Code()).isEqualTo("11");
         assertThat(response.getData().regionDepth2Code()).isEqualTo("11710");
         assertThat(response.getData().regionLabel()).isEqualTo("서울특별시 송파구");

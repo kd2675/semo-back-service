@@ -1,11 +1,16 @@
 package semo.back.service.feature.club.vo;
 
+import java.util.List;
+
 public record ClubDiscoverSummaryResponse(
         Long clubId,
         String name,
         String summary,
         String description,
         String categoryKey,
+        String activityCategory,
+        List<String> activityTags,
+        String affiliationType,
         String visibilityStatus,
         String membershipPolicy,
         String regionScope,
@@ -20,6 +25,7 @@ public record ClubDiscoverSummaryResponse(
         String thumbnailUrl,
         String joinStatus,
         Long clubJoinRequestId,
-        boolean recommendedByCategory
+        boolean recommendedByCategory,
+        boolean recommendedByTags
 ) {
 }

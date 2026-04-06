@@ -10,12 +10,14 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.common.util.ImageFileUrlResolver;
 import semo.back.service.common.util.ImageFinalizeClient;
 import semo.back.service.database.pub.entity.Club;
+import semo.back.service.database.pub.entity.ClubActivityTag;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.repository.ClubNoticeBoardFeedRow;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
+import semo.back.service.database.pub.repository.ClubActivityTagRepository;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
@@ -54,14 +56,6 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubService {
-    private static final Set<String> ALLOWED_CATEGORY_KEYS = Set.of(
-            "TENNIS",
-            "RUNNING",
-            "CROSSFIT",
-            "HIKING",
-            "CYCLING",
-            "OTHER"
-    );
     private static final Set<String> ALLOWED_VISIBILITY_STATUSES = Set.of("PUBLIC", "PRIVATE");
     private static final Set<String> ALLOWED_MEMBERSHIP_POLICIES = Set.of("APPROVAL", "OPEN");
     private static final String ROLE_OWNER = "OWNER";
@@ -75,6 +69,7 @@ public class ClubService {
     private static final DateTimeFormatter SCHEDULE_TIME_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH);
 
     private final ClubRepository clubRepository;
+    private final ClubActivityTagRepository clubActivityTagRepository;
     private final ClubMemberRepository clubMemberRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubNoticeRepository clubNoticeRepository;
@@ -82,6 +77,7 @@ public class ClubService {
     private final ProfileUserService profileUserService;
     private final ImageFinalizeClient imageFinalizeClient;
     private final ImageFileUrlResolver imageFileUrlResolver;
+    private final ClubClassificationSupport clubClassificationSupport;
     private final ClubRegionCatalog clubRegionCatalog;
     private final ClubAccessResolver clubAccessResolver;
 
@@ -92,6 +88,12 @@ public class ClubService {
         Long profileId = profileUserService.resolveProfileId(userKey, userName);
         LocalDateTime now = LocalDateTime.now();
         String finalImageFileName = finalizeImageFileName(request.fileName());
+        ClubClassificationSupport.ResolvedClubClassification resolvedClassification = clubClassificationSupport.resolveForWrite(
+                request.activityCategory(),
+                request.activityTags(),
+                request.affiliationType(),
+                request.categoryKey()
+        );
         ClubRegionCatalog.ResolvedClubRegion resolvedRegion = clubRegionCatalog.resolve(
                 request.regionScope(),
                 request.regionDepth1Code(),
@@ -104,7 +106,9 @@ public class ClubService {
                 .name(request.name().trim())
                 .summary(toSummary(request.description()))
                 .description(trimToNull(request.description()))
-                .categoryKey(normalizeCategoryKey(request.categoryKey()))
+                .categoryKey(resolvedClassification.legacyCategoryKey())
+                .activityCategory(resolvedClassification.activityCategory())
+                .affiliationType(resolvedClassification.affiliationType())
                 .visibilityStatus(normalizeVisibilityStatus(request.visibilityStatus()))
                 .membershipPolicy(normalizeMembershipPolicy(request.membershipPolicy()))
                 .regionScope(resolvedRegion.regionScope())
@@ -116,6 +120,7 @@ public class ClubService {
                 .imageFileName(finalImageFileName)
                 .active(true)
                 .build());
+        saveActivityTags(club.getClubId(), resolvedClassification.activityTags());
 
         ClubMember membership = clubMemberRepository.save(ClubMember.builder()
                 .clubId(club.getClubId())
@@ -134,6 +139,9 @@ public class ClubService {
                 club.getSummary(),
                 club.getDescription(),
                 club.getCategoryKey(),
+                resolvedClassification.activityCategory(),
+                resolvedClassification.activityTags(),
+                resolvedClassification.affiliationType(),
                 club.getVisibilityStatus(),
                 club.getMembershipPolicy(),
                 resolvedRegion.regionScope(),
@@ -163,9 +171,14 @@ public class ClubService {
         Map<Long, Club> clubById = new HashMap<>();
         clubRepository.findByClubIdInAndActiveTrue(clubIds)
                 .forEach(club -> clubById.put(club.getClubId(), club));
+        Map<Long, List<String>> activityTagsByClubId = toActivityTagsByClubId(clubActivityTagRepository.findByClubIdIn(clubIds));
 
         return memberships.stream()
-                .map(membership -> toMyClubSummary(membership, clubById.get(membership.getClubId())))
+                .map(membership -> toMyClubSummary(
+                        membership,
+                        clubById.get(membership.getClubId()),
+                        activityTagsByClubId.getOrDefault(membership.getClubId(), List.of())
+                ))
                 .filter(response -> response != null)
                 .toList();
     }
@@ -174,7 +187,11 @@ public class ClubService {
         MembershipClubPair pair = getMembershipClubPair(clubId, userKey);
         ClubMember membership = pair.membership();
         Club club = pair.club();
-        return toMyClubSummary(membership, club);
+        return toMyClubSummary(
+                membership,
+                club,
+                toTagKeys(clubActivityTagRepository.findByClubId(clubId))
+        );
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -182,6 +199,13 @@ public class ClubService {
     public MyClubSummaryResponse updateClubSettings(Long clubId, String userKey, UpdateClubSettingsRequest request) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         Club current = access.club();
+        List<String> currentActivityTags = toTagKeys(clubActivityTagRepository.findByClubId(clubId));
+        ClubClassificationSupport.ResolvedClubClassification resolvedClassification = clubClassificationSupport.resolveForWrite(
+                request == null || request.activityCategory() == null ? current.getActivityCategory() : request.activityCategory(),
+                request == null || request.activityTags() == null ? currentActivityTags : request.activityTags(),
+                request == null || request.affiliationType() == null ? current.getAffiliationType() : request.affiliationType(),
+                current.getCategoryKey()
+        );
         ClubRegionCatalog.ResolvedClubRegion resolvedRegion = clubRegionCatalog.resolve(
                 request == null ? null : request.regionScope(),
                 request == null ? null : request.regionDepth1Code(),
@@ -200,7 +224,9 @@ public class ClubService {
                 .name(current.getName())
                 .summary(current.getSummary())
                 .description(current.getDescription())
-                .categoryKey(current.getCategoryKey())
+                .categoryKey(resolvedClassification.legacyCategoryKey())
+                .activityCategory(resolvedClassification.activityCategory())
+                .affiliationType(resolvedClassification.affiliationType())
                 .visibilityStatus(current.getVisibilityStatus())
                 .membershipPolicy(current.getMembershipPolicy())
                 .regionScope(resolvedRegion.regionScope())
@@ -212,6 +238,7 @@ public class ClubService {
                 .imageFileName(current.getImageFileName())
                 .active(current.isActive())
                 .build());
+        saveActivityTags(clubId, resolvedClassification.activityTags());
 
         return getMyClub(clubId, userKey);
     }
@@ -347,22 +374,18 @@ public class ClubService {
         if (!StringUtils.hasText(request.name())) {
             throw new SemoException.ValidationException("클럽 이름은 필수입니다.");
         }
-        if (!ALLOWED_CATEGORY_KEYS.contains(normalizeCategoryKey(request.categoryKey()))) {
-            throw new SemoException.ValidationException("지원하지 않는 클럽 카테고리입니다.");
-        }
+        clubClassificationSupport.resolveForWrite(
+                request.activityCategory(),
+                request.activityTags(),
+                request.affiliationType(),
+                request.categoryKey()
+        );
         if (!ALLOWED_VISIBILITY_STATUSES.contains(normalizeVisibilityStatus(request.visibilityStatus()))) {
             throw new SemoException.ValidationException("지원하지 않는 공개 범위입니다.");
         }
         if (!ALLOWED_MEMBERSHIP_POLICIES.contains(normalizeMembershipPolicy(request.membershipPolicy()))) {
             throw new SemoException.ValidationException("지원하지 않는 가입 방식입니다.");
         }
-    }
-
-    private String normalizeCategoryKey(String categoryKey) {
-        if (!StringUtils.hasText(categoryKey)) {
-            return "OTHER";
-        }
-        return categoryKey.trim().toUpperCase(Locale.ROOT);
     }
 
     private String normalizeVisibilityStatus(String visibilityStatus) {
@@ -450,12 +473,18 @@ public class ClubService {
                         .build()));
     }
 
-    private MyClubSummaryResponse toMyClubSummary(ClubMember membership, Club club) {
+    private MyClubSummaryResponse toMyClubSummary(ClubMember membership, Club club, List<String> storedActivityTags) {
         if (club == null) {
             return null;
         }
         String roleCode = membership.getRoleCode();
         String fileName = club.getImageFileName();
+        ClubClassificationSupport.ResolvedClubClassification resolvedClassification = clubClassificationSupport.resolveStored(
+                club.getActivityCategory(),
+                storedActivityTags,
+                club.getAffiliationType(),
+                club.getCategoryKey()
+        );
         ClubRegionCatalog.ResolvedClubRegion resolvedRegion = resolveStoredRegion(club);
         return new MyClubSummaryResponse(
                 club.getClubId(),
@@ -463,6 +492,9 @@ public class ClubService {
                 club.getSummary(),
                 club.getDescription(),
                 club.getCategoryKey(),
+                resolvedClassification.activityCategory(),
+                resolvedClassification.activityTags(),
+                resolvedClassification.affiliationType(),
                 resolvedRegion.regionScope(),
                 resolvedRegion.regionDepth1Code(),
                 resolvedRegion.regionDepth2Code(),
@@ -475,6 +507,36 @@ public class ClubService {
                 imageFileUrlResolver.resolveImageUrl(fileName),
                 imageFileUrlResolver.resolveThumbnailUrl(fileName)
         );
+    }
+
+    private void saveActivityTags(Long clubId, List<String> activityTags) {
+        clubActivityTagRepository.deleteByClubId(clubId);
+        if (activityTags == null || activityTags.isEmpty()) {
+            return;
+        }
+        clubActivityTagRepository.saveAll(activityTags.stream()
+                .map(activityTag -> ClubActivityTag.builder()
+                        .clubId(clubId)
+                        .tagKey(activityTag)
+                        .build())
+                .toList());
+    }
+
+    private Map<Long, List<String>> toActivityTagsByClubId(List<ClubActivityTag> activityTags) {
+        Map<Long, List<String>> result = new HashMap<>();
+        activityTags.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        ClubActivityTag::getClubId,
+                        java.util.stream.Collectors.mapping(ClubActivityTag::getTagKey, java.util.stream.Collectors.toList())
+                ))
+                .forEach(result::put);
+        return result;
+    }
+
+    private List<String> toTagKeys(List<ClubActivityTag> activityTags) {
+        return activityTags.stream()
+                .map(ClubActivityTag::getTagKey)
+                .toList();
     }
 
     private ClubRegionCatalog.ResolvedClubRegion resolveStoredRegion(Club club) {

@@ -95,6 +95,9 @@ class ClubServiceTest {
                         "Semo Tennis",
                         "서울대 테니스 멤버를 위한 클럽입니다.",
                         "TENNIS",
+                        null,
+                        null,
+                        null,
                         "PUBLIC",
                         "APPROVAL",
                         "OFFLINE",
@@ -109,6 +112,10 @@ class ClubServiceTest {
         assertThat(response.clubId()).isNotNull();
         assertThat(response.roleCode()).isEqualTo("OWNER");
         assertThat(response.summary()).isEqualTo("서울대 테니스 멤버를 위한 클럽입니다.");
+        assertThat(response.categoryKey()).isEqualTo("TENNIS");
+        assertThat(response.activityCategory()).isEqualTo("SPORTS");
+        assertThat(response.activityTags()).containsExactly("TENNIS");
+        assertThat(response.affiliationType()).isEqualTo("INDEPENDENT");
         assertThat(response.regionScope()).isEqualTo("OFFLINE");
         assertThat(response.regionDepth1Code()).isEqualTo("11");
         assertThat(response.regionDepth2Code()).isEqualTo("11710");
@@ -264,6 +271,9 @@ class ClubServiceTest {
                         "Semo Region Club",
                         "지역 변경 테스트",
                         "OTHER",
+                        "SPORTS",
+                        java.util.List.of("RUNNING"),
+                        "COMPANY",
                         "PUBLIC",
                         "APPROVAL",
                         "NATIONWIDE",
@@ -278,9 +288,12 @@ class ClubServiceTest {
         MyClubSummaryResponse response = clubService.updateClubSettings(
                 created.clubId(),
                 "user-club-013",
-                new UpdateClubSettingsRequest("OFFLINE", "26", "26350", null, null)
+                new UpdateClubSettingsRequest("CULTURE", java.util.List.of("READING"), "LOCAL", "OFFLINE", "26", "26350", null, null)
         );
 
+        assertThat(response.activityCategory()).isEqualTo("CULTURE");
+        assertThat(response.activityTags()).containsExactly("READING");
+        assertThat(response.affiliationType()).isEqualTo("LOCAL");
         assertThat(response.regionScope()).isEqualTo("OFFLINE");
         assertThat(response.regionDepth1Code()).isEqualTo("26");
         assertThat(response.regionDepth2Code()).isEqualTo("26350");

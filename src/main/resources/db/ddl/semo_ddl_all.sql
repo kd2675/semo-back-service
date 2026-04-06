@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS club (
     summary VARCHAR(255) NULL,
     description VARCHAR(2000) NULL,
     category_key VARCHAR(40) NULL,
+    activity_category VARCHAR(30) NULL,
+    affiliation_type VARCHAR(30) NULL,
     visibility_status VARCHAR(20) NOT NULL DEFAULT 'PUBLIC',
     membership_policy VARCHAR(20) NOT NULL DEFAULT 'APPROVAL',
     region_scope VARCHAR(20) NOT NULL DEFAULT 'NATIONWIDE',
@@ -49,6 +51,19 @@ CREATE TABLE IF NOT EXISTS club (
 
 CREATE INDEX idx_club_category_active
     ON club (category_key, active, club_id);
+
+CREATE TABLE IF NOT EXISTS club_activity_tag (
+    club_activity_tag_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    tag_key VARCHAR(30) NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_activity_tag UNIQUE (club_id, tag_key),
+    CONSTRAINT fk_club_activity_tag_club FOREIGN KEY (club_id) REFERENCES club(club_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_activity_tag_club
+    ON club_activity_tag (club_id, tag_key);
 
 -- ============================================================
 -- Club feature catalog / activation

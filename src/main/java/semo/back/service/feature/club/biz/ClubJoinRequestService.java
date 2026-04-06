@@ -7,11 +7,13 @@ import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.common.util.ImageFileUrlResolver;
 import semo.back.service.database.pub.entity.Club;
+import semo.back.service.database.pub.entity.ClubActivityTag;
 import semo.back.service.database.pub.entity.ClubJoinRequest;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ProfileUser;
 import semo.back.service.database.pub.repository.ClubJoinRequestRepository;
+import semo.back.service.database.pub.repository.ClubActivityTagRepository;
 import semo.back.service.database.pub.repository.ClubMemberCountRow;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
@@ -56,11 +58,13 @@ public class ClubJoinRequestService {
     private static final DateTimeFormatter REQUESTED_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm", Locale.KOREAN);
 
     private final ClubRepository clubRepository;
+    private final ClubActivityTagRepository clubActivityTagRepository;
     private final ClubMemberRepository clubMemberRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubJoinRequestRepository clubJoinRequestRepository;
     private final ProfileUserRepository profileUserRepository;
     private final ImageFileUrlResolver imageFileUrlResolver;
+    private final ClubClassificationSupport clubClassificationSupport;
     private final ClubAccessResolver clubAccessResolver;
 
     public ClubDiscoverResponse getDiscoverClubs(String userKey, String query) {
@@ -73,9 +77,19 @@ public class ClubJoinRequestService {
         List<Club> myClubs = memberClubIds.isEmpty()
                 ? List.of()
                 : clubRepository.findByClubIdInAndActiveTrue(memberClubIds);
+        Map<Long, List<String>> myActivityTagsByClubId = toActivityTagsByClubId(clubActivityTagRepository.findByClubIdIn(memberClubIds));
         Set<String> preferredCategoryKeys = myClubs.stream()
-                .map(Club::getCategoryKey)
+                .map(club -> clubClassificationSupport.resolveStored(
+                        club.getActivityCategory(),
+                        myActivityTagsByClubId.getOrDefault(club.getClubId(), List.of()),
+                        club.getAffiliationType(),
+                        club.getCategoryKey()
+                ))
+                .map(ClubClassificationSupport.ResolvedClubClassification::activityCategory)
                 .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+        Set<String> preferredActivityTags = myActivityTagsByClubId.values().stream()
+                .flatMap(List::stream)
                 .collect(Collectors.toSet());
 
         String normalizedQuery = normalizeQuery(query);
@@ -83,32 +97,40 @@ public class ClubJoinRequestService {
                 .filter(club -> !memberClubIds.contains(club.getClubId()))
                 .toList();
         if (publicClubs.isEmpty()) {
-            return new ClubDiscoverResponse(normalizedQuery, !StringUtils.hasText(normalizedQuery), recommendationLabel(preferredCategoryKeys), 0, List.of());
+            return new ClubDiscoverResponse(normalizedQuery, !StringUtils.hasText(normalizedQuery), recommendationLabel(preferredActivityTags, preferredCategoryKeys), 0, List.of());
         }
 
         List<Long> clubIds = publicClubs.stream().map(Club::getClubId).toList();
+        Map<Long, List<String>> publicActivityTagsByClubId = toActivityTagsByClubId(clubActivityTagRepository.findByClubIdIn(clubIds));
         Map<Long, Integer> activeMemberCountByClubId = toActiveMemberCountMap(
                 clubMemberRepository.countMembersByClubIdInAndMembershipStatus(clubIds, STATUS_ACTIVE)
         );
         Map<Long, ClubJoinRequest> joinRequestByClubId = clubJoinRequestRepository.findByProfileIdAndClubIdIn(profileUser.getProfileId(), clubIds).stream()
                 .collect(Collectors.toMap(ClubJoinRequest::getClubId, Function.identity()));
 
-        Comparator<Club> comparator = buildDiscoverComparator(normalizedQuery, preferredCategoryKeys, joinRequestByClubId);
+        Comparator<Club> comparator = buildDiscoverComparator(normalizedQuery, preferredCategoryKeys, preferredActivityTags, publicActivityTagsByClubId, joinRequestByClubId);
         List<ClubDiscoverSummaryResponse> clubs = publicClubs.stream()
                 .sorted(comparator)
                 .limit(DISCOVER_LIMIT)
                 .map(club -> toDiscoverSummary(
                         club,
+                        publicActivityTagsByClubId.getOrDefault(club.getClubId(), List.of()),
                         activeMemberCountByClubId.getOrDefault(club.getClubId(), 0),
                         joinRequestByClubId.get(club.getClubId()),
-                        preferredCategoryKeys.contains(club.getCategoryKey())
+                        preferredCategoryKeys.contains(clubClassificationSupport.resolveStored(
+                                club.getActivityCategory(),
+                                publicActivityTagsByClubId.getOrDefault(club.getClubId(), List.of()),
+                                club.getAffiliationType(),
+                                club.getCategoryKey()
+                        ).activityCategory()),
+                        hasMatchingTags(preferredActivityTags, publicActivityTagsByClubId.getOrDefault(club.getClubId(), List.of()))
                 ))
                 .toList();
 
         return new ClubDiscoverResponse(
                 normalizedQuery,
                 !StringUtils.hasText(normalizedQuery),
-                recommendationLabel(preferredCategoryKeys),
+                recommendationLabel(preferredActivityTags, preferredCategoryKeys),
                 clubs.size(),
                 clubs
         );
@@ -259,11 +281,22 @@ public class ClubJoinRequestService {
     private Comparator<Club> buildDiscoverComparator(
             String query,
             Collection<String> preferredCategoryKeys,
+            Collection<String> preferredActivityTags,
+            Map<Long, List<String>> activityTagsByClubId,
             Map<Long, ClubJoinRequest> joinRequestByClubId
     ) {
         Comparator<Club> comparator = Comparator
                 .comparingInt((Club club) -> statusPriority(joinRequestByClubId.get(club.getClubId())))
-                .thenComparingInt(club -> categoryPriority(preferredCategoryKeys, club.getCategoryKey()));
+                .thenComparingInt(club -> tagPriority(preferredActivityTags, activityTagsByClubId.getOrDefault(club.getClubId(), List.of())))
+                .thenComparingInt(club -> categoryPriority(
+                        preferredCategoryKeys,
+                        clubClassificationSupport.resolveStored(
+                                club.getActivityCategory(),
+                                activityTagsByClubId.getOrDefault(club.getClubId(), List.of()),
+                                club.getAffiliationType(),
+                                club.getCategoryKey()
+                        ).activityCategory()
+                ));
 
         if (StringUtils.hasText(query)) {
             comparator = comparator
@@ -291,6 +324,10 @@ public class ClubJoinRequestService {
         return preferredCategoryKeys.contains(categoryKey) ? 0 : 1;
     }
 
+    private int tagPriority(Collection<String> preferredActivityTags, Collection<String> activityTags) {
+        return hasMatchingTags(preferredActivityTags, activityTags) ? 0 : 1;
+    }
+
     private int queryMatchPriority(Club club, String query) {
         String normalizedQuery = query.toLowerCase(Locale.ROOT);
         String clubName = club.getName().toLowerCase(Locale.ROOT);
@@ -313,17 +350,28 @@ public class ClubJoinRequestService {
 
     private ClubDiscoverSummaryResponse toDiscoverSummary(
             Club club,
+            List<String> storedActivityTags,
             int activeMemberCount,
             ClubJoinRequest joinRequest,
-            boolean recommendedByCategory
+            boolean recommendedByCategory,
+            boolean recommendedByTags
     ) {
         String fileName = club.getImageFileName();
+        ClubClassificationSupport.ResolvedClubClassification resolvedClassification = clubClassificationSupport.resolveStored(
+                club.getActivityCategory(),
+                storedActivityTags,
+                club.getAffiliationType(),
+                club.getCategoryKey()
+        );
         return new ClubDiscoverSummaryResponse(
                 club.getClubId(),
                 club.getName(),
                 club.getSummary(),
                 club.getDescription(),
                 club.getCategoryKey(),
+                resolvedClassification.activityCategory(),
+                resolvedClassification.activityTags(),
+                resolvedClassification.affiliationType(),
                 club.getVisibilityStatus(),
                 club.getMembershipPolicy(),
                 club.getRegionScope(),
@@ -338,7 +386,8 @@ public class ClubJoinRequestService {
                 imageFileUrlResolver.resolveThumbnailUrl(fileName),
                 joinRequest == null ? "NONE" : joinRequest.getRequestStatus(),
                 joinRequest == null ? null : joinRequest.getClubJoinRequestId(),
-                recommendedByCategory
+                recommendedByCategory,
+                recommendedByTags
         );
     }
 
@@ -366,6 +415,31 @@ public class ClubJoinRequestService {
             result.put(row.getClubId(), Math.toIntExact(row.getMemberCount()));
         }
         return result;
+    }
+
+    private Map<Long, List<String>> toActivityTagsByClubId(List<ClubActivityTag> activityTags) {
+        return activityTags.stream()
+                .collect(Collectors.groupingBy(
+                        ClubActivityTag::getClubId,
+                        Collectors.mapping(ClubActivityTag::getTagKey, Collectors.toList())
+                ));
+    }
+
+    private boolean hasMatchingTags(Collection<String> preferredActivityTags, Collection<String> activityTags) {
+        if (preferredActivityTags == null || preferredActivityTags.isEmpty() || activityTags == null || activityTags.isEmpty()) {
+            return false;
+        }
+        return activityTags.stream().anyMatch(preferredActivityTags::contains);
+    }
+
+    private String recommendationLabel(Collection<String> preferredActivityTags, Collection<String> preferredCategoryKeys) {
+        if (!preferredActivityTags.isEmpty()) {
+            return "내 클럽과 비슷한 활동 태그 우선";
+        }
+        if (!preferredCategoryKeys.isEmpty()) {
+            return "내 클럽과 비슷한 활동 카테고리 우선";
+        }
+        return "최근 생성된 공개 클럽";
     }
 
     private Club requireJoinableClub(Long clubId) {
@@ -425,13 +499,6 @@ public class ClubJoinRequestService {
             return "";
         }
         return query.trim();
-    }
-
-    private String recommendationLabel(Collection<String> preferredCategoryKeys) {
-        if (preferredCategoryKeys.isEmpty()) {
-            return "최근 개설된 공개 클럽";
-        }
-        return "내 클럽과 비슷한 카테고리 우선";
     }
 
     private String trimToNull(String value) {

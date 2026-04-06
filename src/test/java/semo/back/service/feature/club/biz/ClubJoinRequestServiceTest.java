@@ -231,13 +231,14 @@ class ClubJoinRequestServiceTest {
         ClubDiscoverResponse response = clubJoinRequestService.getDiscoverClubs("discover-user-001", null);
 
         assertThat(response.recommended()).isTrue();
-        assertThat(response.recommendationLabel()).isEqualTo("내 클럽과 비슷한 카테고리 우선");
+        assertThat(response.recommendationLabel()).isEqualTo("내 클럽과 비슷한 활동 태그 우선");
         assertThat(response.clubs()).hasSize(2);
         assertThat(response.clubs()).noneMatch(club -> "My Tennis Club".equals(club.name()));
         assertThat(response.clubs()).noneMatch(club -> "Private Tennis".equals(club.name()));
         assertThat(response.clubs().getFirst().clubId()).isEqualTo(pendingClubId);
         assertThat(response.clubs().getFirst().joinStatus()).isEqualTo("PENDING");
         assertThat(response.clubs().getFirst().recommendedByCategory()).isTrue();
+        assertThat(response.clubs().getFirst().recommendedByTags()).isTrue();
         assertThat(response.clubs().stream().anyMatch(club -> club.clubId().equals(openClubId) && "NONE".equals(club.joinStatus()))).isTrue();
     }
 
@@ -250,6 +251,9 @@ class ClubJoinRequestServiceTest {
                         "Han River Runners",
                         "서울 동남권 러닝 모임",
                         "RUNNING",
+                        null,
+                        null,
+                        null,
                         "PUBLIC",
                         "APPROVAL",
                         "OFFLINE",
@@ -270,6 +274,8 @@ class ClubJoinRequestServiceTest {
         assertThat(response.clubs().getFirst().regionDepth1Code()).isEqualTo("11");
         assertThat(response.clubs().getFirst().regionDepth2Code()).isEqualTo("11710");
         assertThat(response.clubs().getFirst().regionLabel()).isEqualTo("서울특별시 송파구");
+        assertThat(response.clubs().getFirst().activityCategory()).isEqualTo("SPORTS");
+        assertThat(response.clubs().getFirst().activityTags()).containsExactly("RUNNING");
     }
 
     private void cleanup() {

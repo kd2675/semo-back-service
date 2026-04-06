@@ -1,11 +1,16 @@
 package semo.back.service.feature.club.vo;
 
+import java.util.List;
+
 public record MyClubSummaryResponse(
         Long clubId,
         String name,
         String summary,
         String description,
         String categoryKey,
+        String activityCategory,
+        List<String> activityTags,
+        String affiliationType,
         String regionScope,
         String regionDepth1Code,
         String regionDepth2Code,
