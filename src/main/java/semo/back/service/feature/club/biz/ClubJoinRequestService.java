@@ -21,14 +21,15 @@ import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
-import semo.back.service.feature.club.vo.ClubAdminJoinRequestResponse;
-import semo.back.service.feature.club.vo.ClubAdminJoinRequestsResponse;
 import semo.back.service.feature.club.vo.ClubDiscoverResponse;
 import semo.back.service.feature.club.vo.ClubDiscoverSummaryResponse;
 import semo.back.service.feature.club.vo.ClubJoinActionResponse;
+import semo.back.service.feature.club.vo.ClubJoinRequestInboxItemResponse;
+import semo.back.service.feature.club.vo.ClubJoinRequestInboxResponse;
 import semo.back.service.feature.club.vo.ReviewClubJoinRequestRequest;
 import semo.back.service.feature.club.vo.SubmitClubJoinRequestRequest;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
@@ -203,24 +204,14 @@ public class ClubJoinRequestService {
         );
     }
 
-    public ClubAdminJoinRequestsResponse getAdminJoinRequests(Long clubId, String userKey) {
+    public ClubJoinRequestInboxResponse getJoinRequestInbox(Long clubId, String userKey) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        return buildJoinRequestInboxResponse(access);
+    }
+
+    public ClubJoinRequestInboxResponse getAdminJoinRequestInbox(Long clubId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        List<ClubJoinRequest> requests = clubJoinRequestRepository
-                .findByClubIdAndRequestStatusOrderByCreateDateDescClubJoinRequestIdDesc(clubId, STATUS_PENDING);
-        if (requests.isEmpty()) {
-            return new ClubAdminJoinRequestsResponse(clubId, access.club().getName(), true, List.of());
-        }
-
-        Map<Long, ProfileUser> profileUserById = profileUserRepository.findAllById(
-                        requests.stream().map(ClubJoinRequest::getProfileId).distinct().toList()
-                ).stream()
-                .collect(Collectors.toMap(ProfileUser::getProfileId, Function.identity()));
-
-        List<ClubAdminJoinRequestResponse> responses = requests.stream()
-                .map(request -> toAdminJoinRequestResponse(request, profileUserById.get(request.getProfileId())))
-                .toList();
-
-        return new ClubAdminJoinRequestsResponse(clubId, access.club().getName(), true, responses);
+        return buildJoinRequestInboxResponse(access);
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
@@ -391,22 +382,64 @@ public class ClubJoinRequestService {
         );
     }
 
-    private ClubAdminJoinRequestResponse toAdminJoinRequestResponse(ClubJoinRequest request, ProfileUser profileUser) {
+    private ClubJoinRequestInboxItemResponse toJoinRequestInboxItemResponse(
+            ClubJoinRequest request,
+            ProfileUser profileUser
+    ) {
         String displayName = profileUser == null || !StringUtils.hasText(profileUser.getDisplayName())
                 ? "SEMO User"
                 : profileUser.getDisplayName();
-        return new ClubAdminJoinRequestResponse(
+        return new ClubJoinRequestInboxItemResponse(
                 request.getClubJoinRequestId(),
                 request.getClubId(),
                 request.getProfileId(),
                 displayName,
-                profileUser == null ? null : profileUser.getTagline(),
-                profileUser == null ? null : profileUser.getProfileColor(),
-                request.getRequestMessage(),
+                trimToNull(profileUser == null ? null : profileUser.getTagline()),
+                trimToNull(profileUser == null ? null : profileUser.getProfileColor()),
+                trimToNull(request.getRequestMessage()),
                 request.getCreateDate() == null ? null : request.getCreateDate().toString(),
                 request.getCreateDate() == null ? null : request.getCreateDate().format(REQUESTED_LABEL_FORMATTER),
                 request.getRequestStatus()
         );
+    }
+
+    private ClubJoinRequestInboxResponse buildJoinRequestInboxResponse(ClubAccessResolver.ClubAccess access) {
+        List<ClubJoinRequestInboxItemResponse> requests = loadJoinRequestItems(access.club().getClubId());
+        int requestedTodayCount = (int) requests.stream()
+                .filter(request -> isRequestedToday(request.requestedAt()))
+                .count();
+        int messageAttachedCount = (int) requests.stream()
+                .filter(request -> StringUtils.hasText(request.requestMessage()))
+                .count();
+        String latestRequestedAtLabel = requests.isEmpty() ? null : requests.getFirst().requestedAtLabel();
+
+        return new ClubJoinRequestInboxResponse(
+                access.club().getClubId(),
+                access.club().getName(),
+                access.isAdmin(),
+                requests.size(),
+                requestedTodayCount,
+                messageAttachedCount,
+                latestRequestedAtLabel,
+                requests
+        );
+    }
+
+    private List<ClubJoinRequestInboxItemResponse> loadJoinRequestItems(Long clubId) {
+        List<ClubJoinRequest> requests = clubJoinRequestRepository
+                .findByClubIdAndRequestStatusOrderByCreateDateDescClubJoinRequestIdDesc(clubId, STATUS_PENDING);
+        if (requests.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, ProfileUser> profileUserById = profileUserRepository.findAllById(
+                        requests.stream().map(ClubJoinRequest::getProfileId).distinct().toList()
+                ).stream()
+                .collect(Collectors.toMap(ProfileUser::getProfileId, Function.identity()));
+
+        return requests.stream()
+                .map(request -> toJoinRequestInboxItemResponse(request, profileUserById.get(request.getProfileId())))
+                .toList();
     }
 
     private Map<Long, Integer> toActiveMemberCountMap(List<ClubMemberCountRow> rows) {
@@ -499,6 +532,17 @@ public class ClubJoinRequestService {
             return "";
         }
         return query.trim();
+    }
+
+    private boolean isRequestedToday(String requestedAt) {
+        if (!StringUtils.hasText(requestedAt)) {
+            return false;
+        }
+        try {
+            return LocalDateTime.parse(requestedAt).toLocalDate().isEqual(LocalDate.now());
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private String trimToNull(String value) {

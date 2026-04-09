@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.database.pub.entity.ClubJoinRequest;
 import semo.back.service.database.pub.entity.ClubMember;
+import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ProfileUser;
 import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
 import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
@@ -24,10 +25,12 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionReposi
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.vo.ClubDiscoverResponse;
 import semo.back.service.feature.club.vo.ClubJoinActionResponse;
+import semo.back.service.feature.club.vo.ClubJoinRequestInboxResponse;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.ReviewClubJoinRequestRequest;
 import semo.back.service.feature.club.vo.SubmitClubJoinRequestRequest;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -278,6 +281,60 @@ class ClubJoinRequestServiceTest {
         assertThat(response.clubs().getFirst().activityTags()).containsExactly("RUNNING");
     }
 
+    @Test
+    void getJoinRequestInboxReturnsPendingQueueForActiveMembers() {
+        Long clubId = clubService.createClub(
+                "owner-join-201",
+                "Owner Queue",
+                new CreateClubRequest("Queue Club", null, "OTHER", "PUBLIC", "APPROVAL", null)
+        ).clubId();
+        createActiveMember(clubId, "member-join-201", "열람 멤버");
+        ProfileUser applicant = createProfileUser("applicant-join-201", "신규 신청자");
+
+        clubJoinRequestService.submitJoinRequest(
+                clubId,
+                applicant.getUserKey(),
+                new SubmitClubJoinRequestRequest("가입 대기열 테스트")
+        );
+
+        ClubJoinRequestInboxResponse response = clubJoinRequestService.getJoinRequestInbox(
+                clubId,
+                "member-join-201"
+        );
+
+        assertThat(response.admin()).isFalse();
+        assertThat(response.pendingRequestCount()).isEqualTo(1);
+        assertThat(response.messageAttachedCount()).isEqualTo(1);
+        assertThat(response.requests()).hasSize(1);
+        assertThat(response.requests().getFirst().displayName()).isEqualTo("신규 신청자");
+        assertThat(response.requests().getFirst().requestStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void getAdminJoinRequestInboxMarksAdminViewer() {
+        Long clubId = clubService.createClub(
+                "owner-join-202",
+                "Owner Queue Admin",
+                new CreateClubRequest("Queue Admin Club", null, "OTHER", "PUBLIC", "APPROVAL", null)
+        ).clubId();
+        ProfileUser applicant = createProfileUser("applicant-join-202", "관리자 확인 신청자");
+
+        clubJoinRequestService.submitJoinRequest(
+                clubId,
+                applicant.getUserKey(),
+                new SubmitClubJoinRequestRequest("운영진 검토 부탁드립니다.")
+        );
+
+        ClubJoinRequestInboxResponse response = clubJoinRequestService.getAdminJoinRequestInbox(
+                clubId,
+                "owner-join-202"
+        );
+
+        assertThat(response.admin()).isTrue();
+        assertThat(response.pendingRequestCount()).isEqualTo(1);
+        assertThat(response.latestRequestedAtLabel()).isNotBlank();
+    }
+
     private void cleanup() {
         clubJoinRequestRepository.deleteAll();
         clubScheduleVoteSelectionRepository.deleteAll();
@@ -300,6 +357,25 @@ class ClubJoinRequestServiceTest {
                 .displayName(displayName)
                 .tagline(displayName + " 소개")
                 .profileColor("#135bec")
+                .build());
+    }
+
+    private void createActiveMember(Long clubId, String userKey, String displayName) {
+        ProfileUser profileUser = createProfileUser(userKey, displayName);
+        ClubMember member = clubMemberRepository.save(ClubMember.builder()
+                .clubId(clubId)
+                .profileId(profileUser.getProfileId())
+                .roleCode("MEMBER")
+                .membershipStatus("ACTIVE")
+                .joinedAt(LocalDateTime.now().minusDays(3))
+                .lastActivityAt(LocalDateTime.now().minusHours(4))
+                .build());
+        clubProfileRepository.save(ClubProfile.builder()
+                .clubMemberId(member.getClubMemberId())
+                .displayName(displayName)
+                .tagline(displayName + " 태그라인")
+                .introText(null)
+                .avatarFileName(null)
                 .build());
     }
 }

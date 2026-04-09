@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
 public class ClubFeatureService {
     private static final String NAVIGATION_SCOPE_USER_AND_ADMIN = "USER_AND_ADMIN";
     private static final String NAVIGATION_SCOPE_ADMIN_ONLY = "ADMIN_ONLY";
+    private static final String FEATURE_JOIN_REQUEST = "JOIN_REQUEST";
 
     private final FeatureCatalogRepository featureCatalogRepository;
     private final ClubFeatureRepository clubFeatureRepository;
@@ -150,6 +151,9 @@ public class ClubFeatureService {
     }
 
     private int resolveResponseSortOrder(FeatureCatalog catalog, ClubFeature clubFeature) {
+        if (clubFeature == null && isImplicitlyEnabled(catalog.getFeatureKey())) {
+            return catalog.getSortOrder();
+        }
         if (clubFeature == null || clubFeature.getSortOrder() == null || clubFeature.getSortOrder() <= 0) {
             return 1000 + catalog.getSortOrder();
         }
@@ -178,7 +182,7 @@ public class ClubFeatureService {
                             catalog.getDescription(),
                             catalog.getIconName(),
                             resolveNavigationScope(catalog),
-                            clubFeature != null && clubFeature.isEnabled(),
+                            resolveEnabled(catalog, clubFeature),
                             toUserPath(clubId, catalog.getFeatureKey()),
                             toAdminPath(clubId, catalog.getFeatureKey())
                     );
@@ -188,6 +192,7 @@ public class ClubFeatureService {
 
     private String toUserPath(Long clubId, String featureKey) {
         return switch (normalizeFeatureKey(featureKey)) {
+            case FEATURE_JOIN_REQUEST -> "/clubs/%d/more/join-requests".formatted(clubId);
             case "ATTENDANCE" -> "/clubs/%d/more/attendance".formatted(clubId);
             case "TIMELINE" -> "/clubs/%d/more/timeline".formatted(clubId);
             case "NOTICE" -> "/clubs/%d/more/notices".formatted(clubId);
@@ -206,6 +211,7 @@ public class ClubFeatureService {
 
     private String toAdminPath(Long clubId, String featureKey) {
         return switch (normalizeFeatureKey(featureKey)) {
+            case FEATURE_JOIN_REQUEST -> "/clubs/%d/admin/more/join-requests".formatted(clubId);
             case "ATTENDANCE" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
             case "TIMELINE" -> "/clubs/%d/admin/more/timeline".formatted(clubId);
             case "NOTICE" -> "/clubs/%d/admin/more/notices".formatted(clubId);
@@ -238,6 +244,17 @@ public class ClubFeatureService {
             return "";
         }
         return featureKey.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean resolveEnabled(FeatureCatalog catalog, ClubFeature clubFeature) {
+        if (clubFeature != null) {
+            return clubFeature.isEnabled();
+        }
+        return isImplicitlyEnabled(catalog.getFeatureKey());
+    }
+
+    private boolean isImplicitlyEnabled(String featureKey) {
+        return FEATURE_JOIN_REQUEST.equals(normalizeFeatureKey(featureKey));
     }
 
     private String buildFeatureUpdateDetail(List<FeatureCatalog> catalogs, Set<String> enabledFeatureKeys) {

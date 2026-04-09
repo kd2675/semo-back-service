@@ -12,30 +12,42 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.club.biz.ClubJoinRequestService;
-import semo.back.service.feature.club.vo.ClubAdminJoinRequestsResponse;
 import semo.back.service.feature.club.vo.ClubJoinActionResponse;
+import semo.back.service.feature.club.vo.ClubJoinRequestInboxResponse;
 import semo.back.service.feature.club.vo.ReviewClubJoinRequestRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
 @RestController
-@RequestMapping("/api/semo/v1/clubs/{clubId}/admin/join-requests")
+@RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
-public class ClubAdminJoinRequestController {
+public class ClubJoinRequestFeatureController {
     private final ClubJoinRequestService clubJoinRequestService;
 
-    @GetMapping
-    public ResponseDataDTO<ClubAdminJoinRequestsResponse> getAdminJoinRequests(
+    @GetMapping("/more/join-requests")
+    public ResponseDataDTO<ClubJoinRequestInboxResponse> getJoinRequestInbox(
             @PathVariable Long clubId,
             UserContext userContext
     ) {
         requireUserRole(userContext);
         return ResponseDataDTO.of(
-                clubJoinRequestService.getAdminJoinRequests(clubId, requireUserKey(userContext)),
-                "가입 신청 목록 조회 성공"
+                clubJoinRequestService.getJoinRequestInbox(clubId, requireUserKey(userContext)),
+                "가입 신청 대기열 조회 성공"
         );
     }
 
-    @PutMapping("/{clubJoinRequestId}/review")
+    @GetMapping("/admin/more/join-requests")
+    public ResponseDataDTO<ClubJoinRequestInboxResponse> getAdminJoinRequestInbox(
+            @PathVariable Long clubId,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubJoinRequestService.getAdminJoinRequestInbox(clubId, requireUserKey(userContext)),
+                "관리자 가입 신청 대기열 조회 성공"
+        );
+    }
+
+    @PutMapping("/admin/more/join-requests/{clubJoinRequestId}/review")
     public ResponseDataDTO<ClubJoinActionResponse> reviewJoinRequest(
             @PathVariable Long clubId,
             @PathVariable Long clubJoinRequestId,

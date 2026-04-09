@@ -1,6 +1,6 @@
 package semo.back.service.feature.club.vo;
 
-public record ClubAdminJoinRequestResponse(
+public record ClubJoinRequestInboxItemResponse(
         Long clubJoinRequestId,
         Long clubId,
         Long profileId,
