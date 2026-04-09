@@ -1,56 +1,53 @@
 package semo.back.service.common.exception;
 
-import lombok.Getter;
+import web.common.core.response.base.exception.GeneralException;
+import web.common.core.response.base.vo.Code;
 
-@Getter
-public class SemoException extends RuntimeException {
-    private final String code;
-    private final int status;
+public class SemoException extends GeneralException {
 
-    public SemoException(String code, String message, int status) {
-        super(message);
-        this.code = code;
-        this.status = status;
+    public SemoException(Code errorCode, String message) {
+        super(errorCode, message);
     }
 
-    public SemoException(String code, String message) {
-        super(message);
-        this.code = code;
-        this.status = 400;
+    public Integer getCode() {
+        return getErrorCode().getCode();
+    }
+
+    public int getStatus() {
+        return getErrorCode().getHttpStatus().value();
     }
 
     // 자주 사용되는 예외들
     public static class ResourceNotFoundException extends SemoException {
         public ResourceNotFoundException(String resourceName, String fieldName, Object fieldValue) {
             super(
-                    "RESOURCE_NOT_FOUND",
-                    String.format("%s not found with %s: '%s'", resourceName, fieldName, fieldValue),
-                    404
+                    Code.NOT_FOUND,
+                    String.format("%s not found with %s: '%s'", resourceName, fieldName, fieldValue)
             );
         }
     }
 
     public static class ValidationException extends SemoException {
         public ValidationException(String message) {
-            super("VALIDATION_ERROR", message, 400);
+            super(Code.VALIDATION_ERROR, message);
         }
     }
 
     public static class UnauthorizedException extends SemoException {
         public UnauthorizedException(String message) {
-            super("UNAUTHORIZED", message, 401);
+            super(Code.UNAUTHORIZED, message);
         }
     }
 
     public static class ForbiddenException extends SemoException {
         public ForbiddenException(String message) {
-            super("FORBIDDEN", message, 403);
+            super(Code.FORBIDDEN, message);
         }
     }
 
     public static class ConflictException extends SemoException {
         public ConflictException(String message) {
-            super("CONFLICT", message, 409);
+            super(Code.CONFLICT, message);
         }
     }
 }

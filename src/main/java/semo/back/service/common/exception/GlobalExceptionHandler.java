@@ -8,6 +8,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import web.common.core.response.base.dto.ResponseErrorDTO;
+import web.common.core.response.base.exception.GeneralException;
+import web.common.core.response.base.vo.Code;
 
 import java.util.stream.Collectors;
 
@@ -15,59 +18,43 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(SemoException.class)
-    public ResponseEntity<ErrorResponse> handleSemoException(
-            SemoException ex,
-            WebRequest request) {
-        log.warn("SemoException: code={}, status={}, message={}", ex.getCode(), ex.getStatus(), ex.getMessage());
+    @ExceptionHandler(GeneralException.class)
+    public ResponseEntity<ResponseErrorDTO> handleGeneralException(GeneralException ex) {
+        Code errorCode = ex.getErrorCode();
+        log.warn("GeneralException: code={}, status={}, message={}",
+                errorCode,
+                errorCode.getHttpStatus().value(),
+                ex.getMessage());
 
-        ErrorResponse errorResponse = ErrorResponse.of(
-                ex.getCode(),
-                ex.getMessage(),
-                ex.getStatus(),
-                request.getDescription(false).replace("uri=", "")
-        );
-        return new ResponseEntity<>(errorResponse, HttpStatus.valueOf(ex.getStatus()));
+        ResponseErrorDTO errorResponse = ResponseErrorDTO.of(errorCode, ex.getMessage());
+        return new ResponseEntity<>(errorResponse, errorCode.getHttpStatus());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationException(
+    public ResponseEntity<ResponseErrorDTO> handleValidationException(
             MethodArgumentNotValidException ex,
             WebRequest request) {
         BindingResult bindingResult = ex.getBindingResult();
         var fieldErrors = bindingResult.getFieldErrors().stream()
-                .map(error -> ErrorResponse.FieldError.builder()
-                        .field(error.getField())
-                        .message(error.getDefaultMessage())
-                        .rejectedValue(error.getRejectedValue())
-                        .build())
+                .map(error -> String.format("%s=%s (%s)",
+                        error.getField(),
+                        error.getRejectedValue(),
+                        error.getDefaultMessage()))
                 .collect(Collectors.toList());
 
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .success(false)
-                .code("VALIDATION_ERROR")
-                .message("Validation failed")
-                .status(HttpStatus.BAD_REQUEST.value())
-                .timestamp(java.time.LocalDateTime.now())
-                .path(request.getDescription(false).replace("uri=", ""))
-                .fieldErrors(fieldErrors)
-                .build();
+        log.warn("Validation failed: path={}, errors={}",
+                request.getDescription(false).replace("uri=", ""),
+                fieldErrors);
 
+        ResponseErrorDTO errorResponse = ResponseErrorDTO.of(Code.VALIDATION_ERROR, "Validation failed");
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGlobalException(
-            Exception ex,
-            WebRequest request) {
+    public ResponseEntity<ResponseErrorDTO> handleGlobalException(Exception ex) {
         log.error("Unexpected exception occurred", ex);
 
-        ErrorResponse errorResponse = ErrorResponse.of(
-                "INTERNAL_SERVER_ERROR",
-                "An unexpected error occurred",
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                request.getDescription(false).replace("uri=", "")
-        );
+        ResponseErrorDTO errorResponse = ResponseErrorDTO.of(Code.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

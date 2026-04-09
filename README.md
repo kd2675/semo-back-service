@@ -28,6 +28,10 @@
   - 프론트/이미지 서버에서 임시 업로드
   - 백엔드는 `ImageFinalizeClient`로 `/files/finalize` 호출
   - DB에는 `fileName` 중심으로 저장하고 URL은 `ImageFileUrlResolver`가 조합
+- 응답 계약
+  - 성공 응답은 `web-common-core`의 `ResponseDataDTO`
+  - 에러 응답은 `web-common-core`의 `ResponseErrorDTO`
+  - `semo` 커스텀 에러 바디가 아니라 공통 `{ success, code, message }` 래퍼를 기준으로 맞춥니다.
 
 ## Stack
 
