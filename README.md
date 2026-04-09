@@ -78,7 +78,6 @@
 ## Related Docs
 
 - `AGENTS.md`
-- `AGENTS_SEMO_TOURNAMENT_RECORD_IMPLEMENTATION_PLAN.md`
 - `../semo-front-service/AGENTS_SEMO_MORE_FEATURE_CHECKLIST.md`
 
 ## Package Map
