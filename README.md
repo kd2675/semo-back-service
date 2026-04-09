@@ -71,6 +71,12 @@
 - 테스트 profile: H2 in-memory datasource 사용
 - `muse-back-service`와 기본 포트가 같아서 로컬 동시 실행 시 포트 조정이 필요합니다.
 
+## Related Docs
+
+- `AGENTS.md`
+- `AGENTS_SEMO_TOURNAMENT_RECORD_IMPLEMENTATION_PLAN.md`
+- `../semo-front-service/AGENTS_SEMO_MORE_FEATURE_CHECKLIST.md`
+
 ## Package Map
 
 - `src/main/java/semo/back/service/common`
