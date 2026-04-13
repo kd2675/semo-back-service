@@ -5,7 +5,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubProfile;
@@ -43,15 +42,11 @@ import semo.back.service.feature.finance.vo.ReviewFinanceRequestRequest;
 import semo.back.service.feature.finance.vo.UpdateFinancePaymentStatusRequest;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.text.DecimalFormat;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -69,50 +64,12 @@ public class ClubFinanceService {
     private static final String OBLIGATION_STATUS_OPEN = "OPEN";
     private static final String OBLIGATION_STATUS_CLOSED = "CLOSED";
     private static final String OBLIGATION_TYPE_FEE = "FEE";
-    private static final String REQUEST_TYPE_ADVANCE = "ADVANCE";
-    private static final String REQUEST_TYPE_REFUND = "REFUND_REQUEST";
-    private static final String REQUEST_TYPE_SETTLEMENT = "SETTLEMENT_REQUEST";
-    private static final Set<String> ALLOWED_REQUEST_TYPES = Set.of(
-            REQUEST_TYPE_ADVANCE,
-            REQUEST_TYPE_REFUND,
-            REQUEST_TYPE_SETTLEMENT
-    );
     private static final String REQUEST_STATUS_SUBMITTED = "SUBMITTED";
     private static final String REQUEST_STATUS_APPROVED = "APPROVED";
     private static final String REQUEST_STATUS_REJECTED = "REJECTED";
-    private static final Set<String> ALLOWED_REVIEW_REQUEST_STATUSES = Set.of(
-            REQUEST_STATUS_APPROVED,
-            REQUEST_STATUS_REJECTED
-    );
     private static final String EXPENSE_TYPE_ADMIN = "ADMIN_EXPENSE";
-    private static final Set<String> KNOWN_EXPENSE_CATEGORIES = Set.of(
-            "MEMBERSHIP_FEE",
-            "EVENT_FEE",
-            "MEAL",
-            "VENUE",
-            "SUPPLIES",
-            "TRANSPORT",
-            "REFUND",
-            "OTHER"
-    );
     private static final String TARGET_SCOPE_ALL_ACTIVE_MEMBERS = "ALL_ACTIVE_MEMBERS";
     private static final String TARGET_SCOPE_SELECTED_MEMBERS = "SELECTED_MEMBERS";
-    private static final Set<String> ALLOWED_TARGET_SCOPES = Set.of(
-            TARGET_SCOPE_ALL_ACTIVE_MEMBERS,
-            TARGET_SCOPE_SELECTED_MEMBERS
-    );
-    private static final String ADMIN_OBLIGATION_FILTER_OPEN = "OPEN";
-    private static final String ADMIN_OBLIGATION_FILTER_SETTLED = "SETTLED";
-    private static final Set<String> ALLOWED_ADMIN_OBLIGATION_FILTERS = Set.of(
-            ADMIN_OBLIGATION_FILTER_OPEN,
-            ADMIN_OBLIGATION_FILTER_SETTLED
-    );
-    private static final Set<String> ALLOWED_UPDATE_STATUSES = Set.of(STATUS_PENDING, STATUS_PAID, STATUS_WAIVED);
-    private static final int DEFAULT_ADMIN_OBLIGATION_PAGE_SIZE = 10;
-    private static final int MAX_ADMIN_OBLIGATION_PAGE_SIZE = 50;
-    private static final DateTimeFormatter DATE_TIME_VALUE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-    private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm", Locale.KOREAN);
 
     private final ClubAccessResolver clubAccessResolver;
     private final FinanceObligationRepository financeObligationRepository;
@@ -122,6 +79,7 @@ public class ClubFinanceService {
     private final ClubProfileRepository clubProfileRepository;
     private final ClubMemberRepository clubMemberRepository;
     private final ClubFinancePermissionService clubFinancePermissionService;
+    private final ClubFinanceSupport clubFinanceSupport;
 
     public ClubFinanceHomeResponse getFinance(Long clubId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
@@ -149,7 +107,7 @@ public class ClubFinanceService {
                 .filter(obligation -> STATUS_PENDING.equals(obligation.payment().paymentStatusCode()) || STATUS_OVERDUE.equals(obligation.payment().paymentStatusCode()))
                 .sorted(Comparator
                         .comparing(
-                                (ClubFinanceUserObligationResponse obligation) -> parseNullableDateTime(obligation.dueAt()),
+                                (ClubFinanceUserObligationResponse obligation) -> clubFinanceSupport.parseNullableDateTime(obligation.dueAt()),
                                 Comparator.nullsLast(Comparator.naturalOrder())
                         )
                         .thenComparing(ClubFinanceUserObligationResponse::issuedAt, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -158,7 +116,7 @@ public class ClubFinanceService {
                 .filter(obligation -> STATUS_PAID.equals(obligation.payment().paymentStatusCode()))
                 .sorted(Comparator
                         .comparing(
-                                (ClubFinanceUserObligationResponse obligation) -> resolvePaidActivityAt(obligation),
+                                (ClubFinanceUserObligationResponse obligation) -> clubFinanceSupport.resolvePaidActivityAt(obligation),
                                 Comparator.nullsLast(Comparator.reverseOrder())
                         )
                         .thenComparing(ClubFinanceUserObligationResponse::issuedAt, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -175,7 +133,7 @@ public class ClubFinanceService {
                 (int) paymentHistory.stream().filter(item -> STATUS_PAID.equals(item.payment().paymentStatusCode())).count(),
                 (int) paymentHistory.stream().filter(item -> item.payment().overdue()).count(),
                 openObligations.size(),
-                formatAmount(
+                clubFinanceSupport.formatAmount(
                         paymentHistory.stream()
                                 .map(ClubFinanceUserObligationResponse::payment)
                                 .filter(payment -> STATUS_PENDING.equals(payment.paymentStatusCode()) || payment.overdue())
@@ -183,7 +141,7 @@ public class ClubFinanceService {
                                 .reduce(BigDecimal.ZERO, BigDecimal::add),
                         "KRW"
                 ),
-                formatAmount(
+                clubFinanceSupport.formatAmount(
                         paymentHistory.stream()
                                 .map(ClubFinanceUserObligationResponse::payment)
                                 .filter(payment -> STATUS_PAID.equals(payment.paymentStatusCode()))
@@ -236,10 +194,10 @@ public class ClubFinanceService {
                 waivedPaymentCount,
                 overduePaymentCount,
                 collectiblePaymentCount == 0 ? 0 : (int) Math.round((paidPaymentCount * 100.0) / collectiblePaymentCount),
-                formatAmount(summary.totalBilledAmount(), "KRW"),
-                formatAmount(summary.totalCollectedAmount(), "KRW"),
-                formatAmount(summary.totalOutstandingAmount(), "KRW"),
-                formatAmount(summary.totalWaivedAmount(), "KRW"),
+                clubFinanceSupport.formatAmount(summary.totalBilledAmount(), "KRW"),
+                clubFinanceSupport.formatAmount(summary.totalCollectedAmount(), "KRW"),
+                clubFinanceSupport.formatAmount(summary.totalOutstandingAmount(), "KRW"),
+                clubFinanceSupport.formatAmount(summary.totalWaivedAmount(), "KRW"),
                 availableMembers
         );
     }
@@ -298,9 +256,9 @@ public class ClubFinanceService {
         requireFinanceFeature(clubId);
         requireAdminFinanceView(access);
 
-        int pageSize = normalizeAdminObligationPageSize(size);
-        String normalizedQuery = normalizeSearchQuery(query);
-        String normalizedObligationFilter = normalizeAdminObligationFilter(obligationFilter);
+        int pageSize = clubFinanceSupport.normalizeAdminObligationPageSize(size);
+        String normalizedQuery = clubFinanceSupport.normalizeSearchQuery(query);
+        String normalizedObligationFilter = clubFinanceSupport.normalizeAdminObligationFilter(obligationFilter);
         List<FinanceObligation> obligations = financeObligationRepository.findAdminFeed(
                 clubId,
                 cursorObligationId,
@@ -355,11 +313,11 @@ public class ClubFinanceService {
             throw new SemoException.ForbiddenException("재정 항목을 발행할 권한이 없습니다.");
         }
 
-        String title = normalizeTitle(request.title());
-        String targetScopeCode = normalizeTargetScope(request.targetScopeCode());
-        BigDecimal amount = normalizeAmount(request.amount());
-        LocalDateTime dueAt = parseDateTime(request.dueAt(), "납부 마감일 형식이 잘못되었습니다.");
-        String note = trimToNull(request.note());
+        String title = clubFinanceSupport.normalizeTitle(request.title());
+        String targetScopeCode = clubFinanceSupport.normalizeTargetScope(request.targetScopeCode());
+        BigDecimal amount = clubFinanceSupport.normalizeAmount(request.amount());
+        LocalDateTime dueAt = clubFinanceSupport.parseDateTime(request.dueAt(), "납부 마감일 형식이 잘못되었습니다.");
+        String note = clubFinanceSupport.trimToNull(request.note());
 
         List<ClubAccessResolver.ClubMemberSnapshot> activeMembers = clubAccessResolver.getActiveMemberSnapshots(clubId);
         List<ClubAccessResolver.ClubMemberSnapshot> targetMembers = resolveTargetMembers(
@@ -408,7 +366,7 @@ public class ClubFinanceService {
                 obligation.getObligationTypeCode(),
                 obligation.getTitle(),
                 obligation.getTargetScopeCode(),
-                resolveTargetScopeLabel(obligation.getTargetScopeCode()),
+                clubFinanceSupport.resolveTargetScopeLabel(obligation.getTargetScopeCode()),
                 payments.size()
         );
     }
@@ -426,12 +384,12 @@ public class ClubFinanceService {
         FinanceRequest saved = financeRequestRepository.save(FinanceRequest.builder()
                 .clubId(clubId)
                 .requesterClubProfileId(access.clubProfile().getClubProfileId())
-                .requestTypeCode(normalizeRequestType(request.requestTypeCode()))
-                .title(normalizeRequestTitle(request.title()))
-                .amount(normalizeAmount(request.amount()))
+                .requestTypeCode(clubFinanceSupport.normalizeRequestType(request.requestTypeCode()))
+                .title(clubFinanceSupport.normalizeRequestTitle(request.title()))
+                .amount(clubFinanceSupport.normalizeAmount(request.amount()))
                 .currencyCode("KRW")
-                .relatedEventName(trimToNull(request.relatedEventName()))
-                .note(trimToNull(request.note()))
+                .relatedEventName(clubFinanceSupport.trimToNull(request.relatedEventName()))
+                .note(clubFinanceSupport.trimToNull(request.note()))
                 .statusCode(REQUEST_STATUS_SUBMITTED)
                 .build());
 
@@ -471,14 +429,14 @@ public class ClubFinanceService {
                 .currencyCode(financeRequest.getCurrencyCode())
                 .relatedEventName(financeRequest.getRelatedEventName())
                 .note(financeRequest.getNote())
-                .statusCode(normalizeReviewStatus(request.statusCode()))
+                .statusCode(clubFinanceSupport.normalizeReviewStatus(request.statusCode()))
                 .reviewedByClubProfileId(access.clubProfile().getClubProfileId())
                 .reviewedAt(LocalDateTime.now())
-                .reviewNote(trimToNull(request.reviewNote()))
+                .reviewNote(clubFinanceSupport.trimToNull(request.reviewNote()))
                 .build());
 
         ClubActivityContextHolder.setDetails(
-                updated.getTitle() + " 요청을 " + resolveRequestStatusLabel(updated.getStatusCode()) + " 처리했습니다.",
+                updated.getTitle() + " 요청을 " + clubFinanceSupport.resolveRequestStatusLabel(updated.getStatusCode()) + " 처리했습니다.",
                 "재정 요청 검토에 실패했습니다."
         );
         return toFinanceRequestResponse(
@@ -504,13 +462,13 @@ public class ClubFinanceService {
                 .clubId(clubId)
                 .enteredByClubProfileId(access.clubProfile().getClubProfileId())
                 .expenseTypeCode(EXPENSE_TYPE_ADMIN)
-                .categoryCode(normalizeExpenseCategory(request.categoryCode()))
-                .title(normalizeExpenseTitle(request.title()))
-                .amount(normalizeAmount(request.amount()))
+                .categoryCode(clubFinanceSupport.normalizeExpenseCategory(request.categoryCode()))
+                .title(clubFinanceSupport.normalizeExpenseTitle(request.title()))
+                .amount(clubFinanceSupport.normalizeAmount(request.amount()))
                 .currencyCode("KRW")
-                .spentAt(parseDateTime(request.spentAt(), "지출 일시 형식이 잘못되었습니다.", LocalDateTime.now()))
-                .relatedEventName(trimToNull(request.relatedEventName()))
-                .note(trimToNull(request.note()))
+                .spentAt(clubFinanceSupport.parseDateTime(request.spentAt(), "지출 일시 형식이 잘못되었습니다.", LocalDateTime.now()))
+                .relatedEventName(clubFinanceSupport.trimToNull(request.relatedEventName()))
+                .note(clubFinanceSupport.trimToNull(request.note()))
                 .build());
 
         ClubActivityContextHolder.setDetails(
@@ -556,7 +514,7 @@ public class ClubFinanceService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireFinanceFeature(clubId);
 
-        String nextStatus = normalizeUpdateStatus(request.paymentStatusCode());
+        String nextStatus = clubFinanceSupport.normalizeUpdateStatus(request.paymentStatusCode());
         if (STATUS_PAID.equals(nextStatus) && !clubFinancePermissionService.canMarkPaid(access)) {
             throw new SemoException.ForbiddenException("재정 항목을 납부 완료 처리할 권한이 없습니다.");
         }
@@ -573,7 +531,7 @@ public class ClubFinanceService {
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("FinancePayment", "paymentId", paymentId));
         FinanceObligation obligation = financeObligationRepository.findByFinanceObligationIdAndClubId(payment.getFinanceObligationId(), clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("FinanceObligation", "obligationId", payment.getFinanceObligationId()));
-        String note = trimToNull(request.note());
+        String note = clubFinanceSupport.trimToNull(request.note());
         LocalDateTime paidAt = STATUS_PAID.equals(nextStatus) ? LocalDateTime.now() : null;
 
         FinancePayment updated = financePaymentRepository.save(FinancePayment.builder()
@@ -591,7 +549,7 @@ public class ClubFinanceService {
         syncObligationStatus(obligation);
 
         ClubActivityContextHolder.setDetails(
-                obligation.getTitle() + " 재정 상태를 " + resolvePaymentStatusLabel(nextStatus, false) + "로 변경했습니다.",
+                obligation.getTitle() + " 재정 상태를 " + clubFinanceSupport.resolvePaymentStatusLabel(nextStatus, false) + "로 변경했습니다.",
                 "재정 상태 변경에 실패했습니다."
         );
 
@@ -690,20 +648,20 @@ public class ClubFinanceService {
         return new ClubFinanceRequestResponse(
                 request.getFinanceRequestId(),
                 request.getRequestTypeCode(),
-                resolveRequestTypeLabel(request.getRequestTypeCode()),
+                clubFinanceSupport.resolveRequestTypeLabel(request.getRequestTypeCode()),
                 displayNameByClubProfileId.getOrDefault(request.getRequesterClubProfileId(), "알 수 없는 멤버"),
                 request.getAmount(),
-                formatAmount(request.getAmount(), request.getCurrencyCode()),
+                clubFinanceSupport.formatAmount(request.getAmount(), request.getCurrencyCode()),
                 request.getCurrencyCode(),
                 request.getTitle(),
                 request.getRelatedEventName(),
                 request.getNote(),
                 request.getStatusCode(),
-                resolveRequestStatusLabel(request.getStatusCode()),
-                formatDateTimeValue(request.getCreateDate()),
-                formatDateTimeLabel(request.getCreateDate()),
-                formatDateTimeValue(request.getReviewedAt()),
-                formatDateTimeLabel(request.getReviewedAt()),
+                clubFinanceSupport.resolveRequestStatusLabel(request.getStatusCode()),
+                clubFinanceSupport.formatDateTimeValue(request.getCreateDate()),
+                clubFinanceSupport.formatDateTimeLabel(request.getCreateDate()),
+                clubFinanceSupport.formatDateTimeValue(request.getReviewedAt()),
+                clubFinanceSupport.formatDateTimeLabel(request.getReviewedAt()),
                 request.getReviewNote()
         );
     }
@@ -727,18 +685,18 @@ public class ClubFinanceService {
         return new ClubFinanceExpenseResponse(
                 expense.getFinanceExpenseId(),
                 expense.getExpenseTypeCode(),
-                resolveExpenseTypeLabel(expense.getExpenseTypeCode()),
+                clubFinanceSupport.resolveExpenseTypeLabel(expense.getExpenseTypeCode()),
                 expense.getCategoryCode(),
-                resolveExpenseCategoryLabel(expense.getCategoryCode()),
+                clubFinanceSupport.resolveExpenseCategoryLabel(expense.getCategoryCode()),
                 displayNameByClubProfileId.getOrDefault(expense.getEnteredByClubProfileId(), "알 수 없는 운영자"),
                 expense.getAmount(),
-                formatAmount(expense.getAmount(), expense.getCurrencyCode()),
+                clubFinanceSupport.formatAmount(expense.getAmount(), expense.getCurrencyCode()),
                 expense.getCurrencyCode(),
                 expense.getTitle(),
                 expense.getRelatedEventName(),
                 expense.getNote(),
-                formatDateTimeValue(expense.getSpentAt()),
-                formatDateTimeLabel(expense.getSpentAt())
+                clubFinanceSupport.formatDateTimeValue(expense.getSpentAt()),
+                clubFinanceSupport.formatDateTimeLabel(expense.getSpentAt())
         );
     }
 
@@ -752,17 +710,17 @@ public class ClubFinanceService {
         return new ClubAdminFinanceObligationResponse(
                 obligation.getFinanceObligationId(),
                 obligation.getObligationTypeCode(),
-                resolveObligationTypeLabel(obligation.getObligationTypeCode()),
+                clubFinanceSupport.resolveObligationTypeLabel(obligation.getObligationTypeCode()),
                 obligation.getTitle(),
                 obligation.getTargetScopeCode(),
-                resolveTargetScopeLabel(obligation.getTargetScopeCode()),
+                clubFinanceSupport.resolveTargetScopeLabel(obligation.getTargetScopeCode()),
                 obligation.getAmount(),
-                formatAmount(obligation.getAmount(), obligation.getCurrencyCode()),
+                clubFinanceSupport.formatAmount(obligation.getAmount(), obligation.getCurrencyCode()),
                 obligation.getCurrencyCode(),
-                formatDateTimeValue(obligation.getDueAt()),
-                formatDateTimeLabel(obligation.getDueAt()),
-                formatDateTimeValue(obligation.getCreateDate()),
-                formatDateTimeLabel(obligation.getCreateDate()),
+                clubFinanceSupport.formatDateTimeValue(obligation.getDueAt()),
+                clubFinanceSupport.formatDateTimeLabel(obligation.getDueAt()),
+                clubFinanceSupport.formatDateTimeValue(obligation.getCreateDate()),
+                clubFinanceSupport.formatDateTimeLabel(obligation.getCreateDate()),
                 obligation.getCreatedByClubProfileId() == null ? "알 수 없는 운영자" : issuerNameByClubProfileId.getOrDefault(obligation.getCreatedByClubProfileId(), "알 수 없는 운영자"),
                 obligation.getNote(),
                 metrics.canDelete(),
@@ -831,15 +789,15 @@ public class ClubFinanceService {
         return new ClubFinanceUserObligationResponse(
                 obligation.getFinanceObligationId(),
                 obligation.getObligationTypeCode(),
-                resolveObligationTypeLabel(obligation.getObligationTypeCode()),
+                clubFinanceSupport.resolveObligationTypeLabel(obligation.getObligationTypeCode()),
                 obligation.getTitle(),
                 obligation.getAmount(),
-                formatAmount(obligation.getAmount(), obligation.getCurrencyCode()),
+                clubFinanceSupport.formatAmount(obligation.getAmount(), obligation.getCurrencyCode()),
                 obligation.getCurrencyCode(),
-                formatDateTimeValue(obligation.getDueAt()),
-                formatDateTimeLabel(obligation.getDueAt()),
-                formatDateTimeValue(obligation.getCreateDate()),
-                formatDateTimeLabel(obligation.getCreateDate()),
+                clubFinanceSupport.formatDateTimeValue(obligation.getDueAt()),
+                clubFinanceSupport.formatDateTimeLabel(obligation.getDueAt()),
+                clubFinanceSupport.formatDateTimeValue(obligation.getCreateDate()),
+                clubFinanceSupport.formatDateTimeLabel(obligation.getCreateDate()),
                 obligation.getNote(),
                 toPaymentResponse(payment, obligation, new PaymentMemberSummary(memberDisplayName, memberRoleCode))
         );
@@ -858,13 +816,13 @@ public class ClubFinanceService {
                 paymentMemberSummary == null ? "알 수 없는 멤버" : paymentMemberSummary.memberDisplayName(),
                 paymentMemberSummary == null ? null : paymentMemberSummary.memberRoleCode(),
                 payment.getAmount(),
-                formatAmount(payment.getAmount(), payment.getCurrencyCode()),
+                clubFinanceSupport.formatAmount(payment.getAmount(), payment.getCurrencyCode()),
                 payment.getCurrencyCode(),
                 responseStatusCode,
-                resolvePaymentStatusLabel(payment.getPaymentStatusCode(), overdue),
+                clubFinanceSupport.resolvePaymentStatusLabel(payment.getPaymentStatusCode(), overdue),
                 overdue,
-                formatDateTimeValue(payment.getPaidAt()),
-                formatDateTimeLabel(payment.getPaidAt()),
+                clubFinanceSupport.formatDateTimeValue(payment.getPaidAt()),
+                clubFinanceSupport.formatDateTimeLabel(payment.getPaidAt()),
                 payment.getNote()
         );
     }
@@ -939,245 +897,6 @@ public class ClubFinanceService {
         }
         return clubProfileRepository.findAllById(clubProfileIds).stream()
                 .collect(Collectors.toMap(ClubProfile::getClubProfileId, ClubProfile::getDisplayName));
-    }
-
-    private String normalizeTitle(String title) {
-        String normalized = trimToNull(title);
-        if (normalized == null) {
-            throw new SemoException.ValidationException("재정 항목 이름은 필수입니다.");
-        }
-        return normalized;
-    }
-
-    private String normalizeRequestTitle(String title) {
-        String normalized = trimToNull(title);
-        if (normalized == null) {
-            throw new SemoException.ValidationException("재정 요청 제목은 필수입니다.");
-        }
-        return normalized;
-    }
-
-    private String normalizeExpenseTitle(String title) {
-        String normalized = trimToNull(title);
-        if (normalized == null) {
-            throw new SemoException.ValidationException("지출 제목은 필수입니다.");
-        }
-        return normalized;
-    }
-
-    private String normalizeRequestType(String requestTypeCode) {
-        String normalized = trimToNull(requestTypeCode);
-        if (normalized == null) {
-            throw new SemoException.ValidationException("재정 요청 타입은 필수입니다.");
-        }
-        String upperCased = normalized.toUpperCase(Locale.ROOT);
-        if (!ALLOWED_REQUEST_TYPES.contains(upperCased)) {
-            throw new SemoException.ValidationException("지원하지 않는 재정 요청 타입입니다.");
-        }
-        return upperCased;
-    }
-
-    private String normalizeReviewStatus(String statusCode) {
-        String normalized = trimToNull(statusCode);
-        if (normalized == null) {
-            throw new SemoException.ValidationException("요청 검토 상태는 필수입니다.");
-        }
-        String upperCased = normalized.toUpperCase(Locale.ROOT);
-        if (!ALLOWED_REVIEW_REQUEST_STATUSES.contains(upperCased)) {
-            throw new SemoException.ValidationException("지원하지 않는 요청 검토 상태입니다.");
-        }
-        return upperCased;
-    }
-
-    private String normalizeExpenseCategory(String categoryCode) {
-        String normalized = trimToNull(categoryCode);
-        if (normalized == null) {
-            return "OTHER";
-        }
-        String upperCased = normalized.toUpperCase(Locale.ROOT);
-        if (!KNOWN_EXPENSE_CATEGORIES.contains(upperCased)) {
-            throw new SemoException.ValidationException("지원하지 않는 지출 카테고리입니다.");
-        }
-        return upperCased;
-    }
-
-    private String normalizeTargetScope(String targetScopeCode) {
-        String normalized = trimToNull(targetScopeCode);
-        if (normalized == null) {
-            return TARGET_SCOPE_ALL_ACTIVE_MEMBERS;
-        }
-        String upperCased = normalized.toUpperCase(Locale.ROOT);
-        if (!ALLOWED_TARGET_SCOPES.contains(upperCased)) {
-            throw new SemoException.ValidationException("지원하지 않는 발행 대상 타입입니다.");
-        }
-        return upperCased;
-    }
-
-    private BigDecimal normalizeAmount(BigDecimal amount) {
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new SemoException.ValidationException("청구 금액은 0보다 커야 합니다.");
-        }
-        return amount.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private String normalizeUpdateStatus(String paymentStatusCode) {
-        String normalized = trimToNull(paymentStatusCode);
-        if (normalized == null) {
-            throw new SemoException.ValidationException("재정 상태는 필수입니다.");
-        }
-        String upperCased = normalized.toUpperCase(Locale.ROOT);
-        if (!ALLOWED_UPDATE_STATUSES.contains(upperCased)) {
-            throw new SemoException.ValidationException("지원하지 않는 재정 상태입니다.");
-        }
-        return upperCased;
-    }
-
-    private int normalizeAdminObligationPageSize(Integer size) {
-        if (size == null || size < 1) {
-            return DEFAULT_ADMIN_OBLIGATION_PAGE_SIZE;
-        }
-        return Math.min(size, MAX_ADMIN_OBLIGATION_PAGE_SIZE);
-    }
-
-    private String normalizeSearchQuery(String query) {
-        String normalized = trimToNull(query);
-        return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
-    }
-
-    private String normalizeAdminObligationFilter(String obligationFilter) {
-        String normalized = trimToNull(obligationFilter);
-        if (normalized == null || "ALL".equalsIgnoreCase(normalized)) {
-            return null;
-        }
-        String upperCased = normalized.toUpperCase(Locale.ROOT);
-        if (!ALLOWED_ADMIN_OBLIGATION_FILTERS.contains(upperCased)) {
-            throw new SemoException.ValidationException("지원하지 않는 재정 필터입니다.");
-        }
-        return upperCased;
-    }
-
-    private LocalDateTime parseDateTime(String rawValue, String errorMessage) {
-        return parseDateTime(rawValue, errorMessage, null);
-    }
-
-    private LocalDateTime parseDateTime(String rawValue, String errorMessage, LocalDateTime defaultValue) {
-        String normalized = trimToNull(rawValue);
-        if (normalized == null) {
-            return defaultValue;
-        }
-        try {
-            return LocalDateTime.parse(normalized, DATE_TIME_VALUE_FORMATTER);
-        } catch (RuntimeException exception) {
-            throw new SemoException.ValidationException(errorMessage);
-        }
-    }
-
-    private LocalDateTime parseNullableDateTime(String rawValue) {
-        if (!StringUtils.hasText(rawValue)) {
-            return null;
-        }
-        return LocalDateTime.parse(rawValue, DATE_TIME_VALUE_FORMATTER);
-    }
-
-    private LocalDateTime resolvePaidActivityAt(ClubFinanceUserObligationResponse obligation) {
-        LocalDateTime paidAt = parseNullableDateTime(obligation.payment().paidAt());
-        if (paidAt != null) {
-            return paidAt;
-        }
-        return parseNullableDateTime(obligation.issuedAt());
-    }
-
-    private String formatDateTimeValue(LocalDateTime value) {
-        if (value == null) {
-            return null;
-        }
-        return value.format(DATE_TIME_VALUE_FORMATTER);
-    }
-
-    private String formatDateTimeLabel(LocalDateTime value) {
-        if (value == null) {
-            return null;
-        }
-        return value.format(DATE_TIME_LABEL_FORMATTER);
-    }
-
-    private String formatAmount(BigDecimal amount, String currencyCode) {
-        BigDecimal normalized = amount == null ? BigDecimal.ZERO : amount.stripTrailingZeros();
-        String pattern = normalized.scale() > 0 ? "#,##0.##" : "#,##0";
-        String formatted = new DecimalFormat(pattern).format(amount == null ? BigDecimal.ZERO : amount);
-        if ("KRW".equalsIgnoreCase(currencyCode)) {
-            return formatted + "원";
-        }
-        return (StringUtils.hasText(currencyCode) ? currencyCode.toUpperCase(Locale.ROOT) : "KRW") + " " + formatted;
-    }
-
-    private String resolveObligationTypeLabel(String obligationTypeCode) {
-        return switch (obligationTypeCode) {
-            case OBLIGATION_TYPE_FEE -> "분담금";
-            default -> "재정 항목";
-        };
-    }
-
-    private String resolveRequestTypeLabel(String requestTypeCode) {
-        return switch (requestTypeCode) {
-            case REQUEST_TYPE_ADVANCE -> "선지출 등록";
-            case REQUEST_TYPE_REFUND -> "환불 요청";
-            case REQUEST_TYPE_SETTLEMENT -> "정산 요청";
-            default -> "재정 요청";
-        };
-    }
-
-    private String resolveRequestStatusLabel(String statusCode) {
-        return switch (statusCode) {
-            case REQUEST_STATUS_APPROVED -> "승인";
-            case REQUEST_STATUS_REJECTED -> "반려";
-            default -> "제출 완료";
-        };
-    }
-
-    private String resolveExpenseTypeLabel(String expenseTypeCode) {
-        return switch (expenseTypeCode) {
-            case EXPENSE_TYPE_ADMIN -> "운영 지출";
-            default -> "지출";
-        };
-    }
-
-    private String resolveExpenseCategoryLabel(String categoryCode) {
-        return switch (categoryCode) {
-            case "MEMBERSHIP_FEE" -> "회비";
-            case "EVENT_FEE" -> "행사비";
-            case "MEAL" -> "식비";
-            case "VENUE" -> "대관비";
-            case "SUPPLIES" -> "물품비";
-            case "TRANSPORT" -> "교통비";
-            case "REFUND" -> "환불";
-            default -> "기타";
-        };
-    }
-
-    private String resolveTargetScopeLabel(String targetScopeCode) {
-        return switch (targetScopeCode) {
-            case TARGET_SCOPE_SELECTED_MEMBERS -> "선택 멤버";
-            default -> "활성 멤버 전체";
-        };
-    }
-
-    private String resolvePaymentStatusLabel(String paymentStatusCode, boolean overdue) {
-        if (overdue) {
-            return "연체";
-        }
-        return switch (paymentStatusCode) {
-            case STATUS_PAID -> "납부 완료";
-            case STATUS_WAIVED -> "면제";
-            default -> "미납";
-        };
-    }
-
-    private String trimToNull(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        return value.trim();
     }
 
     private record PaymentMemberSummary(String memberDisplayName, String memberRoleCode) {

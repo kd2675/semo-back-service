@@ -4,9 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.common.util.ImageFileUrlResolver;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.TournamentApplication;
 import semo.back.service.database.pub.entity.TournamentRecord;
@@ -33,16 +31,12 @@ import semo.back.service.feature.tournament.vo.UpsertTournamentRequest;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -70,17 +64,6 @@ public class ClubTournamentService {
     private static final String APPLICATION_REJECTED = "REJECTED";
     private static final String APPLICATION_CANCELLED = "CANCELLED";
 
-    private static final String MATCH_FORMAT_SINGLE = "SINGLE";
-    private static final String MATCH_FORMAT_DOUBLE = "DOUBLE";
-    private static final String MATCH_FORMAT_TEAM = "TEAM";
-
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
-    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-    private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm", Locale.KOREAN);
-    private static final DateTimeFormatter DATE_LABEL_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.KOREAN);
-
     private final TournamentRecordRepository tournamentRecordRepository;
     private final TournamentApplicationRepository tournamentApplicationRepository;
     private final BracketParticipantRepository bracketParticipantRepository;
@@ -88,7 +71,7 @@ public class ClubTournamentService {
     private final ClubAccessResolver clubAccessResolver;
     private final ClubTournamentPermissionService clubTournamentPermissionService;
     private final ClubContentShareService clubContentShareService;
-    private final ImageFileUrlResolver imageFileUrlResolver;
+    private final ClubTournamentSupport clubTournamentSupport;
 
     public ClubTournamentHomeResponse getTournamentHome(Long clubId, String userKey) {
         requireTournamentFeature(clubId);
@@ -172,7 +155,10 @@ public class ClubTournamentService {
         if (!clubTournamentPermissionService.canCreateTournament(access)) {
             throw new SemoException.ForbiddenException("대회를 생성할 권한이 없습니다.");
         }
-        TournamentDraft draft = toTournamentDraft(request, access, null);
+        ClubTournamentSupport.TournamentDraft draft = clubTournamentSupport.toTournamentDraft(
+                request,
+                access
+        );
         ClubActivityContextHolder.setDetails(
                 "대회 '" + draft.title() + "'을 생성했습니다.",
                 "대회 '" + draft.title() + "' 생성에 실패했습니다."
@@ -227,7 +213,10 @@ public class ClubTournamentService {
         if (!permission.canEdit()) {
             throw new SemoException.ForbiddenException("대회를 수정할 권한이 없습니다.");
         }
-        TournamentDraft draft = toTournamentDraft(request, access, current);
+        ClubTournamentSupport.TournamentDraft draft = clubTournamentSupport.toTournamentDraft(
+                request,
+                access
+        );
         ClubActivityContextHolder.setDetails(
                 "대회 '" + current.getTitle() + "'을 수정했습니다.",
                 "대회 '" + current.getTitle() + "' 수정에 실패했습니다."
@@ -282,8 +271,10 @@ public class ClubTournamentService {
             throw new SemoException.ForbiddenException("대회 승인 검토 권한이 없습니다.");
         }
         TournamentRecord current = getTournament(clubId, tournamentRecordId);
-        String approvalStatus = normalizeTournamentApprovalStatus(request.approvalStatus());
-        String rejectionReason = trimToNull(request.rejectionReason());
+        String approvalStatus = clubTournamentSupport.normalizeTournamentApprovalStatus(
+                request.approvalStatus()
+        );
+        String rejectionReason = clubTournamentSupport.trimToNull(request.rejectionReason());
         if (APPROVAL_REJECTED.equals(approvalStatus) && rejectionReason == null) {
             throw new SemoException.ValidationException("대회 거절 사유를 입력해야 합니다.");
         }
@@ -376,7 +367,7 @@ public class ClubTournamentService {
                 .sharedToCalendar(current.isSharedToCalendar())
                 .pinned(current.isPinned())
                 .cancelledAt(LocalDateTime.now())
-                .cancelReason(trimToNull(request == null ? null : request.cancelReason()))
+                .cancelReason(clubTournamentSupport.trimToNull(request == null ? null : request.cancelReason()))
                 .deleted(false)
                 .build());
         return buildTournamentDetail(access, saved);
@@ -476,12 +467,12 @@ public class ClubTournamentService {
                     .tournamentRecordId(tournamentRecordId)
                     .clubProfileId(access.clubProfile().getClubProfileId())
                     .applicationStatus(APPLICATION_APPLIED)
-                    .applicationNote(trimToNull(request == null ? null : request.applicationNote()))
+                    .applicationNote(clubTournamentSupport.trimToNull(request == null ? null : request.applicationNote()))
                     .reviewedByClubProfileId(null)
                     .reviewedAt(null)
                     .build());
         } else {
-            current.markApplied(trimToNull(request == null ? null : request.applicationNote()));
+            current.markApplied(clubTournamentSupport.trimToNull(request == null ? null : request.applicationNote()));
             tournamentApplicationRepository.save(current);
         }
         return buildTournamentDetail(access, tournament);
@@ -528,7 +519,9 @@ public class ClubTournamentService {
         TournamentApplication current = tournamentApplicationRepository.findById(tournamentApplicationId)
                 .filter(application -> application.getTournamentRecordId().equals(tournamentRecordId))
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TournamentApplication", "tournamentApplicationId", tournamentApplicationId));
-        String nextStatus = normalizeApplicationReviewStatus(request.applicationStatus());
+        String nextStatus = clubTournamentSupport.normalizeApplicationReviewStatus(
+                request.applicationStatus()
+        );
         ClubActivityContextHolder.setDetails(
                 "대회 '" + tournament.getTitle() + "' 참가 신청을 " + nextStatus + " 처리했습니다.",
                 "대회 '" + tournament.getTitle() + "' 참가 신청 검토에 실패했습니다."
@@ -574,18 +567,18 @@ public class ClubTournamentService {
                 tournament.getDetailText(),
                 tournament.getApprovalStatus(),
                 resolveTournamentStatus(tournament),
-                resolveDisplayName(profileById.get(tournament.getAuthorClubProfileId())),
-                resolveAvatarImageUrl(profileById.get(tournament.getAuthorClubProfileId())),
-                resolveAvatarThumbnailUrl(profileById.get(tournament.getAuthorClubProfileId())),
-                resolveDisplayName(profileById.get(tournament.getReviewedByClubProfileId())),
-                formatDateTimeLabel(tournament.getReviewedAt()),
+                clubTournamentSupport.resolveDisplayName(profileById.get(tournament.getAuthorClubProfileId())),
+                clubTournamentSupport.resolveAvatarImageUrl(profileById.get(tournament.getAuthorClubProfileId())),
+                clubTournamentSupport.resolveAvatarThumbnailUrl(profileById.get(tournament.getAuthorClubProfileId())),
+                clubTournamentSupport.resolveDisplayName(profileById.get(tournament.getReviewedByClubProfileId())),
+                clubTournamentSupport.formatDateTimeLabel(tournament.getReviewedAt()),
                 tournament.getRejectionReason(),
-                formatDateTime(tournament.getApplicationStartAt()),
-                formatDateTime(tournament.getApplicationEndAt()),
-                formatApplicationWindowLabel(tournament),
-                formatDate(tournament.getStartDate()),
-                formatDate(tournament.getEndDate()),
-                formatTournamentPeriodLabel(tournament),
+                clubTournamentSupport.formatDateTime(tournament.getApplicationStartAt()),
+                clubTournamentSupport.formatDateTime(tournament.getApplicationEndAt()),
+                clubTournamentSupport.formatApplicationWindowLabel(tournament),
+                clubTournamentSupport.formatDate(tournament.getStartDate()),
+                clubTournamentSupport.formatDate(tournament.getEndDate()),
+                clubTournamentSupport.formatTournamentPeriodLabel(tournament),
                 tournament.getLocationLabel(),
                 tournament.getMatchFormat(),
                 tournament.getTeamMemberLimit(),
@@ -596,7 +589,7 @@ public class ClubTournamentService {
                 tournament.isSharedToBoard(),
                 tournament.isSharedToCalendar(),
                 tournament.isPinned(),
-                tournament.getCancelledAt() == null ? null : DATE_TIME_LABEL_FORMATTER.format(tournament.getCancelledAt()),
+                clubTournamentSupport.formatDateTimeLabel(tournament.getCancelledAt()),
                 tournament.getCancelReason(),
                 applications.size(),
                 approvedApplications.size(),
@@ -654,13 +647,13 @@ public class ClubTournamentService {
                             tournament.getSummaryText(),
                             tournament.getApprovalStatus(),
                             resolveTournamentStatus(tournament),
-                            resolveDisplayName(profileById.get(tournament.getAuthorClubProfileId())),
-                            resolveAvatarImageUrl(profileById.get(tournament.getAuthorClubProfileId())),
-                            resolveAvatarThumbnailUrl(profileById.get(tournament.getAuthorClubProfileId())),
-                            formatApplicationWindowLabel(tournament),
-                            formatTournamentPeriodLabel(tournament),
-                            formatDate(tournament.getStartDate()),
-                            formatDate(tournament.getEndDate()),
+                            clubTournamentSupport.resolveDisplayName(profileById.get(tournament.getAuthorClubProfileId())),
+                            clubTournamentSupport.resolveAvatarImageUrl(profileById.get(tournament.getAuthorClubProfileId())),
+                            clubTournamentSupport.resolveAvatarThumbnailUrl(profileById.get(tournament.getAuthorClubProfileId())),
+                            clubTournamentSupport.formatApplicationWindowLabel(tournament),
+                            clubTournamentSupport.formatTournamentPeriodLabel(tournament),
+                            clubTournamentSupport.formatDate(tournament.getStartDate()),
+                            clubTournamentSupport.formatDate(tournament.getEndDate()),
                             tournament.getLocationLabel(),
                             tournament.getMatchFormat(),
                             tournament.getTeamMemberLimit(),
@@ -695,12 +688,12 @@ public class ClubTournamentService {
         return new TournamentApplicationSummaryResponse(
                 application.getTournamentApplicationId(),
                 application.getClubProfileId(),
-                resolveDisplayName(profile),
-                resolveAvatarImageUrl(profile),
-                resolveAvatarThumbnailUrl(profile),
+                clubTournamentSupport.resolveDisplayName(profile),
+                clubTournamentSupport.resolveAvatarImageUrl(profile),
+                clubTournamentSupport.resolveAvatarThumbnailUrl(profile),
                 application.getApplicationStatus(),
                 application.getApplicationNote(),
-                DATE_TIME_LABEL_FORMATTER.format(application.getCreateDate()),
+                clubTournamentSupport.formatDateTimeLabel(application.getCreateDate()),
                 mine,
                 canManageApplications,
                 mine && (APPLICATION_APPLIED.equals(application.getApplicationStatus()) || APPLICATION_APPROVED.equals(application.getApplicationStatus()))
@@ -710,10 +703,10 @@ public class ClubTournamentService {
     private TournamentParticipantSummaryResponse toParticipantSummary(TournamentApplication application, ClubProfile profile) {
         return new TournamentParticipantSummaryResponse(
                 application.getClubProfileId(),
-                resolveDisplayName(profile),
-                resolveAvatarImageUrl(profile),
-                resolveAvatarThumbnailUrl(profile),
-                formatDateTimeLabel(application.getReviewedAt())
+                clubTournamentSupport.resolveDisplayName(profile),
+                clubTournamentSupport.resolveAvatarImageUrl(profile),
+                clubTournamentSupport.resolveAvatarThumbnailUrl(profile),
+                clubTournamentSupport.formatDateTimeLabel(application.getReviewedAt())
         );
     }
 
@@ -744,66 +737,10 @@ public class ClubTournamentService {
         return new TournamentUpsertResponse(
                 tournament.getTournamentRecordId(),
                 tournament.getTitle(),
-                formatDate(tournament.getStartDate()),
-                formatDate(tournament.getEndDate()),
+                clubTournamentSupport.formatDate(tournament.getStartDate()),
+                clubTournamentSupport.formatDate(tournament.getEndDate()),
                 tournament.getApprovalStatus(),
                 resolveTournamentStatus(tournament)
-        );
-    }
-
-    private TournamentDraft toTournamentDraft(
-            UpsertTournamentRequest request,
-            ClubAccessResolver.ClubAccess access,
-            TournamentRecord current
-    ) {
-        if (request == null) {
-            throw new SemoException.ValidationException("대회 요청이 비어 있습니다.");
-        }
-        String matchFormat = normalizeMatchFormat(request.matchFormat());
-        Integer teamMemberLimit = normalizeTeamMemberLimit(matchFormat, request.teamMemberLimit());
-        LocalDateTime applicationStartAt = parseRequiredDateTime(request.applicationStartAt());
-        LocalDateTime applicationEndAt = parseRequiredDateTime(request.applicationEndAt());
-        LocalDate startDate = parseRequiredDate(request.startDate());
-        LocalDate endDate = parseRequiredDate(request.endDate());
-        if (applicationEndAt.isBefore(applicationStartAt)) {
-            throw new SemoException.ValidationException("신청 종료일시는 시작일시 이후여야 합니다.");
-        }
-        if (endDate.isBefore(startDate)) {
-            throw new SemoException.ValidationException("대회 종료일은 시작일 이후여야 합니다.");
-        }
-        if (applicationEndAt.toLocalDate().isAfter(endDate)) {
-            throw new SemoException.ValidationException("참가 신청 종료일은 대회 종료일보다 늦을 수 없습니다.");
-        }
-        boolean feeRequired = request.feeRequired() != null && request.feeRequired();
-        Integer feeAmount = feeRequired ? request.feeAmount() : null;
-        if (feeRequired && feeAmount != null && feeAmount < 0) {
-            throw new SemoException.ValidationException("참가비는 0 이상이어야 합니다.");
-        }
-        if (request.participantLimit() != null && request.participantLimit() < 2) {
-            throw new SemoException.ValidationException("참가 인원 제한은 2 이상이어야 합니다.");
-        }
-        boolean pinned = request.pinned() != null && request.pinned();
-        if (pinned && !clubTournamentPermissionService.canPinTournament(access)) {
-            throw new SemoException.ForbiddenException("대회를 고정할 권한이 없습니다.");
-        }
-        return new TournamentDraft(
-                request.title().trim(),
-                trimToNull(request.summaryText()),
-                trimToNull(request.detailText()),
-                applicationStartAt,
-                applicationEndAt,
-                startDate,
-                endDate,
-                trimToNull(request.locationLabel()),
-                matchFormat,
-                teamMemberLimit,
-                request.participantLimit(),
-                feeRequired,
-                feeAmount,
-                normalizeCurrencyCode(request.feeCurrencyCode()),
-                request.postToBoard() == null || request.postToBoard(),
-                request.postToCalendar() == null || request.postToCalendar(),
-                pinned
         );
     }
 
@@ -895,123 +832,6 @@ public class ClubTournamentService {
         return STATUS_DRAFT;
     }
 
-    private String formatApplicationWindowLabel(TournamentRecord tournament) {
-        return DATE_TIME_LABEL_FORMATTER.format(tournament.getApplicationStartAt())
-                + " ~ "
-                + DATE_TIME_LABEL_FORMATTER.format(tournament.getApplicationEndAt());
-    }
-
-    private String formatTournamentPeriodLabel(TournamentRecord tournament) {
-        if (tournament.getStartDate().equals(tournament.getEndDate())) {
-            return DATE_LABEL_FORMATTER.format(tournament.getStartDate());
-        }
-        return DATE_LABEL_FORMATTER.format(tournament.getStartDate())
-                + " ~ "
-                + DATE_LABEL_FORMATTER.format(tournament.getEndDate());
-    }
-
-    private String formatDate(LocalDate date) {
-        return date == null ? null : DATE_FORMATTER.format(date);
-    }
-
-    private String formatDateTime(LocalDateTime dateTime) {
-        return dateTime == null ? null : DATE_TIME_FORMATTER.format(dateTime);
-    }
-
-    private String formatDateTimeLabel(LocalDateTime dateTime) {
-        return dateTime == null ? null : DATE_TIME_LABEL_FORMATTER.format(dateTime);
-    }
-
-    private String resolveDisplayName(ClubProfile profile) {
-        return profile == null ? "알 수 없음" : profile.getDisplayName();
-    }
-
-    private String resolveAvatarImageUrl(ClubProfile profile) {
-        return profile == null ? null : imageFileUrlResolver.resolveImageUrl(profile.getAvatarFileName());
-    }
-
-    private String resolveAvatarThumbnailUrl(ClubProfile profile) {
-        return profile == null ? null : imageFileUrlResolver.resolveThumbnailUrl(profile.getAvatarFileName());
-    }
-
-    private String normalizeRequiredKey(String value) {
-        if (!StringUtils.hasText(value)) {
-            throw new SemoException.ValidationException("필수 값이 비어 있습니다.");
-        }
-        return value.trim().toUpperCase(Locale.ROOT);
-    }
-
-    private String normalizeMatchFormat(String value) {
-        String normalized = normalizeRequiredKey(value);
-        if (!Set.of(MATCH_FORMAT_SINGLE, MATCH_FORMAT_DOUBLE, MATCH_FORMAT_TEAM).contains(normalized)) {
-            throw new SemoException.ValidationException("지원하지 않는 경기 형식입니다.");
-        }
-        return normalized;
-    }
-
-    private Integer normalizeTeamMemberLimit(String matchFormat, Integer teamMemberLimit) {
-        if (!MATCH_FORMAT_TEAM.equals(matchFormat)) {
-            return null;
-        }
-        if (teamMemberLimit == null || teamMemberLimit < 3) {
-            throw new SemoException.ValidationException("단체전은 팀 인원을 3명 이상으로 설정해야 합니다.");
-        }
-        return teamMemberLimit;
-    }
-
-    private String normalizeApplicationReviewStatus(String value) {
-        String normalized = normalizeRequiredKey(value);
-        if (!Set.of(APPLICATION_APPROVED, APPLICATION_REJECTED).contains(normalized)) {
-            throw new SemoException.ValidationException("참가 신청 상태는 APPROVED 또는 REJECTED만 가능합니다.");
-        }
-        return normalized;
-    }
-
-    private String normalizeTournamentApprovalStatus(String value) {
-        String normalized = normalizeRequiredKey(value);
-        if (!Set.of(APPROVAL_APPROVED, APPROVAL_REJECTED).contains(normalized)) {
-            throw new SemoException.ValidationException("대회 검토 상태는 APPROVED 또는 REJECTED만 가능합니다.");
-        }
-        return normalized;
-    }
-
-    private String normalizeCurrencyCode(String value) {
-        if (!StringUtils.hasText(value)) {
-            return "KRW";
-        }
-        return value.trim().toUpperCase(Locale.ROOT);
-    }
-
-    private LocalDate parseRequiredDate(String value) {
-        try {
-            return LocalDate.parse(value, DATE_FORMATTER);
-        } catch (DateTimeParseException exception) {
-            throw new SemoException.ValidationException("잘못된 날짜 형식입니다.");
-        }
-    }
-
-    private LocalDateTime parseRequiredDateTime(String value) {
-        try {
-            return LocalDateTime.parse(value, DATE_TIME_FORMATTER);
-        } catch (DateTimeParseException exception) {
-            throw new SemoException.ValidationException("잘못된 일시 형식입니다.");
-        }
-    }
-
-    private LocalDateTime parseOptionalDateTime(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        return parseRequiredDateTime(value.trim());
-    }
-
-    private String trimToNull(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        return value.trim();
-    }
-
     private boolean isTournamentApproved(TournamentRecord tournament) {
         return tournament != null && APPROVAL_APPROVED.equals(tournament.getApprovalStatus());
     }
@@ -1031,27 +851,6 @@ public class ClubTournamentService {
     private boolean canManageApplications(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
         return access.isAdmin()
                 || access.clubProfile().getClubProfileId().equals(tournament.getAuthorClubProfileId());
-    }
-
-    private record TournamentDraft(
-            String title,
-            String summaryText,
-            String detailText,
-            LocalDateTime applicationStartAt,
-            LocalDateTime applicationEndAt,
-            LocalDate startDate,
-            LocalDate endDate,
-            String locationLabel,
-            String matchFormat,
-            Integer teamMemberLimit,
-            Integer participantLimit,
-            boolean feeRequired,
-            Integer feeAmount,
-            String feeCurrencyCode,
-            boolean postToBoard,
-            boolean postToCalendar,
-            boolean pinned
-    ) {
     }
 
     private record TournamentViewerState(

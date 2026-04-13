@@ -4,34 +4,25 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.common.util.ImageFileUrlResolver;
 import semo.back.service.database.pub.entity.ClubCalendarItem;
 import semo.back.service.database.pub.entity.ClubEventParticipant;
-import semo.back.service.database.pub.entity.ClubNotice;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.entity.ClubScheduleVote;
 import semo.back.service.database.pub.entity.ClubScheduleVoteOption;
 import semo.back.service.database.pub.entity.ClubScheduleVoteSelection;
-import semo.back.service.database.pub.entity.TournamentRecord;
 import semo.back.service.database.pub.repository.ClubCalendarItemRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
-import semo.back.service.database.pub.repository.ClubNoticeRepository;
-import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteOptionRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
-import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.ClubAccessResolver;
-import semo.back.service.feature.notice.biz.ClubNoticeService;
 import semo.back.service.feature.poll.biz.ClubPollPermissionService;
 import semo.back.service.feature.schedule.vo.ClubCalendarFeedItemResponse;
-import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.share.biz.ClubContentShareService;
 import semo.back.service.feature.schedule.vo.ClubScheduleResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventDetailResponse;
@@ -47,21 +38,14 @@ import semo.back.service.feature.schedule.vo.SubmitScheduleVoteSelectionRequest;
 import semo.back.service.feature.schedule.vo.UpdateScheduleEventParticipationRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleEventRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleVoteRequest;
-import semo.back.service.feature.tournament.biz.ClubTournamentService;
-import semo.back.service.feature.tournament.vo.TournamentSummaryResponse;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -73,15 +57,6 @@ public class ClubScheduleService {
     private static final String PARTICIPATION_GOING = "GOING";
     private static final String PARTICIPATION_NOT_GOING = "NOT_GOING";
     private static final String PARTICIPATION_CANCEL = "CANCEL";
-    private static final String CONTENT_NOTICE = ClubContentShareService.CONTENT_NOTICE;
-    private static final String CONTENT_SCHEDULE_EVENT = ClubContentShareService.CONTENT_SCHEDULE_EVENT;
-    private static final String CONTENT_SCHEDULE_VOTE = ClubContentShareService.CONTENT_SCHEDULE_VOTE;
-    private static final String CONTENT_TOURNAMENT = ClubContentShareService.CONTENT_TOURNAMENT;
-    private static final DateTimeFormatter DATE_REQUEST_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
-    private static final DateTimeFormatter DATE_LABEL_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy.MM.dd (E)", Locale.KOREAN);
-    private static final DateTimeFormatter TIME_REQUEST_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
-    private static final DateTimeFormatter TIME_LABEL_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubEventParticipantRepository clubEventParticipantRepository;
@@ -89,22 +64,19 @@ public class ClubScheduleService {
     private final ClubScheduleVoteOptionRepository clubScheduleVoteOptionRepository;
     private final ClubScheduleVoteSelectionRepository clubScheduleVoteSelectionRepository;
     private final ClubCalendarItemRepository clubCalendarItemRepository;
-    private final ClubNoticeRepository clubNoticeRepository;
-    private final ClubProfileRepository clubProfileRepository;
-    private final TournamentRecordRepository tournamentRecordRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubSchedulePermissionService clubSchedulePermissionService;
     private final ClubPollPermissionService clubPollPermissionService;
-    private final ClubNoticeService clubNoticeService;
     private final ClubContentShareService clubContentShareService;
-    private final ClubTournamentService clubTournamentService;
-    private final ImageFileUrlResolver imageFileUrlResolver;
+    private final ClubScheduleCalendarLoader clubScheduleCalendarLoader;
+    private final ClubScheduleCommandSupport clubScheduleCommandSupport;
+    private final ClubScheduleViewSupport clubScheduleViewSupport;
 
     public ClubScheduleResponse getClubSchedule(Long clubId, String userKey, Integer year, Integer month) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         Long viewerClubProfileId = access.clubProfile().getClubProfileId();
         LocalDate today = LocalDate.now();
-        LocalDate monthStartDate = resolveMonthStart(year, month);
+        LocalDate monthStartDate = clubScheduleViewSupport.resolveMonthStart(year, month);
         LocalDate monthEndDate = monthStartDate.withDayOfMonth(monthStartDate.lengthOfMonth());
         LocalDateTime monthStartAt = monthStartDate.atStartOfDay();
         LocalDateTime monthEndExclusive = monthEndDate.plusDays(1).atStartOfDay();
@@ -116,30 +88,20 @@ public class ClubScheduleService {
                 monthStartDate,
                 monthEndDate
         );
-        Map<Long, ClubNoticeSummaryResponse> noticeById = loadCalendarNoticeSummaries(access, calendarItems);
-        Map<Long, ScheduleEventSummaryResponse> eventById = loadCalendarEventSummaries(access, calendarItems);
-        Map<Long, ScheduleVoteSummaryResponse> voteById = loadCalendarVoteSummaries(access, calendarItems);
-        Map<Long, TournamentSummaryResponse> tournamentById = loadCalendarTournamentSummaries(access, calendarItems);
-        List<ClubCalendarFeedItemResponse> items = calendarItems.stream()
-                .map(item -> toCalendarFeedItemResponse(
-                        item,
-                        noticeById,
-                        eventById,
-                        voteById,
-                        tournamentById
-                ))
-                .filter(Objects::nonNull)
-                .toList();
+        List<ClubCalendarFeedItemResponse> items = clubScheduleCalendarLoader.loadCalendarFeedItems(
+                access,
+                calendarItems
+        );
 
         List<ScheduleEventSummaryResponse> monthEvents = items.stream()
                 .map(ClubCalendarFeedItemResponse::event)
                 .filter(Objects::nonNull)
                 .toList();
         List<ScheduleEventSummaryResponse> upcomingEvents = monthEvents.stream()
-                .filter(event -> !LocalDate.parse(event.startDate(), DATE_REQUEST_FORMATTER).isBefore(today))
+                .filter(event -> !LocalDate.parse(event.startDate()).isBefore(today))
                 .toList();
         List<ScheduleEventSummaryResponse> recentEvents = monthEvents.stream()
-                .filter(event -> LocalDate.parse(event.startDate(), DATE_REQUEST_FORMATTER).isBefore(today))
+                .filter(event -> LocalDate.parse(event.startDate()).isBefore(today))
                 .sorted(Comparator.comparing(ScheduleEventSummaryResponse::startDate).reversed())
                 .toList();
         List<ScheduleVoteSummaryResponse> votes = items.stream()
@@ -190,7 +152,7 @@ public class ClubScheduleService {
                         events.stream().map(ClubScheduleEvent::getEventId).toList()
                 ).stream()
                 .collect(Collectors.groupingBy(ClubEventParticipant::getEventId));
-        Map<Long, ClubProfile> authorProfileById = loadAuthorProfiles(
+        Map<Long, ClubProfile> authorProfileById = clubScheduleViewSupport.loadAuthorProfiles(
                 events.stream().map(ClubScheduleEvent::getAuthorClubProfileId).distinct().toList()
         );
 
@@ -210,14 +172,14 @@ public class ClubScheduleService {
     public ScheduleEventUpsertResponse createScheduleEvent(Long clubId, String userKey, UpsertScheduleEventRequest request) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireEventCreatePermission(access);
-        EventDraft draft = toEventDraft(request);
+        ClubScheduleCommandSupport.EventDraft draft = clubScheduleCommandSupport.toEventDraft(request);
         ClubActivityContextHolder.setDetails(
                 "일정 '" + draft.title() + "'을 생성했습니다.",
                 "일정 '" + draft.title() + "' 생성에 실패했습니다."
         );
-        boolean postToBoard = shouldPostToBoard(request.postToBoard());
-        boolean postToCalendar = shouldPostToCalendar(request.postToCalendar());
-        boolean pinned = shouldPin(request.pinned());
+        boolean postToBoard = clubScheduleCommandSupport.shouldPostToBoard(request.postToBoard());
+        boolean postToCalendar = clubScheduleCommandSupport.shouldPostToCalendar(request.postToCalendar());
+        boolean pinned = clubScheduleCommandSupport.shouldPin(request.pinned());
 
         ClubScheduleEvent event = clubScheduleEventRepository.save(ClubScheduleEvent.builder()
                 .clubId(clubId)
@@ -258,14 +220,14 @@ public class ClubScheduleService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleEvent current = getEvent(clubId, eventId);
         requireEventEditPermission(access, current.getAuthorClubProfileId());
-        EventDraft draft = toEventDraft(request);
+        ClubScheduleCommandSupport.EventDraft draft = clubScheduleCommandSupport.toEventDraft(request);
         ClubActivityContextHolder.setDetails(
                 "일정 '" + current.getTitle() + "'을 수정했습니다.",
                 "일정 '" + current.getTitle() + "' 수정에 실패했습니다."
         );
-        boolean postToBoard = shouldPostToBoard(request.postToBoard());
-        boolean postToCalendar = shouldPostToCalendar(request.postToCalendar());
-        boolean pinned = shouldPin(request.pinned());
+        boolean postToBoard = clubScheduleCommandSupport.shouldPostToBoard(request.postToBoard());
+        boolean postToCalendar = clubScheduleCommandSupport.shouldPostToCalendar(request.postToCalendar());
+        boolean pinned = clubScheduleCommandSupport.shouldPin(request.pinned());
 
         ClubScheduleEvent updated = clubScheduleEventRepository.save(ClubScheduleEvent.builder()
                 .eventId(current.getEventId())
@@ -341,9 +303,9 @@ public class ClubScheduleService {
         if (!event.isParticipationEnabled()) {
             throw new SemoException.ValidationException("이 일정은 참석 응답을 받지 않습니다.");
         }
-        String participationStatus = normalizeParticipationStatus(request);
+        String participationStatus = clubScheduleCommandSupport.normalizeParticipationStatus(request);
         ClubActivityContextHolder.setDetails(
-                "일정 '" + event.getTitle() + "'에 " + toParticipationActivityLabel(participationStatus) + ".",
+                "일정 '" + event.getTitle() + "'에 " + clubScheduleCommandSupport.toParticipationActivityLabel(participationStatus) + ".",
                 "일정 참석 상태 변경에 실패했습니다."
         );
 
@@ -373,14 +335,14 @@ public class ClubScheduleService {
     public ScheduleVoteUpsertResponse createScheduleVote(Long clubId, String userKey, UpsertScheduleVoteRequest request) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireVoteCreatePermission(access);
-        VoteDraft draft = toVoteDraft(request);
+        ClubScheduleCommandSupport.VoteDraft draft = clubScheduleCommandSupport.toVoteDraft(request);
         ClubActivityContextHolder.setDetails(
                 "투표 '" + draft.title() + "'를 생성했습니다.",
                 "투표 '" + draft.title() + "' 생성에 실패했습니다."
         );
-        boolean postToBoard = shouldPostToBoard(request.postToBoard());
-        boolean postToCalendar = shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
-        boolean pinned = shouldPin(request.pinned());
+        boolean postToBoard = clubScheduleCommandSupport.shouldPostToBoard(request.postToBoard());
+        boolean postToCalendar = clubScheduleCommandSupport.shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
+        boolean pinned = clubScheduleCommandSupport.shouldPin(request.pinned());
 
         ClubScheduleVote vote = clubScheduleVoteRepository.save(ClubScheduleVote.builder()
                 .clubId(clubId)
@@ -412,14 +374,14 @@ public class ClubScheduleService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote current = getVote(clubId, voteId);
         requireVoteEditPermission(access, current.getAuthorClubProfileId());
-        VoteDraft draft = toVoteDraft(request);
+        ClubScheduleCommandSupport.VoteDraft draft = clubScheduleCommandSupport.toVoteDraft(request);
         ClubActivityContextHolder.setDetails(
                 "투표 '" + current.getTitle() + "'를 수정했습니다.",
                 "투표 '" + current.getTitle() + "' 수정에 실패했습니다."
         );
-        boolean postToBoard = shouldPostToBoard(request.postToBoard());
-        boolean postToCalendar = shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
-        boolean pinned = shouldPin(request.pinned());
+        boolean postToBoard = clubScheduleCommandSupport.shouldPostToBoard(request.postToBoard());
+        boolean postToCalendar = clubScheduleCommandSupport.shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
+        boolean pinned = clubScheduleCommandSupport.shouldPin(request.pinned());
 
         ClubScheduleVote updated = clubScheduleVoteRepository.save(ClubScheduleVote.builder()
                 .voteId(current.getVoteId())
@@ -550,7 +512,7 @@ public class ClubScheduleService {
                         votes.stream().map(ClubScheduleVote::getVoteId).toList()
                 ).stream()
                 .collect(Collectors.groupingBy(ClubScheduleVoteSelection::getVoteId));
-        Map<Long, ClubProfile> authorProfileById = loadAuthorProfiles(
+        Map<Long, ClubProfile> authorProfileById = clubScheduleViewSupport.loadAuthorProfiles(
                 votes.stream().map(ClubScheduleVote::getAuthorClubProfileId).distinct().toList()
         );
 
@@ -566,14 +528,14 @@ public class ClubScheduleService {
                     return new ScheduleVoteSummaryResponse(
                             vote.getVoteId(),
                             vote.getTitle(),
-                            resolveAuthorDisplayName(authorProfileById.get(vote.getAuthorClubProfileId())),
-                            resolveAuthorAvatarImageUrl(authorProfileById.get(vote.getAuthorClubProfileId())),
-                            resolveAuthorAvatarThumbnailUrl(authorProfileById.get(vote.getAuthorClubProfileId())),
+                            clubScheduleViewSupport.resolveAuthorDisplayName(authorProfileById.get(vote.getAuthorClubProfileId())),
+                            clubScheduleViewSupport.resolveAuthorAvatarImageUrl(authorProfileById.get(vote.getAuthorClubProfileId())),
+                            clubScheduleViewSupport.resolveAuthorAvatarThumbnailUrl(authorProfileById.get(vote.getAuthorClubProfileId())),
                             resolveVoteStatus(vote),
-                            formatDateValue(vote.getVoteStartDate()),
-                            formatDateValue(vote.getVoteEndDate()),
-                            formatDateRangeLabel(vote.getVoteStartDate(), vote.getVoteEndDate()),
-                            formatVoteTimeLabel(vote.getVoteStartTime(), vote.getVoteEndTime()),
+                            clubScheduleViewSupport.formatDateValue(vote.getVoteStartDate()),
+                            clubScheduleViewSupport.formatDateValue(vote.getVoteEndDate()),
+                            clubScheduleViewSupport.formatDateRangeLabel(vote.getVoteStartDate(), vote.getVoteEndDate()),
+                            clubScheduleViewSupport.formatVoteTimeLabel(vote.getVoteStartTime(), vote.getVoteEndTime()),
                             selection.options().size(),
                             selection.totalResponses(),
                             vote.isSharedToBoard(),
@@ -610,12 +572,15 @@ public class ClubScheduleService {
                 access.isAdmin(),
                 event.getEventId(),
                 event.getTitle(),
-                formatDateValue(event.getStartAt().toLocalDate()),
-                event.getEndAt() == null ? null : formatDateValue(event.getEndAt().toLocalDate()),
-                formatDateRangeLabel(event.getStartAt().toLocalDate(), event.getEndAt() == null ? null : event.getEndAt().toLocalDate()),
-                formatTimeValue(event.getStartAt(), event.getEndAt()),
-                formatEndTimeValue(event.getStartAt(), event.getEndAt()),
-                formatTimeLabel(event.getStartAt(), event.getEndAt()),
+                clubScheduleViewSupport.formatDateValue(event.getStartAt().toLocalDate()),
+                event.getEndAt() == null ? null : clubScheduleViewSupport.formatDateValue(event.getEndAt().toLocalDate()),
+                clubScheduleViewSupport.formatDateRangeLabel(
+                        event.getStartAt().toLocalDate(),
+                        event.getEndAt() == null ? null : event.getEndAt().toLocalDate()
+                ),
+                clubScheduleViewSupport.formatTimeValue(event.getStartAt(), event.getEndAt()),
+                clubScheduleViewSupport.formatEndTimeValue(event.getStartAt(), event.getEndAt()),
+                clubScheduleViewSupport.formatTimeLabel(event.getStartAt(), event.getEndAt()),
                 event.getAttendeeLimit(),
                 event.getLocationLabel(),
                 event.getParticipationConditionText(),
@@ -657,12 +622,12 @@ public class ClubScheduleService {
                 vote.getVoteId(),
                 vote.getTitle(),
                 resolveVoteStatus(vote),
-                formatDateValue(vote.getVoteStartDate()),
-                formatDateValue(vote.getVoteEndDate()),
-                formatDateRangeLabel(vote.getVoteStartDate(), vote.getVoteEndDate()),
-                formatOptionalTimeValue(vote.getVoteStartTime()),
-                formatOptionalTimeValue(vote.getVoteEndTime()),
-                formatVoteTimeLabel(vote.getVoteStartTime(), vote.getVoteEndTime()),
+                clubScheduleViewSupport.formatDateValue(vote.getVoteStartDate()),
+                clubScheduleViewSupport.formatDateValue(vote.getVoteEndDate()),
+                clubScheduleViewSupport.formatDateRangeLabel(vote.getVoteStartDate(), vote.getVoteEndDate()),
+                clubScheduleViewSupport.formatOptionalTimeValue(vote.getVoteStartTime()),
+                clubScheduleViewSupport.formatOptionalTimeValue(vote.getVoteEndTime()),
+                clubScheduleViewSupport.formatVoteTimeLabel(vote.getVoteStartTime(), vote.getVoteEndTime()),
                 vote.isSharedToBoard(),
                 vote.isSharedToCalendar(),
                 vote.isSharedToCalendar(),
@@ -675,114 +640,6 @@ public class ClubScheduleService {
                 actionPermission.canDelete(),
                 isVoteOpen(vote)
         );
-    }
-
-    private EventDraft toEventDraft(UpsertScheduleEventRequest request) {
-        if (request == null) {
-            throw new SemoException.ValidationException("일정 요청이 비어 있습니다.");
-        }
-
-        LocalDate startDate = parseDate(request.startDate());
-        LocalDate endDate = parseOptionalDate(request.endDate());
-        LocalTime startTime = parseOptionalTime(request.startTime());
-        LocalTime endTime = parseOptionalTime(request.endTime());
-        if (startTime == null && endTime != null) {
-            throw new SemoException.ValidationException("종료 시간만 단독으로 입력할 수 없습니다.");
-        }
-
-        LocalDate resolvedEndDate = endDate == null ? startDate : endDate;
-        LocalDateTime startAt = startDate.atTime(startTime == null ? LocalTime.MIDNIGHT : startTime);
-        LocalDateTime endAt = endDate == null && endTime == null
-                ? null
-                : resolvedEndDate.atTime(endTime == null ? LocalTime.MIDNIGHT : endTime);
-        if (endAt != null && endAt.isBefore(startAt)) {
-            throw new SemoException.ValidationException("종료 시간은 시작 시간보다 빠를 수 없습니다.");
-        }
-
-        boolean participationEnabled = Boolean.TRUE.equals(request.participationEnabled());
-        boolean feeRequired = Boolean.TRUE.equals(request.feeRequired());
-        boolean feeAmountUndecided = feeRequired && Boolean.TRUE.equals(request.feeAmountUndecided());
-        Integer feeAmount = feeRequired && !feeAmountUndecided ? request.feeAmount() : null;
-        if (feeRequired && !feeAmountUndecided && feeAmount == null) {
-            throw new SemoException.ValidationException("참가비를 입력하거나 금액 미정을 선택해야 합니다.");
-        }
-        return new EventDraft(
-                trimRequired(request.title(), "일정 제목은 필수입니다."),
-                startAt,
-                endAt,
-                participationEnabled ? request.attendeeLimit() : null,
-                trimToNull(request.locationLabel()),
-                participationEnabled ? trimToNull(request.participationConditionText()) : null,
-                participationEnabled,
-                feeRequired,
-                feeAmount,
-                feeAmountUndecided,
-                feeRequired && participationEnabled && Boolean.TRUE.equals(request.feeNWaySplit())
-        );
-    }
-
-    private VoteDraft toVoteDraft(UpsertScheduleVoteRequest request) {
-        if (request == null) {
-            throw new SemoException.ValidationException("투표 요청이 비어 있습니다.");
-        }
-
-        List<String> optionLabels = request.optionLabels() == null
-                ? List.of()
-                : request.optionLabels().stream()
-                .map(this::trimToNull)
-                .filter(Objects::nonNull)
-                .toList();
-        if (optionLabels.size() < 2) {
-            throw new SemoException.ValidationException("투표 항목은 최소 2개 이상이어야 합니다.");
-        }
-        if (optionLabels.size() != optionLabels.stream().distinct().count()) {
-            throw new SemoException.ValidationException("투표 항목은 중복될 수 없습니다.");
-        }
-
-        LocalDate voteStartDate = parseDate(request.voteStartDate());
-        LocalDate voteEndDate = parseDate(request.voteEndDate());
-        LocalTime voteStartTime = parseOptionalTime(request.voteStartTime());
-        LocalTime voteEndTime = parseOptionalTime(request.voteEndTime());
-        if (voteStartTime == null && voteEndTime != null) {
-            throw new SemoException.ValidationException("투표 종료 시간만 단독으로 입력할 수 없습니다.");
-        }
-
-        LocalDateTime voteStartAt = toVoteStartAt(voteStartDate, voteStartTime);
-        LocalDateTime voteEndAt = toVoteEffectiveEndAt(voteEndDate, voteEndTime);
-        if (voteEndAt.isBefore(voteStartAt)) {
-            throw new SemoException.ValidationException("투표 종료일시는 시작일시보다 빠를 수 없습니다.");
-        }
-
-        return new VoteDraft(
-                trimRequired(request.title(), "투표 제목은 필수입니다."),
-                voteStartDate,
-                voteEndDate,
-                voteStartTime,
-                voteEndTime,
-                optionLabels
-        );
-    }
-
-    private String normalizeParticipationStatus(UpdateScheduleEventParticipationRequest request) {
-        if (request == null || !StringUtils.hasText(request.participationStatus())) {
-            throw new SemoException.ValidationException("참석 상태는 필수입니다.");
-        }
-        String normalized = request.participationStatus().trim().toUpperCase(Locale.ROOT);
-        if (!PARTICIPATION_GOING.equals(normalized)
-                && !PARTICIPATION_NOT_GOING.equals(normalized)
-                && !PARTICIPATION_CANCEL.equals(normalized)) {
-            throw new SemoException.ValidationException("지원하지 않는 참석 상태입니다.");
-        }
-        return normalized;
-    }
-
-    private String toParticipationActivityLabel(String participationStatus) {
-        return switch (participationStatus) {
-            case PARTICIPATION_GOING -> "참석으로 응답했습니다";
-            case PARTICIPATION_NOT_GOING -> "불참으로 응답했습니다";
-            case PARTICIPATION_CANCEL -> "응답을 취소했습니다";
-            default -> "응답했습니다";
-        };
     }
 
     private ScheduleEventSummaryResponse toEventSummaryResponse(
@@ -798,13 +655,16 @@ public class ClubScheduleService {
         return new ScheduleEventSummaryResponse(
                 event.getEventId(),
                 event.getTitle(),
-                resolveAuthorDisplayName(authorProfile),
-                resolveAuthorAvatarImageUrl(authorProfile),
-                resolveAuthorAvatarThumbnailUrl(authorProfile),
-                formatDateValue(event.getStartAt().toLocalDate()),
-                event.getEndAt() == null ? null : formatDateValue(event.getEndAt().toLocalDate()),
-                formatDateRangeLabel(event.getStartAt().toLocalDate(), event.getEndAt() == null ? null : event.getEndAt().toLocalDate()),
-                formatTimeLabel(event.getStartAt(), event.getEndAt()),
+                clubScheduleViewSupport.resolveAuthorDisplayName(authorProfile),
+                clubScheduleViewSupport.resolveAuthorAvatarImageUrl(authorProfile),
+                clubScheduleViewSupport.resolveAuthorAvatarThumbnailUrl(authorProfile),
+                clubScheduleViewSupport.formatDateValue(event.getStartAt().toLocalDate()),
+                event.getEndAt() == null ? null : clubScheduleViewSupport.formatDateValue(event.getEndAt().toLocalDate()),
+                clubScheduleViewSupport.formatDateRangeLabel(
+                        event.getStartAt().toLocalDate(),
+                        event.getEndAt() == null ? null : event.getEndAt().toLocalDate()
+                ),
+                clubScheduleViewSupport.formatTimeLabel(event.getStartAt(), event.getEndAt()),
                 event.getAttendeeLimit(),
                 event.getLocationLabel(),
                 event.getParticipationConditionText(),
@@ -859,7 +719,7 @@ public class ClubScheduleService {
             return List.of();
         }
 
-        Map<Long, ClubProfile> profileById = loadAuthorProfiles(
+        Map<Long, ClubProfile> profileById = clubScheduleViewSupport.loadAuthorProfiles(
                 goingParticipants.stream()
                         .map(ClubEventParticipant::getClubProfileId)
                         .distinct()
@@ -871,9 +731,9 @@ public class ClubScheduleService {
                     ClubProfile profile = profileById.get(participant.getClubProfileId());
                     return new ScheduleEventParticipantSummaryResponse(
                             participant.getClubProfileId(),
-                            resolveAuthorDisplayName(profile),
-                            resolveAuthorAvatarImageUrl(profile),
-                            resolveAuthorAvatarThumbnailUrl(profile)
+                            clubScheduleViewSupport.resolveAuthorDisplayName(profile),
+                            clubScheduleViewSupport.resolveAuthorAvatarImageUrl(profile),
+                            clubScheduleViewSupport.resolveAuthorAvatarThumbnailUrl(profile)
                     );
                 })
                 .toList();
@@ -937,10 +797,13 @@ public class ClubScheduleService {
                 event.getEventId(),
                 null,
                 event.getTitle(),
-                formatDateValue(event.getStartAt().toLocalDate()),
-                event.getEndAt() == null ? null : formatDateValue(event.getEndAt().toLocalDate()),
-                formatDateRangeLabel(event.getStartAt().toLocalDate(), event.getEndAt() == null ? null : event.getEndAt().toLocalDate()),
-                formatTimeLabel(event.getStartAt(), event.getEndAt()),
+                clubScheduleViewSupport.formatDateValue(event.getStartAt().toLocalDate()),
+                event.getEndAt() == null ? null : clubScheduleViewSupport.formatDateValue(event.getEndAt().toLocalDate()),
+                clubScheduleViewSupport.formatDateRangeLabel(
+                        event.getStartAt().toLocalDate(),
+                        event.getEndAt() == null ? null : event.getEndAt().toLocalDate()
+                ),
+                clubScheduleViewSupport.formatTimeLabel(event.getStartAt(), event.getEndAt()),
                 event.isSharedToBoard(),
                 event.isSharedToCalendar(),
                 event.isPinned()
@@ -952,12 +815,12 @@ public class ClubScheduleService {
                 vote.getVoteId(),
                 null,
                 vote.getTitle(),
-                formatDateValue(vote.getVoteStartDate()),
-                formatDateValue(vote.getVoteEndDate()),
-                formatDateRangeLabel(vote.getVoteStartDate(), vote.getVoteEndDate()),
-                formatOptionalTimeValue(vote.getVoteStartTime()),
-                formatOptionalTimeValue(vote.getVoteEndTime()),
-                formatVoteTimeLabel(vote.getVoteStartTime(), vote.getVoteEndTime()),
+                clubScheduleViewSupport.formatDateValue(vote.getVoteStartDate()),
+                clubScheduleViewSupport.formatDateValue(vote.getVoteEndDate()),
+                clubScheduleViewSupport.formatDateRangeLabel(vote.getVoteStartDate(), vote.getVoteEndDate()),
+                clubScheduleViewSupport.formatOptionalTimeValue(vote.getVoteStartTime()),
+                clubScheduleViewSupport.formatOptionalTimeValue(vote.getVoteEndTime()),
+                clubScheduleViewSupport.formatVoteTimeLabel(vote.getVoteStartTime(), vote.getVoteEndTime()),
                 optionCount,
                 vote.isSharedToBoard(),
                 vote.isSharedToCalendar(),
@@ -1008,327 +871,8 @@ public class ClubScheduleService {
         }
     }
 
-    private LocalDate parseDate(String value) {
-        try {
-            return LocalDate.parse(value, DATE_REQUEST_FORMATTER);
-        } catch (DateTimeParseException exception) {
-            throw new SemoException.ValidationException("잘못된 날짜 형식입니다.");
-        }
-    }
-
-    private LocalDate parseOptionalDate(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        return parseDate(value);
-    }
-
-    private LocalTime parseOptionalTime(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        try {
-            return LocalTime.parse(value, TIME_REQUEST_FORMATTER);
-        } catch (DateTimeParseException exception) {
-            throw new SemoException.ValidationException("잘못된 시간 형식입니다.");
-        }
-    }
-
-    private String formatDateValue(LocalDate value) {
-        return value.format(DATE_REQUEST_FORMATTER);
-    }
-
-    private String formatDateLabel(LocalDate value) {
-        return value.format(DATE_LABEL_FORMATTER);
-    }
-
-    private String formatDateRangeLabel(LocalDate startDate, LocalDate endDate) {
-        if (endDate == null || endDate.equals(startDate)) {
-            return formatDateLabel(startDate);
-        }
-        return formatDateLabel(startDate) + " - " + formatDateLabel(endDate);
-    }
-
-    private String formatOptionalTimeValue(LocalTime value) {
-        if (value == null) {
-            return null;
-        }
-        return value.format(TIME_REQUEST_FORMATTER);
-    }
-
-    private String formatVoteTimeLabel(LocalTime startTime, LocalTime endTime) {
-        if (startTime == null && endTime == null) {
-            return null;
-        }
-        if (startTime == null) {
-            return null;
-        }
-        if (endTime == null) {
-            return startTime.format(TIME_LABEL_FORMATTER);
-        }
-        return startTime.format(TIME_LABEL_FORMATTER)
-                + " - "
-                + endTime.format(TIME_LABEL_FORMATTER);
-    }
-
-    private String formatTimeValue(LocalDateTime startAt, LocalDateTime endAt) {
-        if (!hasExplicitTime(startAt, endAt)) {
-            return null;
-        }
-        return startAt.toLocalTime().format(TIME_REQUEST_FORMATTER);
-    }
-
-    private String formatEndTimeValue(LocalDateTime startAt, LocalDateTime endAt) {
-        if (endAt == null || !hasExplicitTime(startAt, endAt)) {
-            return null;
-        }
-        return endAt.toLocalTime().format(TIME_REQUEST_FORMATTER);
-    }
-
-    private String formatTimeLabel(LocalDateTime startAt, LocalDateTime endAt) {
-        if (!hasExplicitTime(startAt, endAt)) {
-            return null;
-        }
-        if (endAt == null) {
-            return startAt.toLocalTime().format(TIME_LABEL_FORMATTER);
-        }
-        return startAt.toLocalTime().format(TIME_LABEL_FORMATTER)
-                + " - "
-                + endAt.toLocalTime().format(TIME_LABEL_FORMATTER);
-    }
-
-    private boolean hasExplicitTime(LocalDateTime startAt, LocalDateTime endAt) {
-        return !LocalTime.MIDNIGHT.equals(startAt.toLocalTime())
-                || (endAt != null && !LocalTime.MIDNIGHT.equals(endAt.toLocalTime()));
-    }
-
-    private String trimRequired(String value, String message) {
-        String normalized = trimToNull(value);
-        if (normalized == null) {
-            throw new SemoException.ValidationException(message);
-        }
-        return normalized;
-    }
-
-    private String trimToNull(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        return value.trim();
-    }
-
-    private boolean shouldPostToBoard(Boolean postToBoard) {
-        return postToBoard == null || postToBoard;
-    }
-
-    private boolean shouldPin(Boolean pinned) {
-        return Boolean.TRUE.equals(pinned);
-    }
-
-    private boolean shouldPostToCalendar(Boolean postToCalendar) {
-        return postToCalendar == null || postToCalendar;
-    }
-
-    private boolean shouldPostVoteToCalendar(Boolean postToCalendar, Boolean postToSchedule) {
-        if (postToCalendar != null) {
-            return postToCalendar;
-        }
-        if (postToSchedule != null) {
-            return postToSchedule;
-        }
-        return true;
-    }
-
-    private LocalDate resolveMonthStart(Integer year, Integer month) {
-        LocalDate today = LocalDate.now();
-        int resolvedYear = year == null ? today.getYear() : year;
-        int resolvedMonth = month == null ? today.getMonthValue() : month;
-        if (resolvedMonth < 1 || resolvedMonth > 12) {
-            throw new SemoException.ValidationException("조회 월은 1월부터 12월 사이여야 합니다.");
-        }
-        return LocalDate.of(resolvedYear, resolvedMonth, 1);
-    }
-
-    private LocalDateTime toVoteStartAt(LocalDate startDate, LocalTime startTime) {
-        return startDate.atTime(startTime == null ? LocalTime.MIDNIGHT : startTime);
-    }
-
-    private LocalDateTime toVoteEffectiveEndAt(LocalDate endDate, LocalTime endTime) {
-        return endDate.atTime(endTime == null ? LocalTime.MAX : endTime);
-    }
-
     private boolean isVoteOpen(ClubScheduleVote vote) {
         return "ONGOING".equals(resolveVoteStatus(vote));
-    }
-
-    private Map<Long, ClubProfile> loadAuthorProfiles(List<Long> clubProfileIds) {
-        if (clubProfileIds.isEmpty()) {
-            return Map.of();
-        }
-        return clubProfileRepository.findAllById(clubProfileIds).stream()
-                .collect(Collectors.toMap(ClubProfile::getClubProfileId, Function.identity()));
-    }
-
-    private String resolveAuthorDisplayName(ClubProfile authorProfile) {
-        return authorProfile == null ? "Unknown Member" : authorProfile.getDisplayName();
-    }
-
-    private String resolveAuthorAvatarImageUrl(ClubProfile authorProfile) {
-        return authorProfile == null ? null : imageFileUrlResolver.resolveImageUrl(authorProfile.getAvatarFileName());
-    }
-
-    private String resolveAuthorAvatarThumbnailUrl(ClubProfile authorProfile) {
-        return authorProfile == null ? null : imageFileUrlResolver.resolveThumbnailUrl(authorProfile.getAvatarFileName());
-    }
-
-    private Map<Long, ClubNoticeSummaryResponse> loadCalendarNoticeSummaries(
-            ClubAccessResolver.ClubAccess access,
-            List<ClubCalendarItem> calendarItems
-    ) {
-        List<Long> noticeIds = calendarItems.stream()
-                .filter(item -> CONTENT_NOTICE.equals(item.getContentType()))
-                .map(ClubCalendarItem::getContentId)
-                .toList();
-        if (noticeIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, ClubNotice> noticeById = clubNoticeRepository.findAllByNoticeIdIn(noticeIds).stream()
-                .filter(notice -> !notice.isDeleted())
-                .collect(Collectors.toMap(ClubNotice::getNoticeId, Function.identity()));
-        List<ClubNotice> noticesInOrder = noticeIds.stream()
-                .map(noticeById::get)
-                .filter(Objects::nonNull)
-                .toList();
-
-        return clubNoticeService.toNoticeSummaries(access, noticesInOrder).stream()
-                .collect(Collectors.toMap(ClubNoticeSummaryResponse::noticeId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
-    }
-
-    private Map<Long, ScheduleEventSummaryResponse> loadCalendarEventSummaries(
-            ClubAccessResolver.ClubAccess access,
-            List<ClubCalendarItem> calendarItems
-    ) {
-        List<Long> eventIds = calendarItems.stream()
-                .filter(item -> CONTENT_SCHEDULE_EVENT.equals(item.getContentType()))
-                .map(ClubCalendarItem::getContentId)
-                .toList();
-        if (eventIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, ClubScheduleEvent> eventById = clubScheduleEventRepository.findAllByEventIdIn(eventIds).stream()
-                .filter(event -> !"CANCELLED".equals(event.getEventStatus()))
-                .collect(Collectors.toMap(ClubScheduleEvent::getEventId, Function.identity()));
-        List<ClubScheduleEvent> eventsInOrder = eventIds.stream()
-                .map(eventById::get)
-                .filter(Objects::nonNull)
-                .toList();
-
-        return getEventSummariesForHome(access, eventsInOrder).stream()
-                .collect(Collectors.toMap(ScheduleEventSummaryResponse::eventId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
-    }
-
-    private Map<Long, ScheduleVoteSummaryResponse> loadCalendarVoteSummaries(
-            ClubAccessResolver.ClubAccess access,
-            List<ClubCalendarItem> calendarItems
-    ) {
-        List<Long> voteIds = calendarItems.stream()
-                .filter(item -> CONTENT_SCHEDULE_VOTE.equals(item.getContentType()))
-                .map(ClubCalendarItem::getContentId)
-                .toList();
-        if (voteIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, ClubScheduleVote> voteById = clubScheduleVoteRepository.findAllByVoteIdIn(voteIds).stream()
-                .collect(Collectors.toMap(ClubScheduleVote::getVoteId, Function.identity()));
-        List<ClubScheduleVote> votesInOrder = voteIds.stream()
-                .map(voteById::get)
-                .filter(Objects::nonNull)
-                .toList();
-
-        return getVoteSummariesForHome(access, votesInOrder).stream()
-                .collect(Collectors.toMap(ScheduleVoteSummaryResponse::voteId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
-    }
-
-    private Map<Long, TournamentSummaryResponse> loadCalendarTournamentSummaries(
-            ClubAccessResolver.ClubAccess access,
-            List<ClubCalendarItem> calendarItems
-    ) {
-        List<Long> tournamentIds = calendarItems.stream()
-                .filter(item -> CONTENT_TOURNAMENT.equals(item.getContentType()))
-                .map(ClubCalendarItem::getContentId)
-                .toList();
-        if (tournamentIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, TournamentRecord> tournamentById = tournamentRecordRepository.findAllByTournamentRecordIdIn(tournamentIds).stream()
-                .filter(tournament -> !tournament.isDeleted())
-                .collect(Collectors.toMap(TournamentRecord::getTournamentRecordId, Function.identity()));
-        List<TournamentRecord> tournamentsInOrder = tournamentIds.stream()
-                .map(tournamentById::get)
-                .filter(Objects::nonNull)
-                .toList();
-        return clubTournamentService.getTournamentSummariesForDisplay(access, tournamentsInOrder).stream()
-                .collect(Collectors.toMap(TournamentSummaryResponse::tournamentRecordId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
-    }
-
-    private ClubCalendarFeedItemResponse toCalendarFeedItemResponse(
-            ClubCalendarItem calendarItem,
-            Map<Long, ClubNoticeSummaryResponse> noticeById,
-            Map<Long, ScheduleEventSummaryResponse> eventById,
-            Map<Long, ScheduleVoteSummaryResponse> voteById,
-            Map<Long, TournamentSummaryResponse> tournamentById
-    ) {
-        return switch (calendarItem.getContentType()) {
-            case CONTENT_NOTICE -> {
-                ClubNoticeSummaryResponse notice = noticeById.get(calendarItem.getContentId());
-                yield notice == null ? null : new ClubCalendarFeedItemResponse(
-                        calendarItem.getCalendarItemId(),
-                        calendarItem.getContentType(),
-                        notice,
-                        null,
-                        null,
-                        null
-                );
-            }
-            case CONTENT_SCHEDULE_EVENT -> {
-                ScheduleEventSummaryResponse event = eventById.get(calendarItem.getContentId());
-                yield event == null ? null : new ClubCalendarFeedItemResponse(
-                        calendarItem.getCalendarItemId(),
-                        calendarItem.getContentType(),
-                        null,
-                        event,
-                        null,
-                        null
-                );
-            }
-            case CONTENT_SCHEDULE_VOTE -> {
-                ScheduleVoteSummaryResponse vote = voteById.get(calendarItem.getContentId());
-                yield vote == null ? null : new ClubCalendarFeedItemResponse(
-                        calendarItem.getCalendarItemId(),
-                        calendarItem.getContentType(),
-                        null,
-                        null,
-                        vote,
-                        null
-                );
-            }
-            case CONTENT_TOURNAMENT -> {
-                TournamentSummaryResponse tournament = tournamentById.get(calendarItem.getContentId());
-                yield tournament == null ? null : new ClubCalendarFeedItemResponse(
-                        calendarItem.getCalendarItemId(),
-                        calendarItem.getContentType(),
-                        null,
-                        null,
-                        null,
-                        tournament
-                );
-            }
-            default -> null;
-        };
     }
 
     private void syncEventShares(ClubScheduleEvent event) {
@@ -1367,39 +911,20 @@ public class ClubScheduleService {
             return "CLOSED";
         }
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime startAt = toVoteStartAt(vote.getVoteStartDate(), vote.getVoteStartTime());
+        LocalDateTime startAt = clubScheduleCommandSupport.toVoteStartAt(
+                vote.getVoteStartDate(),
+                vote.getVoteStartTime()
+        );
         if (now.isBefore(startAt)) {
             return "WAITING";
         }
-        if (now.isAfter(toVoteEffectiveEndAt(vote.getVoteEndDate(), vote.getVoteEndTime()))) {
+        if (now.isAfter(clubScheduleCommandSupport.toVoteEffectiveEndAt(
+                vote.getVoteEndDate(),
+                vote.getVoteEndTime()
+        ))) {
             return "CLOSED";
         }
         return "ONGOING";
-    }
-
-    private record EventDraft(
-            String title,
-            LocalDateTime startAt,
-            LocalDateTime endAt,
-            Integer attendeeLimit,
-            String locationLabel,
-            String participationConditionText,
-            boolean participationEnabled,
-            boolean feeRequired,
-            Integer feeAmount,
-            boolean feeAmountUndecided,
-            boolean feeNWaySplit
-    ) {
-    }
-
-    private record VoteDraft(
-            String title,
-            LocalDate voteStartDate,
-            LocalDate voteEndDate,
-            LocalTime voteStartTime,
-            LocalTime voteEndTime,
-            List<String> optionLabels
-    ) {
     }
 
     private record EventParticipationSnapshot(
