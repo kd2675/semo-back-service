@@ -1,4 +1,4 @@
-package semo.back.service.feature.finance.biz;
+package semo.back.service.feature.finance.biz.support;
 
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -57,19 +57,19 @@ public class ClubFinanceSupport {
     private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm", Locale.KOREAN);
 
-    String normalizeTitle(String title) {
+    public String normalizeTitle(String title) {
         return normalizeRequiredText(title, "재정 항목 이름은 필수입니다.");
     }
 
-    String normalizeRequestTitle(String title) {
+    public String normalizeRequestTitle(String title) {
         return normalizeRequiredText(title, "재정 요청 제목은 필수입니다.");
     }
 
-    String normalizeExpenseTitle(String title) {
+    public String normalizeExpenseTitle(String title) {
         return normalizeRequiredText(title, "지출 제목은 필수입니다.");
     }
 
-    String normalizeRequestType(String requestTypeCode) {
+    public String normalizeRequestType(String requestTypeCode) {
         String upperCased = normalizeUpperCase(requestTypeCode, "재정 요청 타입은 필수입니다.");
         if (!ALLOWED_REQUEST_TYPES.contains(upperCased)) {
             throw new SemoException.ValidationException("지원하지 않는 재정 요청 타입입니다.");
@@ -77,7 +77,7 @@ public class ClubFinanceSupport {
         return upperCased;
     }
 
-    String normalizeReviewStatus(String statusCode) {
+    public String normalizeReviewStatus(String statusCode) {
         String upperCased = normalizeUpperCase(statusCode, "요청 검토 상태는 필수입니다.");
         if (!ALLOWED_REVIEW_REQUEST_STATUSES.contains(upperCased)) {
             throw new SemoException.ValidationException("지원하지 않는 요청 검토 상태입니다.");
@@ -85,7 +85,7 @@ public class ClubFinanceSupport {
         return upperCased;
     }
 
-    String normalizeExpenseCategory(String categoryCode) {
+    public String normalizeExpenseCategory(String categoryCode) {
         String normalized = trimToNull(categoryCode);
         if (normalized == null) {
             return "OTHER";
@@ -97,7 +97,7 @@ public class ClubFinanceSupport {
         return upperCased;
     }
 
-    String normalizeTargetScope(String targetScopeCode) {
+    public String normalizeTargetScope(String targetScopeCode) {
         String normalized = trimToNull(targetScopeCode);
         if (normalized == null) {
             return "ALL_ACTIVE_MEMBERS";
@@ -109,14 +109,14 @@ public class ClubFinanceSupport {
         return upperCased;
     }
 
-    BigDecimal normalizeAmount(BigDecimal amount) {
+    public BigDecimal normalizeAmount(BigDecimal amount) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new SemoException.ValidationException("청구 금액은 0보다 커야 합니다.");
         }
         return amount.setScale(2, RoundingMode.HALF_UP);
     }
 
-    String normalizeUpdateStatus(String paymentStatusCode) {
+    public String normalizeUpdateStatus(String paymentStatusCode) {
         String upperCased = normalizeUpperCase(paymentStatusCode, "재정 상태는 필수입니다.");
         if (!ALLOWED_UPDATE_STATUSES.contains(upperCased)) {
             throw new SemoException.ValidationException("지원하지 않는 재정 상태입니다.");
@@ -124,19 +124,19 @@ public class ClubFinanceSupport {
         return upperCased;
     }
 
-    int normalizeAdminObligationPageSize(Integer size) {
+    public int normalizeAdminObligationPageSize(Integer size) {
         if (size == null || size < 1) {
             return DEFAULT_ADMIN_OBLIGATION_PAGE_SIZE;
         }
         return Math.min(size, MAX_ADMIN_OBLIGATION_PAGE_SIZE);
     }
 
-    String normalizeSearchQuery(String query) {
+    public String normalizeSearchQuery(String query) {
         String normalized = trimToNull(query);
         return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
-    String normalizeAdminObligationFilter(String obligationFilter) {
+    public String normalizeAdminObligationFilter(String obligationFilter) {
         String normalized = trimToNull(obligationFilter);
         if (normalized == null || "ALL".equalsIgnoreCase(normalized)) {
             return null;
@@ -148,11 +148,11 @@ public class ClubFinanceSupport {
         return upperCased;
     }
 
-    LocalDateTime parseDateTime(String rawValue, String errorMessage) {
+    public LocalDateTime parseDateTime(String rawValue, String errorMessage) {
         return parseDateTime(rawValue, errorMessage, null);
     }
 
-    LocalDateTime parseDateTime(String rawValue, String errorMessage, LocalDateTime defaultValue) {
+    public LocalDateTime parseDateTime(String rawValue, String errorMessage, LocalDateTime defaultValue) {
         String normalized = trimToNull(rawValue);
         if (normalized == null) {
             return defaultValue;
@@ -164,14 +164,14 @@ public class ClubFinanceSupport {
         }
     }
 
-    LocalDateTime parseNullableDateTime(String rawValue) {
+    public LocalDateTime parseNullableDateTime(String rawValue) {
         if (!StringUtils.hasText(rawValue)) {
             return null;
         }
         return LocalDateTime.parse(rawValue, DATE_TIME_VALUE_FORMATTER);
     }
 
-    LocalDateTime resolvePaidActivityAt(ClubFinanceUserObligationResponse obligation) {
+    public LocalDateTime resolvePaidActivityAt(ClubFinanceUserObligationResponse obligation) {
         LocalDateTime paidAt = parseNullableDateTime(obligation.payment().paidAt());
         if (paidAt != null) {
             return paidAt;
@@ -179,15 +179,15 @@ public class ClubFinanceSupport {
         return parseNullableDateTime(obligation.issuedAt());
     }
 
-    String formatDateTimeValue(LocalDateTime value) {
+    public String formatDateTimeValue(LocalDateTime value) {
         return value == null ? null : value.format(DATE_TIME_VALUE_FORMATTER);
     }
 
-    String formatDateTimeLabel(LocalDateTime value) {
+    public String formatDateTimeLabel(LocalDateTime value) {
         return value == null ? null : value.format(DATE_TIME_LABEL_FORMATTER);
     }
 
-    String formatAmount(BigDecimal amount, String currencyCode) {
+    public String formatAmount(BigDecimal amount, String currencyCode) {
         BigDecimal normalized = amount == null ? BigDecimal.ZERO : amount.stripTrailingZeros();
         String pattern = normalized.scale() > 0 ? "#,##0.##" : "#,##0";
         String formatted = new DecimalFormat(pattern).format(amount == null ? BigDecimal.ZERO : amount);
@@ -199,14 +199,14 @@ public class ClubFinanceSupport {
                 + formatted;
     }
 
-    String resolveObligationTypeLabel(String obligationTypeCode) {
+    public String resolveObligationTypeLabel(String obligationTypeCode) {
         return switch (obligationTypeCode) {
             case "FEE" -> "분담금";
             default -> "재정 항목";
         };
     }
 
-    String resolveRequestTypeLabel(String requestTypeCode) {
+    public String resolveRequestTypeLabel(String requestTypeCode) {
         return switch (requestTypeCode) {
             case "ADVANCE" -> "선지출 등록";
             case "REFUND_REQUEST" -> "환불 요청";
@@ -215,7 +215,7 @@ public class ClubFinanceSupport {
         };
     }
 
-    String resolveRequestStatusLabel(String statusCode) {
+    public String resolveRequestStatusLabel(String statusCode) {
         return switch (statusCode) {
             case "APPROVED" -> "승인";
             case "REJECTED" -> "반려";
@@ -223,14 +223,14 @@ public class ClubFinanceSupport {
         };
     }
 
-    String resolveExpenseTypeLabel(String expenseTypeCode) {
+    public String resolveExpenseTypeLabel(String expenseTypeCode) {
         return switch (expenseTypeCode) {
             case "ADMIN_EXPENSE" -> "운영 지출";
             default -> "지출";
         };
     }
 
-    String resolveExpenseCategoryLabel(String categoryCode) {
+    public String resolveExpenseCategoryLabel(String categoryCode) {
         return switch (categoryCode) {
             case "MEMBERSHIP_FEE" -> "회비";
             case "EVENT_FEE" -> "행사비";
@@ -243,14 +243,14 @@ public class ClubFinanceSupport {
         };
     }
 
-    String resolveTargetScopeLabel(String targetScopeCode) {
+    public String resolveTargetScopeLabel(String targetScopeCode) {
         return switch (targetScopeCode) {
             case "SELECTED_MEMBERS" -> "선택 멤버";
             default -> "활성 멤버 전체";
         };
     }
 
-    String resolvePaymentStatusLabel(String paymentStatusCode, boolean overdue) {
+    public String resolvePaymentStatusLabel(String paymentStatusCode, boolean overdue) {
         if (overdue) {
             return "연체";
         }
@@ -261,7 +261,7 @@ public class ClubFinanceSupport {
         };
     }
 
-    String trimToNull(String value) {
+    public String trimToNull(String value) {
         if (!StringUtils.hasText(value)) {
             return null;
         }

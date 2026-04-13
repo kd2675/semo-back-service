@@ -1,4 +1,4 @@
-package semo.back.service.feature.tournament.biz;
+package semo.back.service.feature.tournament.biz.support;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -7,7 +7,8 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.common.util.ImageFileUrlResolver;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.TournamentRecord;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.tournament.biz.policy.ClubTournamentPermissionService;
 import semo.back.service.feature.tournament.vo.UpsertTournamentRequest;
 
 import java.time.LocalDate;
@@ -34,7 +35,7 @@ public class ClubTournamentSupport {
     private final ClubTournamentPermissionService clubTournamentPermissionService;
     private final ImageFileUrlResolver imageFileUrlResolver;
 
-    TournamentDraft toTournamentDraft(
+    public TournamentDraft toTournamentDraft(
             UpsertTournamentRequest request,
             ClubAccessResolver.ClubAccess access
     ) {
@@ -93,7 +94,7 @@ public class ClubTournamentSupport {
         );
     }
 
-    String normalizeApplicationReviewStatus(String value) {
+    public String normalizeApplicationReviewStatus(String value) {
         String normalized = normalizeRequiredKey(value);
         if (!Set.of("APPROVED", "REJECTED").contains(normalized)) {
             throw new SemoException.ValidationException("참가 신청 상태는 APPROVED 또는 REJECTED만 가능합니다.");
@@ -101,7 +102,7 @@ public class ClubTournamentSupport {
         return normalized;
     }
 
-    String normalizeTournamentApprovalStatus(String value) {
+    public String normalizeTournamentApprovalStatus(String value) {
         String normalized = normalizeRequiredKey(value);
         if (!Set.of("APPROVED", "REJECTED").contains(normalized)) {
             throw new SemoException.ValidationException("대회 검토 상태는 APPROVED 또는 REJECTED만 가능합니다.");
@@ -109,13 +110,13 @@ public class ClubTournamentSupport {
         return normalized;
     }
 
-    String formatApplicationWindowLabel(TournamentRecord tournament) {
+    public String formatApplicationWindowLabel(TournamentRecord tournament) {
         return DATE_TIME_LABEL_FORMATTER.format(tournament.getApplicationStartAt())
                 + " ~ "
                 + DATE_TIME_LABEL_FORMATTER.format(tournament.getApplicationEndAt());
     }
 
-    String formatTournamentPeriodLabel(TournamentRecord tournament) {
+    public String formatTournamentPeriodLabel(TournamentRecord tournament) {
         if (tournament.getStartDate().equals(tournament.getEndDate())) {
             return DATE_LABEL_FORMATTER.format(tournament.getStartDate());
         }
@@ -124,31 +125,31 @@ public class ClubTournamentSupport {
                 + DATE_LABEL_FORMATTER.format(tournament.getEndDate());
     }
 
-    String formatDate(LocalDate date) {
+    public String formatDate(LocalDate date) {
         return date == null ? null : DATE_FORMATTER.format(date);
     }
 
-    String formatDateTime(LocalDateTime dateTime) {
+    public String formatDateTime(LocalDateTime dateTime) {
         return dateTime == null ? null : DATE_TIME_FORMATTER.format(dateTime);
     }
 
-    String formatDateTimeLabel(LocalDateTime dateTime) {
+    public String formatDateTimeLabel(LocalDateTime dateTime) {
         return dateTime == null ? null : DATE_TIME_LABEL_FORMATTER.format(dateTime);
     }
 
-    String resolveDisplayName(ClubProfile profile) {
+    public String resolveDisplayName(ClubProfile profile) {
         return profile == null ? "알 수 없음" : profile.getDisplayName();
     }
 
-    String resolveAvatarImageUrl(ClubProfile profile) {
+    public String resolveAvatarImageUrl(ClubProfile profile) {
         return profile == null ? null : imageFileUrlResolver.resolveImageUrl(profile.getAvatarFileName());
     }
 
-    String resolveAvatarThumbnailUrl(ClubProfile profile) {
+    public String resolveAvatarThumbnailUrl(ClubProfile profile) {
         return profile == null ? null : imageFileUrlResolver.resolveThumbnailUrl(profile.getAvatarFileName());
     }
 
-    String trimToNull(String value) {
+    public String trimToNull(String value) {
         if (!StringUtils.hasText(value)) {
             return null;
         }
@@ -203,7 +204,7 @@ public class ClubTournamentSupport {
         }
     }
 
-    record TournamentDraft(
+    public record TournamentDraft(
             String title,
             String summaryText,
             String detailText,

@@ -12,7 +12,7 @@ import semo.back.service.database.pub.entity.DashboardWidgetCatalog;
 import semo.back.service.database.pub.repository.ClubDashboardWidgetRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.DashboardWidgetCatalogRepository;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.dashboard.vo.ClubDashboardEditorResponse;
 import semo.back.service.feature.dashboard.vo.ClubDashboardWidgetResponse;
 import semo.back.service.feature.dashboard.vo.UpdateClubDashboardLayoutRequest;

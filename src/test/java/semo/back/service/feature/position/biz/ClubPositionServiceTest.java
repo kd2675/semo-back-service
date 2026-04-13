@@ -26,8 +26,8 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionReposi
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.FeaturePermissionCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
 import semo.back.service.feature.club.biz.ClubService;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;

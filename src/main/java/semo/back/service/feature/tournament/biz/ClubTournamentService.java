@@ -14,8 +14,10 @@ import semo.back.service.database.pub.repository.TournamentApplicationRepository
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.share.biz.ClubContentShareService;
+import semo.back.service.feature.tournament.biz.policy.ClubTournamentPermissionService;
+import semo.back.service.feature.tournament.biz.support.ClubTournamentSupport;
 import semo.back.service.feature.tournament.vo.CancelTournamentRequest;
 import semo.back.service.feature.tournament.vo.ClubAdminTournamentHomeResponse;
 import semo.back.service.feature.tournament.vo.ClubTournamentHomeResponse;

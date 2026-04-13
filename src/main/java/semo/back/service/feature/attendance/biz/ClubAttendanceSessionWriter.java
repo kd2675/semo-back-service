@@ -7,7 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubAttendanceSession;
 import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

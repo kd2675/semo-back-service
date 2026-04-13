@@ -1,4 +1,4 @@
-package semo.back.service.feature.club.biz;
+package semo.back.service.feature.club.biz.catalog;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -16,7 +16,7 @@ import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.contentread.biz.ClubContentReadService;
 import semo.back.service.feature.notice.vo.ClubBoardFeedItemResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;

@@ -33,7 +33,7 @@ import semo.back.service.feature.bracket.vo.ClubBracketHomeResponse;
 import semo.back.service.feature.bracket.vo.ReviewBracketRequest;
 import semo.back.service.feature.bracket.vo.UpsertBracketParticipantRequest;
 import semo.back.service.feature.bracket.vo.UpsertBracketRequest;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

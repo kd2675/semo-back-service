@@ -1,24 +1,37 @@
-package semo.back.service.feature.schedule.biz;
+package semo.back.service.feature.schedule.biz.support;
 
-import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.database.pub.entity.ClubScheduleVote;
+import semo.back.service.common.util.ImageFileUrlResolver;
+import semo.back.service.database.pub.entity.ClubProfile;
+import semo.back.service.database.pub.repository.ClubProfileRepository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
-@Component
-public class ClubScheduleFormatter {
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class ClubScheduleViewSupport {
     private static final DateTimeFormatter DATE_REQUEST_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DateTimeFormatter DATE_LABEL_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy.MM.dd (E)", Locale.KOREAN);
     private static final DateTimeFormatter TIME_REQUEST_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter TIME_LABEL_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+
+    private final ClubProfileRepository clubProfileRepository;
+    private final ImageFileUrlResolver imageFileUrlResolver;
 
     public LocalDate parseDate(String value) {
         try {
@@ -65,6 +78,9 @@ public class ClubScheduleFormatter {
     }
 
     public String formatVoteTimeLabel(LocalTime startTime, LocalTime endTime) {
+        if (startTime == null && endTime == null) {
+            return null;
+        }
         if (startTime == null) {
             return null;
         }
@@ -102,28 +118,6 @@ public class ClubScheduleFormatter {
                 + endAt.toLocalTime().format(TIME_LABEL_FORMATTER);
     }
 
-    public boolean shouldPostToBoard(Boolean postToBoard) {
-        return postToBoard == null || postToBoard;
-    }
-
-    public boolean shouldPin(Boolean pinned) {
-        return Boolean.TRUE.equals(pinned);
-    }
-
-    public boolean shouldPostToCalendar(Boolean postToCalendar) {
-        return postToCalendar == null || postToCalendar;
-    }
-
-    public boolean shouldPostVoteToCalendar(Boolean postToCalendar, Boolean postToSchedule) {
-        if (postToCalendar != null) {
-            return postToCalendar;
-        }
-        if (postToSchedule != null) {
-            return postToSchedule;
-        }
-        return true;
-    }
-
     public LocalDate resolveMonthStart(Integer year, Integer month) {
         LocalDate today = LocalDate.now();
         int resolvedYear = year == null ? today.getYear() : year;
@@ -134,46 +128,24 @@ public class ClubScheduleFormatter {
         return LocalDate.of(resolvedYear, resolvedMonth, 1);
     }
 
-    public LocalDateTime toVoteStartAt(LocalDate startDate, LocalTime startTime) {
-        return startDate.atTime(startTime == null ? LocalTime.MIDNIGHT : startTime);
+    public Map<Long, ClubProfile> loadAuthorProfiles(List<Long> clubProfileIds) {
+        if (clubProfileIds.isEmpty()) {
+            return Map.of();
+        }
+        return clubProfileRepository.findAllById(clubProfileIds).stream()
+                .collect(Collectors.toMap(ClubProfile::getClubProfileId, Function.identity()));
     }
 
-    public LocalDateTime toVoteEffectiveEndAt(LocalDate endDate, LocalTime endTime) {
-        return endDate.atTime(endTime == null ? LocalTime.MAX : endTime);
+    public String resolveAuthorDisplayName(ClubProfile authorProfile) {
+        return authorProfile == null ? "Unknown Member" : authorProfile.getDisplayName();
     }
 
-    public boolean isVoteOpen(ClubScheduleVote vote) {
-        return "ONGOING".equals(resolveVoteStatus(vote));
+    public String resolveAuthorAvatarImageUrl(ClubProfile authorProfile) {
+        return authorProfile == null ? null : imageFileUrlResolver.resolveImageUrl(authorProfile.getAvatarFileName());
     }
 
-    public String resolveVoteStatus(ClubScheduleVote vote) {
-        if (vote.getClosedAt() != null) {
-            return "CLOSED";
-        }
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime startAt = toVoteStartAt(vote.getVoteStartDate(), vote.getVoteStartTime());
-        if (now.isBefore(startAt)) {
-            return "WAITING";
-        }
-        if (now.isAfter(toVoteEffectiveEndAt(vote.getVoteEndDate(), vote.getVoteEndTime()))) {
-            return "CLOSED";
-        }
-        return "ONGOING";
-    }
-
-    public String trimRequired(String value, String message) {
-        String normalized = trimToNull(value);
-        if (normalized == null) {
-            throw new SemoException.ValidationException(message);
-        }
-        return normalized;
-    }
-
-    public String trimToNull(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        return value.trim();
+    public String resolveAuthorAvatarThumbnailUrl(ClubProfile authorProfile) {
+        return authorProfile == null ? null : imageFileUrlResolver.resolveThumbnailUrl(authorProfile.getAvatarFileName());
     }
 
     private String formatDateLabel(LocalDate value) {

@@ -11,7 +11,7 @@ import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.BoardItemReadCountRow;
 import semo.back.service.database.pub.repository.ClubBoardItemReadRepository;
 import semo.back.service.database.pub.repository.ClubBoardItemRepository;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.contentread.vo.BoardItemReadResponse;
 import semo.back.service.feature.contentread.vo.BoardItemReadStatusResponse;
 import semo.back.service.feature.contentread.vo.ItemReadMemberResponse;

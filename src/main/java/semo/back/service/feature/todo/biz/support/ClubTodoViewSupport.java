@@ -1,4 +1,4 @@
-package semo.back.service.feature.todo.biz;
+package semo.back.service.feature.todo.biz.support;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -6,7 +6,8 @@ import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.TodoItem;
 import semo.back.service.database.pub.entity.TodoItemApplication;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.todo.biz.policy.ClubTodoPermissionService;
 import semo.back.service.feature.todo.vo.TodoActionResponse;
 import semo.back.service.feature.todo.vo.TodoItemApplicationResponse;
 import semo.back.service.feature.todo.vo.TodoSummaryResponse;
@@ -49,7 +50,7 @@ public class ClubTodoViewSupport {
     private final ClubProfileRepository clubProfileRepository;
     private final ClubTodoPermissionService clubTodoPermissionService;
 
-    Map<Long, ClubProfile> resolveClubProfiles(
+    public Map<Long, ClubProfile> resolveClubProfiles(
             List<List<TodoItem>> itemGroups,
             List<List<TodoItemApplication>> applicationGroups
     ) {
@@ -80,7 +81,7 @@ public class ClubTodoViewSupport {
                 .collect(Collectors.toMap(ClubProfile::getClubProfileId, Function.identity()));
     }
 
-    Map<Long, Integer> resolveApplicationCountByTodoItemId(List<TodoItemApplication> applications) {
+    public Map<Long, Integer> resolveApplicationCountByTodoItemId(List<TodoItemApplication> applications) {
         return applications.stream()
                 .filter(application -> !APPLICATION_STATUS_WITHDRAWN.equals(application.getApplicationStatus()))
                 .collect(Collectors.toMap(
@@ -91,7 +92,7 @@ public class ClubTodoViewSupport {
                 ));
     }
 
-    Comparator<TodoItem> todoPriorityComparator() {
+    public Comparator<TodoItem> todoPriorityComparator() {
         return Comparator
                 .comparing((TodoItem item) -> !isOverdue(item))
                 .thenComparing(item -> item.getStatusCode(), Comparator.comparingInt(this::statusSortOrder))
@@ -100,7 +101,7 @@ public class ClubTodoViewSupport {
                 .thenComparing(TodoItem::getTodoItemId, Comparator.reverseOrder());
     }
 
-    TodoSummaryResponse toSummaryResponse(
+    public TodoSummaryResponse toSummaryResponse(
             TodoItem item,
             Map<Long, ClubProfile> profileById,
             ClubAccessResolver.ClubAccess access,
@@ -163,7 +164,7 @@ public class ClubTodoViewSupport {
         );
     }
 
-    TodoActionResponse toActionResponse(TodoItem item, Map<Long, ClubProfile> profileById) {
+    public TodoActionResponse toActionResponse(TodoItem item, Map<Long, ClubProfile> profileById) {
         return new TodoActionResponse(
                 item.getTodoItemId(),
                 item.getStatusCode(),
@@ -177,7 +178,7 @@ public class ClubTodoViewSupport {
         );
     }
 
-    TodoItemApplicationResponse toApplicationResponse(
+    public TodoItemApplicationResponse toApplicationResponse(
             TodoItemApplication application,
             Map<Long, ClubProfile> profileById,
             Long viewerClubProfileId,
@@ -199,7 +200,7 @@ public class ClubTodoViewSupport {
         );
     }
 
-    String resolveDisplayName(Map<Long, ClubProfile> profileById, Long clubProfileId) {
+    public String resolveDisplayName(Map<Long, ClubProfile> profileById, Long clubProfileId) {
         if (clubProfileId == null) {
             return null;
         }
@@ -215,7 +216,7 @@ public class ClubTodoViewSupport {
         };
     }
 
-    String toAssignmentModeLabel(String assignmentMode) {
+    public String toAssignmentModeLabel(String assignmentMode) {
         return switch (assignmentMode) {
             case ASSIGNMENT_MODE_DIRECT_ASSIGN -> "직접 배정";
             case ASSIGNMENT_MODE_OPEN_SUPPORT -> "신청 모집";
@@ -223,7 +224,7 @@ public class ClubTodoViewSupport {
         };
     }
 
-    String toStatusLabel(String statusCode) {
+    public String toStatusLabel(String statusCode) {
         return switch (statusCode) {
             case STATUS_OPEN -> "열림";
             case STATUS_IN_PROGRESS -> "진행중";
@@ -254,7 +255,7 @@ public class ClubTodoViewSupport {
         return value == null ? null : value.format(DATE_TIME_LABEL_FORMATTER);
     }
 
-    boolean isOverdue(TodoItem item) {
+    public boolean isOverdue(TodoItem item) {
         return item.getDueAt() != null
                 && item.getDueAt().isBefore(LocalDateTime.now())
                 && !isTerminalStatus(item.getStatusCode());

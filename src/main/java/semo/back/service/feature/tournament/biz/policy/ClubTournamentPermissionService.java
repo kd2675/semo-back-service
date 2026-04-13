@@ -1,9 +1,9 @@
-package semo.back.service.feature.tournament.biz;
+package semo.back.service.feature.tournament.biz.policy;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 

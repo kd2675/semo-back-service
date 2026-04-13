@@ -1,4 +1,4 @@
-package semo.back.service.feature.club.biz;
+package semo.back.service.feature.club.biz.policy;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

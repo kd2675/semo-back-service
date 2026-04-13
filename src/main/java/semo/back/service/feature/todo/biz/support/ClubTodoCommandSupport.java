@@ -1,4 +1,4 @@
-package semo.back.service.feature.todo.biz;
+package semo.back.service.feature.todo.biz.support;
 
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -56,7 +56,7 @@ public class ClubTodoCommandSupport {
     private static final int MAX_ADMIN_PAGE_SIZE = 30;
     private static final DateTimeFormatter REQUEST_DATE_TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
-    String normalizeTitle(String title) {
+    public String normalizeTitle(String title) {
         String normalized = trimToNull(title);
         if (normalized == null) {
             throw new SemoException.ValidationException("업무 이름은 필수입니다.");
@@ -67,7 +67,7 @@ public class ClubTodoCommandSupport {
         return normalized;
     }
 
-    String normalizeTodoType(String todoType) {
+    public String normalizeTodoType(String todoType) {
         String normalized = normalizeUpperCase(todoType, "업무 유형은 필수입니다.");
         if (!ALLOWED_TODO_TYPES.contains(normalized)) {
             throw new SemoException.ValidationException("지원하지 않는 업무 유형입니다.");
@@ -75,7 +75,7 @@ public class ClubTodoCommandSupport {
         return normalized;
     }
 
-    String normalizeAssignmentMode(String assignmentMode) {
+    public String normalizeAssignmentMode(String assignmentMode) {
         String normalized = normalizeUpperCase(assignmentMode, "배정 방식은 필수입니다.");
         if (!ALLOWED_ASSIGNMENT_MODES.contains(normalized)) {
             throw new SemoException.ValidationException("지원하지 않는 배정 방식입니다.");
@@ -83,7 +83,7 @@ public class ClubTodoCommandSupport {
         return normalized;
     }
 
-    String normalizeStatusCode(String statusCode) {
+    public String normalizeStatusCode(String statusCode) {
         String normalized = normalizeUpperCase(statusCode, "상태 코드는 필수입니다.");
         if (!ALLOWED_STATUS_ACTIONS.contains(normalized)) {
             throw new SemoException.ValidationException("지원하지 않는 상태 코드입니다.");
@@ -91,7 +91,7 @@ public class ClubTodoCommandSupport {
         return normalized;
     }
 
-    String normalizeStatusFilter(String statusFilter) {
+    public String normalizeStatusFilter(String statusFilter) {
         String normalized = trimToNull(statusFilter);
         if (normalized == null) {
             return "ALL";
@@ -106,7 +106,7 @@ public class ClubTodoCommandSupport {
         return normalized;
     }
 
-    String normalizeAssignmentFilter(String assignmentFilter) {
+    public String normalizeAssignmentFilter(String assignmentFilter) {
         String normalized = trimToNull(assignmentFilter);
         if (normalized == null) {
             return "ALL";
@@ -118,7 +118,7 @@ public class ClubTodoCommandSupport {
         return normalized;
     }
 
-    String normalizeApplicationFilter(String applicationFilter) {
+    public String normalizeApplicationFilter(String applicationFilter) {
         String normalized = trimToNull(applicationFilter);
         if (normalized == null) {
             return "ALL";
@@ -130,7 +130,7 @@ public class ClubTodoCommandSupport {
         return normalized;
     }
 
-    String normalizeApplicationReviewStatus(String applicationStatus) {
+    public String normalizeApplicationReviewStatus(String applicationStatus) {
         String normalized = normalizeUpperCase(applicationStatus, "신청 상태는 필수입니다.");
         if (!ALLOWED_APPLICATION_REVIEW_STATUSES.contains(normalized)) {
             throw new SemoException.ValidationException("신청 상태는 SELECTED 또는 REJECTED만 가능합니다.");
@@ -138,7 +138,7 @@ public class ClubTodoCommandSupport {
         return normalized;
     }
 
-    int normalizeAdminPageSize(Integer size) {
+    public int normalizeAdminPageSize(Integer size) {
         if (size == null) {
             return DEFAULT_ADMIN_PAGE_SIZE;
         }
@@ -148,7 +148,7 @@ public class ClubTodoCommandSupport {
         return size;
     }
 
-    LocalDateTime parseDateTime(String value, String errorMessage) {
+    public LocalDateTime parseDateTime(String value, String errorMessage) {
         String normalized = trimToNull(value);
         if (normalized == null) {
             return null;
@@ -160,7 +160,7 @@ public class ClubTodoCommandSupport {
         }
     }
 
-    void validateStatusTransition(TodoItem current, String nextStatus) {
+    public void validateStatusTransition(TodoItem current, String nextStatus) {
         if (STATUS_REOPEN.equals(nextStatus)) {
             if (!TERMINAL_STATUSES.contains(current.getStatusCode())) {
                 throw new SemoException.ValidationException("다시 열기는 완료되거나 취소된 업무에만 사용할 수 있습니다.");
@@ -200,7 +200,7 @@ public class ClubTodoCommandSupport {
         throw new SemoException.ValidationException("지원하지 않는 상태 전이입니다.");
     }
 
-    String trimToNull(String value) {
+    public String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 

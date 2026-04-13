@@ -8,7 +8,7 @@ import semo.back.service.database.pub.entity.ClubPositionPermission;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubPositionPermissionRepository;
 import semo.back.service.database.pub.repository.ClubPositionRepository;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 
 import java.util.List;

@@ -21,6 +21,8 @@ import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.club.biz.support.ClubClassificationSupport;
 import semo.back.service.feature.club.vo.ClubDiscoverResponse;
 import semo.back.service.feature.club.vo.ClubDiscoverSummaryResponse;
 import semo.back.service.feature.club.vo.ClubJoinActionResponse;

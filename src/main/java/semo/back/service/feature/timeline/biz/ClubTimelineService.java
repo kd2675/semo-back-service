@@ -8,7 +8,7 @@ import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubActivityLog;
 import semo.back.service.database.pub.repository.ClubActivityLogRepository;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.timeline.vo.ClubAdminTimelineResponse;
 import semo.back.service.feature.timeline.vo.ClubTimelineResponse;

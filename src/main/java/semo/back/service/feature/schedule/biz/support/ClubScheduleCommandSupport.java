@@ -1,4 +1,4 @@
-package semo.back.service.feature.schedule.biz;
+package semo.back.service.feature.schedule.biz.support;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -24,7 +24,7 @@ public class ClubScheduleCommandSupport {
 
     private final ClubScheduleViewSupport clubScheduleViewSupport;
 
-    EventDraft toEventDraft(UpsertScheduleEventRequest request) {
+    public EventDraft toEventDraft(UpsertScheduleEventRequest request) {
         if (request == null) {
             throw new SemoException.ValidationException("일정 요청이 비어 있습니다.");
         }
@@ -69,7 +69,7 @@ public class ClubScheduleCommandSupport {
         );
     }
 
-    VoteDraft toVoteDraft(UpsertScheduleVoteRequest request) {
+    public VoteDraft toVoteDraft(UpsertScheduleVoteRequest request) {
         if (request == null) {
             throw new SemoException.ValidationException("투표 요청이 비어 있습니다.");
         }
@@ -111,7 +111,7 @@ public class ClubScheduleCommandSupport {
         );
     }
 
-    String normalizeParticipationStatus(UpdateScheduleEventParticipationRequest request) {
+    public String normalizeParticipationStatus(UpdateScheduleEventParticipationRequest request) {
         if (request == null || !StringUtils.hasText(request.participationStatus())) {
             throw new SemoException.ValidationException("참석 상태는 필수입니다.");
         }
@@ -125,7 +125,7 @@ public class ClubScheduleCommandSupport {
         return normalized;
     }
 
-    String toParticipationActivityLabel(String participationStatus) {
+    public String toParticipationActivityLabel(String participationStatus) {
         return switch (participationStatus) {
             case PARTICIPATION_GOING -> "참석으로 응답했습니다";
             case PARTICIPATION_NOT_GOING -> "불참으로 응답했습니다";
@@ -134,19 +134,19 @@ public class ClubScheduleCommandSupport {
         };
     }
 
-    boolean shouldPostToBoard(Boolean postToBoard) {
+    public boolean shouldPostToBoard(Boolean postToBoard) {
         return postToBoard == null || postToBoard;
     }
 
-    boolean shouldPin(Boolean pinned) {
+    public boolean shouldPin(Boolean pinned) {
         return Boolean.TRUE.equals(pinned);
     }
 
-    boolean shouldPostToCalendar(Boolean postToCalendar) {
+    public boolean shouldPostToCalendar(Boolean postToCalendar) {
         return postToCalendar == null || postToCalendar;
     }
 
-    boolean shouldPostVoteToCalendar(Boolean postToCalendar, Boolean postToSchedule) {
+    public boolean shouldPostVoteToCalendar(Boolean postToCalendar, Boolean postToSchedule) {
         if (postToCalendar != null) {
             return postToCalendar;
         }
@@ -156,11 +156,11 @@ public class ClubScheduleCommandSupport {
         return true;
     }
 
-    LocalDateTime toVoteStartAt(LocalDate startDate, LocalTime startTime) {
+    public LocalDateTime toVoteStartAt(LocalDate startDate, LocalTime startTime) {
         return startDate.atTime(startTime == null ? LocalTime.MIDNIGHT : startTime);
     }
 
-    LocalDateTime toVoteEffectiveEndAt(LocalDate endDate, LocalTime endTime) {
+    public LocalDateTime toVoteEffectiveEndAt(LocalDate endDate, LocalTime endTime) {
         return endDate.atTime(endTime == null ? LocalTime.MAX : endTime);
     }
 
@@ -179,7 +179,7 @@ public class ClubScheduleCommandSupport {
         return value.trim();
     }
 
-    record EventDraft(
+    public record EventDraft(
             String title,
             LocalDateTime startAt,
             LocalDateTime endAt,
@@ -194,7 +194,7 @@ public class ClubScheduleCommandSupport {
     ) {
     }
 
-    record VoteDraft(
+    public record VoteDraft(
             String title,
             LocalDate voteStartDate,
             LocalDate voteEndDate,

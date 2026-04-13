@@ -21,7 +21,7 @@ import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.FeaturePermissionCatalogRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.position.vo.ClubAdminRoleManagementResponse;
 import semo.back.service.feature.position.vo.ClubPermissionGroupResponse;
 import semo.back.service.feature.position.vo.ClubPermissionItemResponse;

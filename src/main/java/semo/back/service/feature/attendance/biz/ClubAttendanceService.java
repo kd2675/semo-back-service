@@ -17,7 +17,7 @@ import semo.back.service.feature.attendance.vo.AttendanceDailyLogResponse;
 import semo.back.service.feature.attendance.vo.AttendanceTodayResponse;
 import semo.back.service.feature.attendance.vo.ClubAdminAttendanceResponse;
 import semo.back.service.feature.attendance.vo.ClubAttendanceResponse;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 
 import java.time.LocalDate;

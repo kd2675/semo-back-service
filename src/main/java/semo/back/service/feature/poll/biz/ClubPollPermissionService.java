@@ -3,7 +3,7 @@ package semo.back.service.feature.poll.biz;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 
 @Service

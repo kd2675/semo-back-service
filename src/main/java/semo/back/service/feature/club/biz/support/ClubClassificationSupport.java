@@ -1,4 +1,4 @@
-package semo.back.service.feature.club.biz;
+package semo.back.service.feature.club.biz.support;
 
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;

@@ -1,4 +1,4 @@
-package semo.back.service.feature.schedule.biz;
+package semo.back.service.feature.schedule.biz.support;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -12,9 +12,10 @@ import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.notice.biz.ClubNoticeService;
 import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
+import semo.back.service.feature.schedule.biz.assembler.ClubScheduleSummaryAssembler;
 import semo.back.service.feature.schedule.vo.ClubCalendarFeedItemResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventSummaryResponse;
 import semo.back.service.feature.schedule.vo.ScheduleVoteSummaryResponse;

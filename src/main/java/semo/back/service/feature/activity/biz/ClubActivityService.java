@@ -9,7 +9,7 @@ import semo.back.service.database.pub.entity.ClubActivityLog;
 import semo.back.service.database.pub.repository.ClubActivityLogRepository;
 import semo.back.service.feature.activity.vo.ClubAdminActivityFeedResponse;
 import semo.back.service.feature.activity.vo.ClubAdminActivityItemResponse;
-import semo.back.service.feature.club.biz.ClubAccessResolver;
+import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
