@@ -245,20 +245,6 @@
   - `src/main/resources/db/ddl/semo_ddl_all.sql`
 - Seed source of truth
   - `src/main/resources/db/seed/semo_seed_all.sql`
-- 운영 전환 SQL
-  - `src/main/resources/db/seed/semo_finance_apply.sql`
-  - `src/main/resources/db/seed/semo_finance_cleanup.sql`
-
-운영 전환 순서는 아래를 권장합니다.
-
-- 권장
-  - `semo_ddl_all.sql` 반영
-  - `semo_finance_apply.sql` 실행
-  - 애플리케이션 배포 및 검증
-  - `semo_finance_cleanup.sql` 실행
-- 참고
-  - `semo_finance_apply.sql`에는 `finance_obligation`, `finance_payment` 생성 DDL이 포함되어 있어 단독 선적용도 가능합니다.
-  - cleanup 이후에도 `semo_finance_apply.sql`은 다시 실행할 수 있지만, 이 경우에는 FINANCE 스키마/카탈로그만 복구되고 삭제된 legacy DUES 데이터와 클럽별 DUES 기반 설정은 복구되지 않습니다.
 
 현재 seed에는 아래 카탈로그 성격의 데이터가 포함됩니다.
 
@@ -275,7 +261,7 @@
 - `feature_permission_catalog`
   - 공지, 투표, 대회, 대진표, 재정, 직책관리 권한
 - `dashboard_widget_catalog`
-  - 공지, 일정, 투표, 프로필, 출석, 재정, 대회, 대진표 위젯
+  - 공지, 보드 스트립, 일정 개요, 일정 인사이트, 투표 상태, 투표 펄스, 프로필, 출석 상태, 최근 출석, 재정 상태, 재정 요약, 대회 센터, 내 대회, 대진표 보드, 대진표 워크벤치 위젯
 
 ## Run
 

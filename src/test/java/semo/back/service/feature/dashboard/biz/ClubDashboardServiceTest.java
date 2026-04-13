@@ -32,6 +32,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static semo.back.service.support.TestCatalogSeeder.seedDashboardWidgetCatalogs;
 import static semo.back.service.support.TestCatalogSeeder.seedFeatureCatalogs;
 
@@ -131,7 +132,7 @@ class ClubDashboardServiceTest {
 
         var initialWidgets = clubDashboardService.getDashboardWidgets(clubId, ownerUserKey, "USER_HOME");
         assertThat(initialWidgets).extracting("widgetKey")
-                .containsExactly("BOARD_NOTICE", "SCHEDULE_OVERVIEW", "PROFILE_SUMMARY");
+                .containsExactly("BOARD_NOTICE", "BOARD_STRIP", "SCHEDULE_OVERVIEW", "SCHEDULE_INSIGHT", "PROFILE_SUMMARY");
 
         clubFeatureService.updateClubFeatures(
                 clubId,
@@ -167,7 +168,14 @@ class ClubDashboardServiceTest {
 
         var updatedWidgets = clubDashboardService.getDashboardWidgets(clubId, ownerUserKey, "USER_HOME");
         assertThat(updatedWidgets).extracting("widgetKey")
-                .containsExactly("BOARD_NOTICE", "SCHEDULE_OVERVIEW", "PROFILE_SUMMARY", "ATTENDANCE_STATUS");
+                .containsExactly(
+                        "BOARD_NOTICE",
+                        "BOARD_STRIP",
+                        "SCHEDULE_OVERVIEW",
+                        "SCHEDULE_INSIGHT",
+                        "PROFILE_SUMMARY",
+                        "ATTENDANCE_STATUS"
+                );
     }
 
     @Test
@@ -270,14 +278,14 @@ class ClubDashboardServiceTest {
     }
 
     @Test
-    void memberDirectoryWidgetUsesMemberDirectoryPaths() {
+    void widgetVariantsResolveExpectedRoutes() {
         String ownerUserKey = "dashboard-owner-004";
         Long clubId = clubService.createClub(
                 ownerUserKey,
                 "Dashboard Owner 4",
                 new CreateClubRequest(
                         "Dashboard Club 4",
-                        "회원 디렉터리 위젯 테스트",
+                        "위젯 경로 테스트",
                         "OTHER",
                         "PUBLIC",
                         "APPROVAL",
@@ -288,17 +296,35 @@ class ClubDashboardServiceTest {
         clubFeatureService.updateClubFeatures(
                 clubId,
                 ownerUserKey,
-                new UpdateClubFeaturesRequest(List.of("MEMBER_DIRECTORY"))
+                new UpdateClubFeaturesRequest(List.of(
+                        "ATTENDANCE",
+                        "POLL",
+                        "TOURNAMENT_RECORD",
+                        "BRACKET",
+                        "FINANCE"
+                ))
         );
 
         var editor = clubDashboardService.getDashboardWidgetEditor(clubId, ownerUserKey, "USER_HOME");
         assertThat(editor.widgets())
-                .filteredOn(widget -> widget.widgetKey().equals("MEMBER_DIRECTORY_HIGHLIGHT"))
-                .singleElement()
-                .satisfies(widget -> {
-                    assertThat(widget.available()).isTrue();
-                    assertThat(widget.userPath()).isEqualTo("/clubs/%d/more/members".formatted(clubId));
-                    assertThat(widget.adminPath()).isEqualTo("/clubs/%d/admin/more/members".formatted(clubId));
-                });
+                .filteredOn(widget -> List.of(
+                        "BOARD_STRIP",
+                        "SCHEDULE_INSIGHT",
+                        "POLL_PULSE",
+                        "TOURNAMENT_RECORD_MINE",
+                        "BRACKET_WORKBENCH",
+                        "ATTENDANCE_RECENT",
+                        "FINANCE_LEDGER"
+                ).contains(widget.widgetKey()))
+                .extracting("widgetKey", "userPath", "adminPath")
+                .containsExactlyInAnyOrder(
+                        tuple("BOARD_STRIP", "/clubs/%d/board".formatted(clubId), "/clubs/%d/board".formatted(clubId)),
+                        tuple("SCHEDULE_INSIGHT", "/clubs/%d/schedule".formatted(clubId), "/clubs/%d/schedule".formatted(clubId)),
+                        tuple("POLL_PULSE", "/clubs/%d/more/polls".formatted(clubId), "/clubs/%d/admin/more/polls".formatted(clubId)),
+                        tuple("TOURNAMENT_RECORD_MINE", "/clubs/%d/more/tournaments".formatted(clubId), "/clubs/%d/admin/more/tournaments".formatted(clubId)),
+                        tuple("BRACKET_WORKBENCH", "/clubs/%d/more/brackets".formatted(clubId), "/clubs/%d/admin/more/brackets".formatted(clubId)),
+                        tuple("ATTENDANCE_RECENT", "/clubs/%d/more/attendance".formatted(clubId), "/clubs/%d/admin/more/attendance".formatted(clubId)),
+                        tuple("FINANCE_LEDGER", "/clubs/%d/more/finance".formatted(clubId), "/clubs/%d/admin/more/finance".formatted(clubId))
+                );
     }
 }

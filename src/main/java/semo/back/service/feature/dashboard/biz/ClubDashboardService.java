@@ -341,30 +341,28 @@ public class ClubDashboardService {
 
     private String toUserPath(Long clubId, String widgetKey) {
         return switch (normalizeWidgetKey(widgetKey)) {
-            case "BOARD_NOTICE" -> "/clubs/%d/board".formatted(clubId);
-            case "SCHEDULE_OVERVIEW" -> "/clubs/%d/schedule".formatted(clubId);
-            case "POLL_STATUS" -> "/clubs/%d/more/polls".formatted(clubId);
-            case "TOURNAMENT_RECORD_LATEST" -> "/clubs/%d/more/tournaments".formatted(clubId);
-            case "BRACKET_LATEST" -> "/clubs/%d/more/brackets".formatted(clubId);
-            case "MEMBER_DIRECTORY_HIGHLIGHT" -> "/clubs/%d/more/members".formatted(clubId);
+            case "BOARD_NOTICE", "BOARD_STRIP" -> "/clubs/%d/board".formatted(clubId);
+            case "SCHEDULE_OVERVIEW", "SCHEDULE_INSIGHT" -> "/clubs/%d/schedule".formatted(clubId);
+            case "POLL_STATUS", "POLL_PULSE" -> "/clubs/%d/more/polls".formatted(clubId);
+            case "TOURNAMENT_RECORD_LATEST", "TOURNAMENT_RECORD_MINE" -> "/clubs/%d/more/tournaments".formatted(clubId);
+            case "BRACKET_LATEST", "BRACKET_WORKBENCH" -> "/clubs/%d/more/brackets".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
-            case "ATTENDANCE_STATUS" -> "/clubs/%d/more/attendance".formatted(clubId);
-            case "FINANCE_STATUS" -> "/clubs/%d/more/finance".formatted(clubId);
+            case "ATTENDANCE_STATUS", "ATTENDANCE_RECENT" -> "/clubs/%d/more/attendance".formatted(clubId);
+            case "FINANCE_STATUS", "FINANCE_LEDGER" -> "/clubs/%d/more/finance".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
     }
 
     private String toAdminPath(Long clubId, String widgetKey) {
         return switch (normalizeWidgetKey(widgetKey)) {
-            case "BOARD_NOTICE" -> "/clubs/%d/board".formatted(clubId);
-            case "SCHEDULE_OVERVIEW" -> "/clubs/%d/schedule".formatted(clubId);
-            case "POLL_STATUS" -> "/clubs/%d/admin/more/polls".formatted(clubId);
-            case "TOURNAMENT_RECORD_LATEST" -> "/clubs/%d/admin/more/tournaments".formatted(clubId);
-            case "BRACKET_LATEST" -> "/clubs/%d/admin/more/brackets".formatted(clubId);
-            case "MEMBER_DIRECTORY_HIGHLIGHT" -> "/clubs/%d/admin/more/members".formatted(clubId);
+            case "BOARD_NOTICE", "BOARD_STRIP" -> "/clubs/%d/board".formatted(clubId);
+            case "SCHEDULE_OVERVIEW", "SCHEDULE_INSIGHT" -> "/clubs/%d/schedule".formatted(clubId);
+            case "POLL_STATUS", "POLL_PULSE" -> "/clubs/%d/admin/more/polls".formatted(clubId);
+            case "TOURNAMENT_RECORD_LATEST", "TOURNAMENT_RECORD_MINE" -> "/clubs/%d/admin/more/tournaments".formatted(clubId);
+            case "BRACKET_LATEST", "BRACKET_WORKBENCH" -> "/clubs/%d/admin/more/brackets".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
-            case "ATTENDANCE_STATUS" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
-            case "FINANCE_STATUS" -> "/clubs/%d/admin/more/finance".formatted(clubId);
+            case "ATTENDANCE_STATUS", "ATTENDANCE_RECENT" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
+            case "FINANCE_STATUS", "FINANCE_LEDGER" -> "/clubs/%d/admin/more/finance".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
     }

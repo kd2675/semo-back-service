@@ -871,8 +871,42 @@ INSERT INTO dashboard_widget_catalog (
     create_date,
     update_date
 )
+SELECT 'BOARD_STRIP', 'Board Strip', 'Compact strip of the latest board notices.', 'vertical_distribute', NULL, 'USER_HOME', 1, 2, 12, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'BOARD_STRIP');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
 SELECT 'SCHEDULE_OVERVIEW', 'Schedule Overview', 'Upcoming schedules and next events.', 'calendar_month', NULL, 'USER_HOME', 1, 1, 20, 1, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'SCHEDULE_OVERVIEW');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'SCHEDULE_INSIGHT', 'Schedule Insight', 'Upcoming and pending schedule metrics.', 'schedule', NULL, 'USER_HOME', 1, 1, 22, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'SCHEDULE_INSIGHT');
 
 INSERT INTO dashboard_widget_catalog (
     widget_key,
@@ -905,42 +939,25 @@ INSERT INTO dashboard_widget_catalog (
     create_date,
     update_date
 )
+SELECT 'POLL_PULSE', 'Poll Pulse', 'Waiting, ongoing, and closed poll counts.', 'stacked_bar_chart', 'POLL', 'USER_HOME', 1, 1, 27, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'POLL_PULSE');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
 SELECT 'PROFILE_SUMMARY', 'My Profile', 'Quick access to your club profile.', 'person', NULL, 'USER_HOME', 1, 1, 30, 1, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'PROFILE_SUMMARY');
-
-INSERT INTO dashboard_widget_catalog (
-    widget_key,
-    display_name,
-    description,
-    icon_name,
-    required_feature_key,
-    default_visibility_scope,
-    default_column_span,
-    default_row_span,
-    default_sort_order,
-    active,
-    create_date,
-    update_date
-)
-SELECT 'ATTENDANCE_STATUS', 'Attendance Check', 'Check in and review attendance status.', 'fact_check', 'ATTENDANCE', 'USER_HOME', 1, 1, 40, 1, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'ATTENDANCE_STATUS');
-
-INSERT INTO dashboard_widget_catalog (
-    widget_key,
-    display_name,
-    description,
-    icon_name,
-    required_feature_key,
-    default_visibility_scope,
-    default_column_span,
-    default_row_span,
-    default_sort_order,
-    active,
-    create_date,
-    update_date
-)
-SELECT 'FINANCE_STATUS', 'Finance Status', 'My pending finance items and latest payment status.', 'payments', 'FINANCE', 'USER_HOME', 1, 1, 42, 1, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'FINANCE_STATUS');
 
 INSERT INTO dashboard_widget_catalog (
     widget_key,
@@ -973,6 +990,23 @@ INSERT INTO dashboard_widget_catalog (
     create_date,
     update_date
 )
+SELECT 'TOURNAMENT_RECORD_MINE', 'My Tournaments', 'My tournament pipeline and participation counts.', 'sports_score', 'TOURNAMENT_RECORD', 'USER_HOME', 1, 1, 36, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'TOURNAMENT_RECORD_MINE');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
 SELECT 'BRACKET_LATEST', 'Bracket Board', 'Approved brackets and my latest draft.', 'account_tree', 'BRACKET', 'USER_HOME', 1, 1, 37, 1, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'BRACKET_LATEST');
 
@@ -990,8 +1024,59 @@ INSERT INTO dashboard_widget_catalog (
     create_date,
     update_date
 )
-SELECT 'MEMBER_DIRECTORY_HIGHLIGHT', 'Member Directory', 'Recently active members and quick access to the member directory.', 'group_search', 'MEMBER_DIRECTORY', 'USER_HOME', 1, 1, 38, 1, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'MEMBER_DIRECTORY_HIGHLIGHT');
+SELECT 'ATTENDANCE_STATUS', 'Attendance Check', 'Check in and review attendance status.', 'fact_check', 'ATTENDANCE', 'USER_HOME', 1, 1, 40, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'ATTENDANCE_STATUS');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'ATTENDANCE_RECENT', 'Attendance Recent', 'Recent attendance logs and completion rate.', 'event_note', 'ATTENDANCE', 'USER_HOME', 1, 1, 41, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'ATTENDANCE_RECENT');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'FINANCE_STATUS', 'Finance Status', 'My pending finance items and latest payment status.', 'payments', 'FINANCE', 'USER_HOME', 1, 1, 42, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'FINANCE_STATUS');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT 'FINANCE_LEDGER', 'Finance Ledger', 'Pending and completed finance summary.', 'account_balance_wallet', 'FINANCE', 'USER_HOME', 1, 1, 44, 1, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'FINANCE_LEDGER');
 
 -- ------------------------------------------------------------
 -- Optional example: enable attendance for specific clubs.
