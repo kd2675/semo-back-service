@@ -36,7 +36,8 @@
 ## Stack
 
 - Java `21`
-- Gradle Wrapper `9.3.0`
+- 루트 Gradle Wrapper `9.2.1` 기준으로 워크스페이스 모듈 명령 실행
+- 서비스 단독 Gradle Wrapper `9.3.0`
 - Spring Boot `4.0.2`
 - Spring Cloud BOM `2025.1.0`
 - Spring Web, Validation, Data JPA, Actuator, Cache
@@ -277,7 +278,10 @@
 ```bash
 ./gradlew :semo-back-service:compileJava
 ./gradlew :semo-back-service:test
+./gradlew :semo-back-service:test --rerun-tasks
 ```
+
+2026-05-21 현재 루트 wrapper 기준으로 `compileJava`와 `test --rerun-tasks`가 성공했습니다.
 
 ## Test Coverage Snapshot
 
@@ -289,12 +293,15 @@
 - `attendance`
 - `contentread`
 - `dashboard`
+- `feedback`
 - `finance`
+- `memberdirectory`
 - `notice` 일부(permission/feed)
 - `poll` 일부(permission)
 - `position`
 - `schedule`
 - `timeline`
+- `todo`
 
 상대적으로 공백이 큰 영역도 있습니다.
 
