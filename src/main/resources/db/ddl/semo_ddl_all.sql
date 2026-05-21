@@ -168,6 +168,38 @@ CREATE TABLE IF NOT EXISTS club_member_position (
 CREATE INDEX idx_club_member_position_member
     ON club_member_position (club_member_id, club_position_id);
 
+CREATE TABLE IF NOT EXISTS club_member_position_history (
+    club_member_position_history_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    club_member_id BIGINT NOT NULL,
+    club_profile_id BIGINT NULL,
+    club_position_id BIGINT NOT NULL,
+    position_code_snapshot VARCHAR(50) NOT NULL,
+    position_display_name_snapshot VARCHAR(100) NOT NULL,
+    started_at DATETIME NOT NULL,
+    ended_at DATETIME NULL,
+    assigned_by_club_profile_id BIGINT NULL,
+    ended_by_club_profile_id BIGINT NULL,
+    deleted TINYINT(1) NOT NULL DEFAULT 0,
+    deleted_by_club_profile_id BIGINT NULL,
+    deleted_at DATETIME NULL,
+    delete_reason VARCHAR(500) NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_club_member_position_history_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_club_member_position_history_member FOREIGN KEY (club_member_id) REFERENCES club_member(club_member_id),
+    CONSTRAINT fk_club_member_position_history_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_club_member_position_history_assigned_by FOREIGN KEY (assigned_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_club_member_position_history_ended_by FOREIGN KEY (ended_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_club_member_position_history_deleted_by FOREIGN KEY (deleted_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_member_position_history_member
+    ON club_member_position_history (club_id, club_member_id, deleted, started_at, ended_at);
+
+CREATE INDEX idx_club_member_position_history_position
+    ON club_member_position_history (club_id, club_position_id, deleted, started_at, ended_at);
+
 -- ============================================================
 -- Club membership / role
 -- USER joins club through this table.

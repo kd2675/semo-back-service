@@ -7,11 +7,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.FeaturePermissionCatalog;
+import semo.back.service.database.pub.repository.ClubActivityLogRepository;
 import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
 import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
 import semo.back.service.database.pub.repository.ClubBoardItemRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
+import semo.back.service.database.pub.repository.ClubMemberPositionHistoryRepository;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
@@ -31,6 +33,8 @@ import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
+import semo.back.service.feature.activity.biz.ClubActivityRecorder;
+import semo.back.service.feature.activity.biz.ClubActivityService;
 import semo.back.service.feature.position.vo.CreateClubPositionRequest;
 import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 
@@ -55,7 +59,16 @@ class ClubPositionServiceTest {
     private ClubFeatureService clubFeatureService;
 
     @Autowired
+    private ClubActivityRecorder clubActivityRecorder;
+
+    @Autowired
+    private ClubActivityService clubActivityService;
+
+    @Autowired
     private ClubPositionService clubPositionService;
+
+    @Autowired
+    private ClubActivityLogRepository clubActivityLogRepository;
 
     @Autowired
     private ClubAttendanceCheckInRepository clubAttendanceCheckInRepository;
@@ -74,6 +87,9 @@ class ClubPositionServiceTest {
 
     @Autowired
     private ClubMemberPositionRepository clubMemberPositionRepository;
+
+    @Autowired
+    private ClubMemberPositionHistoryRepository clubMemberPositionHistoryRepository;
 
     @Autowired
     private ClubMemberRepository clubMemberRepository;
@@ -116,6 +132,7 @@ class ClubPositionServiceTest {
 
     @BeforeEach
     void setUp() {
+        clubActivityLogRepository.deleteAll();
         clubScheduleVoteSelectionRepository.deleteAll();
         clubScheduleVoteOptionRepository.deleteAll();
         clubScheduleVoteRepository.deleteAll();
@@ -125,6 +142,7 @@ class ClubPositionServiceTest {
         clubNoticeRepository.deleteAll();
         clubAttendanceCheckInRepository.deleteAll();
         clubAttendanceSessionRepository.deleteAll();
+        clubMemberPositionHistoryRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();
         clubPositionRepository.deleteAll();
@@ -313,6 +331,109 @@ class ClubPositionServiceTest {
         assertThat(clubMemberPositionRepository.findByClubMemberId(ownerMember.getClubMemberId()))
                 .extracting(item -> item.getClubPositionId())
                 .containsExactlyInAnyOrder(leader.position().clubPositionId(), manager.position().clubPositionId());
+    }
+
+    @Test
+    void replaceMemberPositions_recordsPositionTenureHistory() {
+        Long clubId = createClub("role-owner-005", "직책 이력 검증 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-005",
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "ROLE_MANAGEMENT"))
+        );
+        var leader = clubPositionService.createPosition(
+                clubId,
+                "role-owner-005",
+                new CreateClubPositionRequest(
+                        "리더",
+                        "LEADER",
+                        null,
+                        "shield",
+                        "#0053dd",
+                        List.of("NOTICE_CREATE")
+                )
+        );
+        var access = clubAccessResolver.requireAdmin(clubId, "role-owner-005");
+        var ownerMember = clubMemberRepository.findByClubIdOrderByClubMemberIdAsc(clubId).getFirst();
+
+        clubPositionService.replaceMemberPositions(
+                access,
+                ownerMember,
+                List.of(leader.position().clubPositionId())
+        );
+
+        var openHistory = clubMemberPositionHistoryRepository.findOpenHistories(
+                ownerMember.getClubMemberId(),
+                leader.position().clubPositionId()
+        );
+        assertThat(openHistory).singleElement().satisfies(history -> {
+            assertThat(history.getClubId()).isEqualTo(clubId);
+            assertThat(history.getPositionCodeSnapshot()).isEqualTo("LEADER");
+            assertThat(history.getPositionDisplayNameSnapshot()).isEqualTo("리더");
+            assertThat(history.getStartedAt()).isNotNull();
+            assertThat(history.getEndedAt()).isNull();
+        });
+
+        clubPositionService.replaceMemberPositions(access, ownerMember, List.of());
+
+        assertThat(clubMemberPositionHistoryRepository.findOpenHistories(
+                ownerMember.getClubMemberId(),
+                leader.position().clubPositionId()
+        )).isEmpty();
+        assertThat(clubMemberPositionHistoryRepository.findByClubIdAndDeletedFalseOrderByStartedAtDescClubMemberPositionHistoryIdDesc(clubId))
+                .singleElement()
+                .satisfies(history -> assertThat(history.getEndedAt()).isNotNull());
+    }
+
+    @Test
+    void getRecentAdminActivities_positionFilterUsesTenureAtActivityTime() {
+        Long clubId = createClub("role-owner-006", "직책 로그 필터 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-006",
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "ROLE_MANAGEMENT"))
+        );
+        var leader = clubPositionService.createPosition(
+                clubId,
+                "role-owner-006",
+                new CreateClubPositionRequest(
+                        "리더",
+                        "LEADER",
+                        null,
+                        "shield",
+                        "#0053dd",
+                        List.of("NOTICE_CREATE")
+                )
+        );
+        var access = clubAccessResolver.requireAdmin(clubId, "role-owner-006");
+        var ownerMember = clubMemberRepository.findByClubIdOrderByClubMemberIdAsc(clubId).getFirst();
+        clubPositionService.replaceMemberPositions(
+                access,
+                ownerMember,
+                List.of(leader.position().clubPositionId())
+        );
+
+        clubActivityRecorder.recordSuccessSafely(clubId, "role-owner-006", "공지관리", "공지 테스트 로그를 남겼습니다.");
+
+        var response = clubActivityService.getRecentAdminActivities(
+                clubId,
+                "role-owner-006",
+                null,
+                null,
+                20,
+                leader.position().clubPositionId()
+        );
+
+        assertThat(response.selectedPositionId()).isEqualTo(leader.position().clubPositionId());
+        assertThat(response.positionFilters())
+                .extracting(item -> item.displayName())
+                .contains("리더");
+        assertThat(response.activities()).singleElement().satisfies(activity -> {
+            assertThat(activity.detail()).isEqualTo("공지 테스트 로그를 남겼습니다.");
+            assertThat(activity.actorPositions())
+                    .extracting(item -> item.displayName())
+                    .containsExactly("리더");
+        });
     }
 
     private Long createClub(String userKey, String clubName) {

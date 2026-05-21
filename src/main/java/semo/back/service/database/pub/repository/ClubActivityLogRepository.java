@@ -57,6 +57,35 @@ public interface ClubActivityLogRepository extends JpaRepository<ClubActivityLog
             select a
             from ClubActivityLog a
             where a.clubId = :clubId
+              and exists (
+                    select 1
+                    from ClubMemberPositionHistory h
+                    where h.clubId = a.clubId
+                      and h.clubMemberId = a.actorClubMemberId
+                      and h.clubPositionId = :clubPositionId
+                      and h.deleted = false
+                      and h.startedAt <= a.createDate
+                      and (h.endedAt is null or h.endedAt >= a.createDate)
+                  )
+              and (
+                    :cursorCreatedAt is null
+                    or a.createDate < :cursorCreatedAt
+                    or (a.createDate = :cursorCreatedAt and a.clubActivityLogId < :cursorActivityId)
+                  )
+            order by a.createDate desc, a.clubActivityLogId desc
+            """)
+    List<ClubActivityLog> findFeedByPosition(
+            Long clubId,
+            Long clubPositionId,
+            LocalDateTime cursorCreatedAt,
+            Long cursorActivityId,
+            Pageable pageable
+    );
+
+    @Query("""
+            select a
+            from ClubActivityLog a
+            where a.clubId = :clubId
               and a.actorClubProfileId = :actorClubProfileId
               and (
                     :cursorCreatedAt is null

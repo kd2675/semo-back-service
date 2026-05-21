@@ -25,6 +25,7 @@ public class ClubActivityAdminController {
             @RequestParam(required = false) String cursorCreatedAt,
             @RequestParam(required = false) Long cursorActivityId,
             @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) Long positionId,
             UserContext userContext
     ) {
         requireUserRole(userContext);
@@ -34,7 +35,8 @@ public class ClubActivityAdminController {
                         requireUserKey(userContext),
                         cursorCreatedAt,
                         cursorActivityId,
-                        size
+                        size,
+                        positionId
                 ),
                 "최근 활동 조회 성공"
         );

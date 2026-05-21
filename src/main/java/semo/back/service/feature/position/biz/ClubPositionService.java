@@ -8,15 +8,19 @@ import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubMemberPosition;
+import semo.back.service.database.pub.entity.ClubMemberPositionHistory;
 import semo.back.service.database.pub.entity.ClubPosition;
 import semo.back.service.database.pub.entity.ClubPositionPermission;
+import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubFeature;
 import semo.back.service.database.pub.entity.FeatureCatalog;
 import semo.back.service.database.pub.entity.FeaturePermissionCatalog;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
+import semo.back.service.database.pub.repository.ClubMemberPositionHistoryRepository;
 import semo.back.service.database.pub.repository.ClubPositionPermissionRepository;
 import semo.back.service.database.pub.repository.ClubPositionRepository;
+import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.FeaturePermissionCatalogRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
@@ -25,12 +29,16 @@ import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.position.vo.ClubAdminRoleManagementResponse;
 import semo.back.service.feature.position.vo.ClubPermissionGroupResponse;
 import semo.back.service.feature.position.vo.ClubPermissionItemResponse;
+import semo.back.service.feature.position.vo.ClubPositionHistoryItemResponse;
+import semo.back.service.feature.position.vo.ClubPositionHistoryResponse;
 import semo.back.service.feature.position.vo.ClubPositionDetailResponse;
 import semo.back.service.feature.position.vo.ClubPositionSummaryResponse;
 import semo.back.service.feature.position.vo.CreateClubPositionRequest;
+import semo.back.service.feature.position.vo.DeleteClubPositionHistoryRequest;
 import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -54,6 +62,8 @@ public class ClubPositionService {
     private static final String FEATURE_BRACKET = "BRACKET";
     private static final String FEATURE_FINANCE = "FINANCE";
     private static final String FEATURE_TODO = "TODO";
+    private static final DateTimeFormatter DATE_TIME_VALUE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+    private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm", Locale.KOREAN);
 
     private final ClubAccessResolver clubAccessResolver;
     private final ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
@@ -63,6 +73,8 @@ public class ClubPositionService {
     private final ClubPositionRepository clubPositionRepository;
     private final ClubPositionPermissionRepository clubPositionPermissionRepository;
     private final ClubMemberPositionRepository clubMemberPositionRepository;
+    private final ClubMemberPositionHistoryRepository clubMemberPositionHistoryRepository;
+    private final ClubProfileRepository clubProfileRepository;
 
     public ClubAdminRoleManagementResponse getRoleManagement(Long clubId, String userKey) {
         requireRoleManagementFeature(clubId);
@@ -176,15 +188,71 @@ public class ClubPositionService {
     @RecordClubActivity(subject = "직책관리")
     public void deletePosition(Long clubId, Long clubPositionId, String userKey) {
         requireRoleManagementFeature(clubId);
-        clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         ClubPosition current = requirePosition(clubId, clubPositionId);
         ClubActivityContextHolder.setDetails(
                 "직책 '" + current.getDisplayName() + "'을 삭제했습니다.",
                 "직책 '" + current.getDisplayName() + "' 삭제에 실패했습니다."
         );
+        closeOpenHistoriesForPosition(clubId, clubPositionId, access.clubProfile().getClubProfileId(), LocalDateTime.now());
         clubMemberPositionRepository.deleteByClubPositionId(current.getClubPositionId());
         clubPositionPermissionRepository.deleteByClubPositionId(current.getClubPositionId());
         clubPositionRepository.delete(current);
+    }
+
+    public ClubPositionHistoryResponse getPositionHistory(Long clubId, String userKey) {
+        requireRoleManagementFeature(clubId);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        List<ClubMemberPositionHistory> histories = clubMemberPositionHistoryRepository
+                .findByClubIdAndDeletedFalseOrderByStartedAtDescClubMemberPositionHistoryIdDesc(clubId);
+        List<Long> clubMemberIds = histories.stream()
+                .map(ClubMemberPositionHistory::getClubMemberId)
+                .distinct()
+                .toList();
+        Map<Long, String> displayNameByMemberId = clubMemberIds.isEmpty()
+                ? Map.of()
+                : clubProfileRepository.findByClubMemberIdIn(clubMemberIds).stream()
+                        .collect(Collectors.toMap(
+                                ClubProfile::getClubMemberId,
+                                ClubProfile::getDisplayName,
+                                (left, right) -> left
+                        ));
+
+        return new ClubPositionHistoryResponse(
+                access.club().getClubId(),
+                access.club().getName(),
+                true,
+                histories.stream()
+                        .map(history -> toHistoryResponse(history, displayNameByMemberId.get(history.getClubMemberId())))
+                        .toList()
+        );
+    }
+
+    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @RecordClubActivity(subject = "직책관리")
+    public void deletePositionHistory(
+            Long clubId,
+            Long positionHistoryId,
+            String userKey,
+            DeleteClubPositionHistoryRequest request
+    ) {
+        requireRoleManagementFeature(clubId);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubMemberPositionHistory history = clubMemberPositionHistoryRepository
+                .findByClubMemberPositionHistoryIdAndClubId(positionHistoryId, clubId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubMemberPositionHistory", "positionHistoryId", positionHistoryId));
+        if (history.isDeleted()) {
+            return;
+        }
+        history.markDeleted(
+                access.clubProfile().getClubProfileId(),
+                LocalDateTime.now(),
+                trimToNull(request == null ? null : request.deleteReason())
+        );
+        ClubActivityContextHolder.setDetails(
+                "직책 보유 이력 '" + history.getPositionDisplayNameSnapshot() + "'을 삭제했습니다.",
+                "직책 보유 이력 삭제에 실패했습니다."
+        );
     }
 
     public boolean isRoleManagementEnabled(Long clubId) {
@@ -240,16 +308,24 @@ public class ClubPositionService {
         if (positions.size() != normalizedPositionIds.size() || positions.stream().anyMatch(position -> !position.getClubId().equals(target.getClubId()))) {
             throw new SemoException.ValidationException("다른 모임의 직책은 할당할 수 없습니다.");
         }
+        Map<Long, ClubPosition> positionById = positions.stream()
+                .collect(Collectors.toMap(ClubPosition::getClubPositionId, Function.identity()));
 
         List<ClubMemberPosition> existingAssignments = clubMemberPositionRepository.findByClubMemberId(target.getClubMemberId());
         Set<Long> requestedPositionIds = Set.copyOf(normalizedPositionIds);
         Set<Long> existingPositionIds = existingAssignments.stream()
                 .map(ClubMemberPosition::getClubPositionId)
                 .collect(Collectors.toSet());
+        LocalDateTime now = LocalDateTime.now();
+        Long actorClubProfileId = actorAccess.clubProfile().getClubProfileId();
+        Long targetClubProfileId = resolveClubProfileId(target.getClubMemberId());
         List<ClubMemberPosition> assignmentsToRemove = existingAssignments.stream()
                 .filter(assignment -> !requestedPositionIds.contains(assignment.getClubPositionId()))
                 .toList();
         if (!assignmentsToRemove.isEmpty()) {
+            for (ClubMemberPosition assignment : assignmentsToRemove) {
+                closeOpenHistories(target.getClubMemberId(), assignment.getClubPositionId(), actorClubProfileId, now);
+            }
             clubMemberPositionRepository.deleteAllInBatch(assignmentsToRemove);
         }
 
@@ -260,15 +336,66 @@ public class ClubPositionService {
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now();
         for (Long clubPositionId : positionIdsToAdd) {
             clubMemberPositionRepository.save(ClubMemberPosition.builder()
                     .clubMemberId(target.getClubMemberId())
                     .clubPositionId(clubPositionId)
-                    .assignedByClubProfileId(actorAccess.clubProfile().getClubProfileId())
+                    .assignedByClubProfileId(actorClubProfileId)
                     .assignedAt(now)
                     .build());
+            ClubPosition position = positionById.get(clubPositionId);
+            clubMemberPositionHistoryRepository.save(ClubMemberPositionHistory.builder()
+                    .clubId(target.getClubId())
+                    .clubMemberId(target.getClubMemberId())
+                    .clubProfileId(targetClubProfileId)
+                    .clubPositionId(clubPositionId)
+                    .positionCodeSnapshot(position.getPositionCode())
+                    .positionDisplayNameSnapshot(position.getDisplayName())
+                    .startedAt(now)
+                    .endedAt(null)
+                    .assignedByClubProfileId(actorClubProfileId)
+                    .endedByClubProfileId(null)
+                    .deleted(false)
+                    .build());
         }
+    }
+
+    private void closeOpenHistories(Long clubMemberId, Long clubPositionId, Long actorClubProfileId, LocalDateTime endedAt) {
+        clubMemberPositionHistoryRepository.findOpenHistories(clubMemberId, clubPositionId)
+                .forEach(history -> history.close(actorClubProfileId, endedAt));
+    }
+
+    private void closeOpenHistoriesForPosition(Long clubId, Long clubPositionId, Long actorClubProfileId, LocalDateTime endedAt) {
+        clubMemberPositionHistoryRepository.findOpenHistoriesByPosition(clubId, clubPositionId)
+                .forEach(history -> history.close(actorClubProfileId, endedAt));
+    }
+
+    private Long resolveClubProfileId(Long clubMemberId) {
+        return clubProfileRepository.findByClubMemberId(clubMemberId)
+                .map(ClubProfile::getClubProfileId)
+                .orElse(null);
+    }
+
+    private ClubPositionHistoryItemResponse toHistoryResponse(
+            ClubMemberPositionHistory history,
+            String memberDisplayName
+    ) {
+        return new ClubPositionHistoryItemResponse(
+                history.getClubMemberPositionHistoryId(),
+                history.getClubMemberId(),
+                history.getClubProfileId(),
+                StringUtils.hasText(memberDisplayName) ? memberDisplayName : "알 수 없는 멤버",
+                history.getClubPositionId(),
+                history.getPositionCodeSnapshot(),
+                history.getPositionDisplayNameSnapshot(),
+                formatDateTimeValue(history.getStartedAt()),
+                formatDateTimeLabel(history.getStartedAt()),
+                formatDateTimeValue(history.getEndedAt()),
+                formatDateTimeLabel(history.getEndedAt()),
+                history.getEndedAt() == null && !history.isDeleted(),
+                history.isDeleted(),
+                history.getDeleteReason()
+        );
     }
 
     private PositionSnapshot loadSnapshot(Long clubId) {
@@ -453,6 +580,14 @@ public class ClubPositionService {
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String formatDateTimeValue(LocalDateTime value) {
+        return value == null ? null : value.format(DATE_TIME_VALUE_FORMATTER);
+    }
+
+    private String formatDateTimeLabel(LocalDateTime value) {
+        return value == null ? null : value.format(DATE_TIME_LABEL_FORMATTER);
     }
 
     private record PositionSnapshot(

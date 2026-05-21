@@ -15,8 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.position.biz.ClubPositionService;
 import semo.back.service.feature.position.vo.ClubAdminRoleManagementResponse;
+import semo.back.service.feature.position.vo.ClubPositionHistoryResponse;
 import semo.back.service.feature.position.vo.ClubPositionDetailResponse;
 import semo.back.service.feature.position.vo.CreateClubPositionRequest;
+import semo.back.service.feature.position.vo.DeleteClubPositionHistoryRequest;
 import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
@@ -36,6 +38,30 @@ public class ClubPositionAdminController {
                 clubPositionService.getRoleManagement(clubId, requireUserKey(userContext)),
                 "직책관리 조회 성공"
         );
+    }
+
+    @GetMapping("/history")
+    public ResponseDataDTO<ClubPositionHistoryResponse> getPositionHistory(
+            @PathVariable Long clubId,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        return ResponseDataDTO.of(
+                clubPositionService.getPositionHistory(clubId, requireUserKey(userContext)),
+                "직책 보유 이력 조회 성공"
+        );
+    }
+
+    @DeleteMapping("/history/{positionHistoryId}")
+    public ResponseDataDTO<Boolean> deletePositionHistory(
+            @PathVariable Long clubId,
+            @PathVariable Long positionHistoryId,
+            @Valid @RequestBody(required = false) DeleteClubPositionHistoryRequest request,
+            UserContext userContext
+    ) {
+        requireUserRole(userContext);
+        clubPositionService.deletePositionHistory(clubId, positionHistoryId, requireUserKey(userContext), request);
+        return ResponseDataDTO.of(true, "직책 보유 이력 삭제 성공");
     }
 
     @PostMapping
