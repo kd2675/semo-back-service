@@ -1,5 +1,6 @@
 package semo.back.service.feature.finance.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import semo.back.service.feature.finance.vo.ReviewFinanceRequestRequest;
 import semo.back.service.feature.finance.vo.UpdateFinancePaymentStatusRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
@@ -43,7 +45,6 @@ public class ClubFinanceController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.getFinance(clubId, requireUserKey(userContext)),
                 "재정 조회 성공"
@@ -55,7 +56,6 @@ public class ClubFinanceController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.getMyFinanceRequests(clubId, requireUserKey(userContext)),
                 "내 재정 요청 조회 성공"
@@ -68,7 +68,6 @@ public class ClubFinanceController {
             @Valid @RequestBody CreateFinanceRequestRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.createFinanceRequest(clubId, requireUserKey(userContext), request),
                 "재정 요청 제출 성공"
@@ -80,7 +79,6 @@ public class ClubFinanceController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.getAdminFinance(clubId, requireUserKey(userContext)),
                 "관리자 재정 조회 성공"
@@ -96,7 +94,6 @@ public class ClubFinanceController {
             @RequestParam(required = false) Integer size,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.getAdminFinanceObligations(
                         clubId,
@@ -115,7 +112,6 @@ public class ClubFinanceController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.getAdminFinanceRequests(clubId, requireUserKey(userContext)),
                 "관리자 재정 요청 조회 성공"
@@ -129,7 +125,6 @@ public class ClubFinanceController {
             @Valid @RequestBody ReviewFinanceRequestRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.reviewFinanceRequest(clubId, requestId, requireUserKey(userContext), request),
                 "재정 요청 검토 성공"
@@ -141,7 +136,6 @@ public class ClubFinanceController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.getAdminFinanceExpenses(clubId, requireUserKey(userContext)),
                 "관리자 지출 조회 성공"
@@ -154,7 +148,6 @@ public class ClubFinanceController {
             @Valid @RequestBody CreateFinanceExpenseRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.createFinanceExpense(clubId, requireUserKey(userContext), request),
                 "지출 입력 성공"
@@ -167,7 +160,6 @@ public class ClubFinanceController {
             @PathVariable Long obligationId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.getAdminFinanceObligationDetail(clubId, obligationId, requireUserKey(userContext)),
                 "관리자 재정 청구 상세 조회 성공"
@@ -180,7 +172,6 @@ public class ClubFinanceController {
             @Valid @RequestBody CreateFinanceObligationRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.createObligation(clubId, requireUserKey(userContext), request),
                 "재정 항목 발행 성공"
@@ -194,7 +185,6 @@ public class ClubFinanceController {
             @Valid @RequestBody UpdateFinancePaymentStatusRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubFinanceService.updatePaymentStatus(clubId, paymentId, requireUserKey(userContext), request),
                 "재정 상태 변경 성공"
@@ -207,7 +197,6 @@ public class ClubFinanceController {
             @PathVariable Long obligationId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubFinanceService.deleteObligation(clubId, obligationId, requireUserKey(userContext));
         return ResponseDataDTO.of(null, "재정 항목 삭제 성공");
     }
@@ -219,12 +208,4 @@ public class ClubFinanceController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

@@ -1,5 +1,6 @@
 package semo.back.service.feature.profile.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
@@ -12,6 +13,7 @@ import semo.back.service.feature.profile.biz.ProfileUserService;
 import semo.back.service.feature.profile.vo.ProfileSummaryResponse;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/profile")
 @RequiredArgsConstructor
@@ -20,7 +22,6 @@ public class ProfileController {
 
     @GetMapping("/summary")
     public ResponseDataDTO<ProfileSummaryResponse> getProfileSummary(UserContext userContext) {
-        requireUserRole(userContext);
         String userKey = requireUserKey(userContext);
         return ResponseDataDTO.of(
                 profileUserService.getProfileSummary(userKey),
@@ -30,7 +31,6 @@ public class ProfileController {
 
     @PostMapping("/initialize")
     public ResponseDataDTO<ProfileSummaryResponse> initializeProfile(UserContext userContext) {
-        requireUserRole(userContext);
         String userKey = requireUserKey(userContext);
         return ResponseDataDTO.of(
                 profileUserService.initializeProfile(userKey, userContext.getUserName()),
@@ -45,12 +45,4 @@ public class ProfileController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

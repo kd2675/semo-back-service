@@ -1,5 +1,6 @@
 package semo.back.service.feature.tournament.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import semo.back.service.feature.tournament.vo.ReviewTournamentRecordRequest;
 import semo.back.service.feature.tournament.vo.TournamentDetailResponse;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
@@ -30,7 +32,6 @@ public class ClubTournamentAdminController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTournamentService.getAdminTournamentHome(clubId, requireUserKey(userContext)),
                 "대회 관리 홈 조회 성공"
@@ -44,7 +45,6 @@ public class ClubTournamentAdminController {
             @Valid @RequestBody ReviewTournamentRecordRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTournamentService.reviewTournament(
                         clubId,
@@ -62,7 +62,6 @@ public class ClubTournamentAdminController {
             @PathVariable Long tournamentRecordId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubTournamentService.deleteTournament(clubId, tournamentRecordId, requireUserKey(userContext));
         return ResponseDataDTO.of(null, "대회 삭제 성공");
     }
@@ -74,12 +73,4 @@ public class ClubTournamentAdminController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

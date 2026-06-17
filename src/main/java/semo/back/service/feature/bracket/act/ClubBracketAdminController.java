@@ -1,5 +1,6 @@
 package semo.back.service.feature.bracket.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import semo.back.service.feature.bracket.vo.ClubAdminBracketHomeResponse;
 import semo.back.service.feature.bracket.vo.ReviewBracketRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
@@ -29,7 +31,6 @@ public class ClubBracketAdminController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubBracketService.getAdminBracketHome(clubId, requireUserKey(userContext)),
                 "대진표 관리자 홈 조회 성공"
@@ -43,7 +44,6 @@ public class ClubBracketAdminController {
             @Valid @RequestBody ReviewBracketRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubBracketService.reviewBracket(clubId, bracketRecordId, requireUserKey(userContext), request),
                 "대진표 승인 검토 성공"
@@ -56,7 +56,6 @@ public class ClubBracketAdminController {
             @PathVariable Long bracketRecordId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubBracketService.deleteBracket(clubId, bracketRecordId, requireUserKey(userContext));
         return ResponseDataDTO.of(null, "대진표 삭제 성공");
     }
@@ -68,12 +67,4 @@ public class ClubBracketAdminController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

@@ -1,5 +1,6 @@
 package semo.back.service.feature.todo.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import semo.back.service.feature.todo.vo.UpdateClubTodoRequest;
 import semo.back.service.feature.todo.vo.UpdateTodoStatusRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
@@ -39,7 +41,6 @@ public class ClubTodoController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.getTodos(clubId, requireUserKey(userContext)),
                 "할 일 조회 성공"
@@ -52,7 +53,6 @@ public class ClubTodoController {
             @PathVariable Long todoItemId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.claimTodo(clubId, todoItemId, requireUserKey(userContext)),
                 "업무 맡기 성공"
@@ -66,7 +66,6 @@ public class ClubTodoController {
             @Valid @RequestBody(required = false) CreateTodoApplicationRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.applyTodo(clubId, todoItemId, requireUserKey(userContext), request),
                 "업무 신청 성공"
@@ -79,7 +78,6 @@ public class ClubTodoController {
             @PathVariable Long todoItemId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.cancelMyTodoApplication(clubId, todoItemId, requireUserKey(userContext)),
                 "업무 신청 취소 성공"
@@ -92,7 +90,6 @@ public class ClubTodoController {
             @PathVariable Long todoItemId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.completeTodo(clubId, todoItemId, requireUserKey(userContext)),
                 "업무 완료 처리 성공"
@@ -109,7 +106,6 @@ public class ClubTodoController {
             @RequestParam(required = false) Integer size,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.getAdminTodos(
                         clubId,
@@ -130,7 +126,6 @@ public class ClubTodoController {
             @PathVariable Long todoItemId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.getAdminTodoApplications(clubId, todoItemId, requireUserKey(userContext)),
                 "업무 신청 목록 조회 성공"
@@ -145,7 +140,6 @@ public class ClubTodoController {
             @Valid @RequestBody ReviewTodoItemApplicationRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.reviewTodoApplication(
                         clubId,
@@ -164,7 +158,6 @@ public class ClubTodoController {
             @Valid @RequestBody CreateClubTodoRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.createTodo(clubId, requireUserKey(userContext), request),
                 "할 일 등록 성공"
@@ -178,7 +171,6 @@ public class ClubTodoController {
             @Valid @RequestBody UpdateClubTodoRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.updateTodo(clubId, todoItemId, requireUserKey(userContext), request),
                 "할 일 수정 성공"
@@ -192,7 +184,6 @@ public class ClubTodoController {
             @Valid @RequestBody UpdateTodoStatusRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTodoService.updateTodoStatus(clubId, todoItemId, requireUserKey(userContext), request),
                 "할 일 상태 변경 성공"
@@ -205,7 +196,6 @@ public class ClubTodoController {
             @PathVariable Long todoItemId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubTodoService.deleteTodo(clubId, todoItemId, requireUserKey(userContext));
         return ResponseDataDTO.of(null, "할 일 삭제 성공");
     }
@@ -217,12 +207,4 @@ public class ClubTodoController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

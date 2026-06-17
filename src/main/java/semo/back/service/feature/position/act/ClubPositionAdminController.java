@@ -1,5 +1,6 @@
 package semo.back.service.feature.position.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import semo.back.service.feature.position.vo.DeleteClubPositionHistoryRequest;
 import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}/admin/more/roles")
 @RequiredArgsConstructor
@@ -33,7 +35,6 @@ public class ClubPositionAdminController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubPositionService.getRoleManagement(clubId, requireUserKey(userContext)),
                 "직책관리 조회 성공"
@@ -45,7 +46,6 @@ public class ClubPositionAdminController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubPositionService.getPositionHistory(clubId, requireUserKey(userContext)),
                 "직책 보유 이력 조회 성공"
@@ -59,7 +59,6 @@ public class ClubPositionAdminController {
             @Valid @RequestBody(required = false) DeleteClubPositionHistoryRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubPositionService.deletePositionHistory(clubId, positionHistoryId, requireUserKey(userContext), request);
         return ResponseDataDTO.of(true, "직책 보유 이력 삭제 성공");
     }
@@ -70,7 +69,6 @@ public class ClubPositionAdminController {
             @Valid @RequestBody CreateClubPositionRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubPositionService.createPosition(clubId, requireUserKey(userContext), request),
                 "직책 생성 성공"
@@ -83,7 +81,6 @@ public class ClubPositionAdminController {
             @PathVariable Long clubPositionId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubPositionService.getPositionDetail(clubId, clubPositionId, requireUserKey(userContext)),
                 "직책 상세 조회 성공"
@@ -97,7 +94,6 @@ public class ClubPositionAdminController {
             @Valid @RequestBody UpdateClubPositionRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubPositionService.updatePosition(clubId, clubPositionId, requireUserKey(userContext), request),
                 "직책 수정 성공"
@@ -110,7 +106,6 @@ public class ClubPositionAdminController {
             @PathVariable Long clubPositionId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubPositionService.deletePosition(clubId, clubPositionId, requireUserKey(userContext));
         return ResponseDataDTO.of(true, "직책 삭제 성공");
     }
@@ -122,12 +117,4 @@ public class ClubPositionAdminController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

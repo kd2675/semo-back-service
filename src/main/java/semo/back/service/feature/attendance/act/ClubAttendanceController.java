@@ -1,5 +1,6 @@
 package semo.back.service.feature.attendance.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
@@ -15,6 +16,7 @@ import semo.back.service.feature.attendance.vo.ClubAdminAttendanceResponse;
 import semo.back.service.feature.attendance.vo.ClubAttendanceResponse;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
@@ -26,7 +28,6 @@ public class ClubAttendanceController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubAttendanceService.getAttendance(clubId, requireUserKey(userContext)),
                 "출석 조회 성공"
@@ -38,7 +39,6 @@ public class ClubAttendanceController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubAttendanceService.checkIn(clubId, requireUserKey(userContext)),
                 "출석 체크 성공"
@@ -50,7 +50,6 @@ public class ClubAttendanceController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubAttendanceService.getAdminAttendance(clubId, requireUserKey(userContext)),
                 "관리자 출석 조회 성공"
@@ -64,12 +63,4 @@ public class ClubAttendanceController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

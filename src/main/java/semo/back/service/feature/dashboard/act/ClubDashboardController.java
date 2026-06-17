@@ -1,5 +1,6 @@
 package semo.back.service.feature.dashboard.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
@@ -19,6 +20,7 @@ import web.common.core.response.base.dto.ResponseDataDTO;
 
 import java.util.List;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
@@ -31,7 +33,6 @@ public class ClubDashboardController {
             @RequestParam(required = false) String scope,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         String userKey = requireUserKey(userContext);
         return ResponseDataDTO.of(
                 clubDashboardService.getDashboardWidgets(clubId, userKey, scope),
@@ -45,7 +46,6 @@ public class ClubDashboardController {
             @RequestParam(required = false) String scope,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         String userKey = requireUserKey(userContext);
         return ResponseDataDTO.of(
                 clubDashboardService.getDashboardWidgetEditor(clubId, userKey, scope),
@@ -59,7 +59,6 @@ public class ClubDashboardController {
             @RequestBody UpdateClubDashboardLayoutRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         String userKey = requireUserKey(userContext);
         return ResponseDataDTO.of(
                 clubDashboardService.updateDashboardWidgetLayout(clubId, userKey, request),
@@ -74,12 +73,4 @@ public class ClubDashboardController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

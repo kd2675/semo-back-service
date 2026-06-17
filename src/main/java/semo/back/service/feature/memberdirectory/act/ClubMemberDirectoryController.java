@@ -1,5 +1,6 @@
 package semo.back.service.feature.memberdirectory.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
@@ -16,6 +17,7 @@ import semo.back.service.feature.memberdirectory.vo.ClubMemberDirectoryResponse;
 import semo.back.service.feature.memberdirectory.vo.UpdateClubAdminMemberDirectorySettingsRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
@@ -27,7 +29,6 @@ public class ClubMemberDirectoryController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubMemberDirectoryService.getMemberDirectory(clubId, requireUserKey(userContext)),
                 "회원 디렉터리 조회 성공"
@@ -39,7 +40,6 @@ public class ClubMemberDirectoryController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubMemberDirectoryService.getAdminMemberDirectory(clubId, requireUserKey(userContext)),
                 "회원 디렉터리 설정 조회 성공"
@@ -52,7 +52,6 @@ public class ClubMemberDirectoryController {
             @RequestBody UpdateClubAdminMemberDirectorySettingsRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubMemberDirectoryService.updateAdminMemberDirectory(clubId, requireUserKey(userContext), request),
                 "회원 디렉터리 설정 저장 성공"
@@ -66,12 +65,4 @@ public class ClubMemberDirectoryController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

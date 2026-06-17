@@ -1,5 +1,6 @@
 package semo.back.service.feature.notice.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import semo.back.service.feature.notice.vo.ClubNoticeUpsertResponse;
 import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}/board/notices")
 @RequiredArgsConstructor
@@ -38,7 +40,6 @@ public class ClubNoticeController {
             @RequestParam(required = false) Integer size,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         String userKey = requireUserKey(userContext);
         ClubNoticeFeedResponse feed = clubBoardFeedService.getBoardFeed(
                 clubId,
@@ -57,7 +58,6 @@ public class ClubNoticeController {
             @PathVariable Long noticeId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeService.getNoticeDetail(clubId, noticeId, requireUserKey(userContext)),
                 "게시글 상세 조회 성공"
@@ -70,7 +70,6 @@ public class ClubNoticeController {
             @Valid @RequestBody UpsertClubNoticeRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeService.createNotice(clubId, requireUserKey(userContext), request),
                 "게시글 작성 성공"
@@ -84,7 +83,6 @@ public class ClubNoticeController {
             @Valid @RequestBody UpsertClubNoticeRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubNoticeService.updateNotice(clubId, noticeId, requireUserKey(userContext), request),
                 "게시글 수정 성공"
@@ -97,7 +95,6 @@ public class ClubNoticeController {
             @PathVariable Long noticeId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubNoticeService.deleteNotice(clubId, noticeId, requireUserKey(userContext));
         return ResponseDataDTO.of(null, "게시글 삭제 성공");
     }
@@ -109,12 +106,4 @@ public class ClubNoticeController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

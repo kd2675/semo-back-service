@@ -1,5 +1,6 @@
 package semo.back.service.feature.contentread.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
@@ -14,6 +15,7 @@ import semo.back.service.feature.contentread.vo.BoardItemReadResponse;
 import semo.back.service.feature.contentread.vo.BoardItemReadStatusResponse;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
@@ -26,7 +28,6 @@ public class ClubContentReadController {
             @PathVariable Long boardItemId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubContentReadService.recordBoardItemRead(clubId, boardItemId, requireUserKey(userContext)),
                 "게시판 읽음 기록 성공"
@@ -39,7 +40,6 @@ public class ClubContentReadController {
             @PathVariable Long boardItemId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubContentReadService.getBoardItemReadStatus(clubId, boardItemId, requireUserKey(userContext)),
                 "게시판 읽음 현황 조회 성공"
@@ -53,12 +53,4 @@ public class ClubContentReadController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

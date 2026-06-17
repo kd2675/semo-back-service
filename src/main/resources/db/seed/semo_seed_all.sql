@@ -560,17 +560,6 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-INSERT INTO feature_permission_catalog (
-    permission_key,
-    feature_key,
-    display_name,
-    description,
-    ownership_scope,
-    active,
-    sort_order,
-    create_date,
-    update_date
-)
 SELECT 'TOURNAMENT_RECORD_DELETE_ANY', 'TOURNAMENT_RECORD', '대회 삭제', '운영자 화면에서 대회를 삭제합니다.', 'CLUB', 1, 50, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_DELETE_ANY');
 

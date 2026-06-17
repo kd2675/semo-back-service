@@ -1,5 +1,6 @@
 package semo.back.service.feature.poll.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import semo.back.service.feature.schedule.vo.SubmitScheduleVoteSelectionRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleVoteRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}/more/polls")
 @RequiredArgsConstructor
@@ -36,7 +38,6 @@ public class ClubPollController {
             @RequestParam(required = false) String query,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubPollService.getPollHome(clubId, requireUserKey(userContext), query),
                 "투표 홈 조회 성공"
@@ -49,7 +50,6 @@ public class ClubPollController {
             @PathVariable Long voteId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.getScheduleVoteDetail(clubId, voteId, requireUserKey(userContext)),
                 "투표 상세 조회 성공"
@@ -62,7 +62,6 @@ public class ClubPollController {
             @Valid @RequestBody UpsertScheduleVoteRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubPollService.requirePollFeature(clubId);
         return ResponseDataDTO.of(
                 clubScheduleService.createScheduleVote(clubId, requireUserKey(userContext), request),
@@ -77,7 +76,6 @@ public class ClubPollController {
             @Valid @RequestBody UpsertScheduleVoteRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubPollService.requirePollFeature(clubId);
         return ResponseDataDTO.of(
                 clubScheduleService.updateScheduleVote(clubId, voteId, requireUserKey(userContext), request),
@@ -91,7 +89,6 @@ public class ClubPollController {
             @PathVariable Long voteId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubPollService.requirePollFeature(clubId);
         clubScheduleService.deleteScheduleVote(clubId, voteId, requireUserKey(userContext));
         return ResponseDataDTO.of(null, "투표 삭제 성공");
@@ -104,7 +101,6 @@ public class ClubPollController {
             @Valid @RequestBody SubmitScheduleVoteSelectionRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubPollService.requirePollFeature(clubId);
         return ResponseDataDTO.of(
                 clubScheduleService.submitScheduleVoteSelection(clubId, voteId, requireUserKey(userContext), request),
@@ -118,7 +114,6 @@ public class ClubPollController {
             @PathVariable Long voteId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubPollService.requirePollFeature(clubId);
         return ResponseDataDTO.of(
                 clubScheduleService.closeScheduleVote(clubId, voteId, requireUserKey(userContext)),
@@ -133,12 +128,4 @@ public class ClubPollController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

@@ -1,5 +1,6 @@
 package semo.back.service.feature.activity.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
@@ -13,6 +14,7 @@ import semo.back.service.feature.activity.biz.ClubActivityService;
 import semo.back.service.feature.activity.vo.ClubAdminActivityFeedResponse;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}/admin/activity")
 @RequiredArgsConstructor
@@ -28,7 +30,6 @@ public class ClubActivityAdminController {
             @RequestParam(required = false) Long positionId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubActivityService.getRecentAdminActivities(
                         clubId,
@@ -49,12 +50,4 @@ public class ClubActivityAdminController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

@@ -1,5 +1,6 @@
 package semo.back.service.feature.clubfeature.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
@@ -17,6 +18,7 @@ import web.common.core.response.base.dto.ResponseDataDTO;
 
 import java.util.List;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}/features")
 @RequiredArgsConstructor
@@ -28,7 +30,6 @@ public class ClubFeatureController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         String userKey = requireUserKey(userContext);
         return ResponseDataDTO.of(
                 clubFeatureService.getClubFeatures(clubId, userKey),
@@ -42,7 +43,6 @@ public class ClubFeatureController {
             @RequestBody UpdateClubFeaturesRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         String userKey = requireUserKey(userContext);
         return ResponseDataDTO.of(
                 clubFeatureService.updateClubFeatures(clubId, userKey, request),
@@ -57,12 +57,4 @@ public class ClubFeatureController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

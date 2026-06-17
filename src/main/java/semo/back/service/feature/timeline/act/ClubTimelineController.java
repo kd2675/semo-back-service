@@ -1,5 +1,6 @@
 package semo.back.service.feature.timeline.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
@@ -15,6 +16,7 @@ import semo.back.service.feature.timeline.vo.ClubAdminTimelineResponse;
 import semo.back.service.feature.timeline.vo.ClubTimelineResponse;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}")
 @RequiredArgsConstructor
@@ -29,7 +31,6 @@ public class ClubTimelineController {
             @RequestParam(required = false) Integer size,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTimelineService.getTimeline(
                         clubId,
@@ -47,7 +48,6 @@ public class ClubTimelineController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTimelineService.getAdminTimeline(clubId, requireUserKey(userContext)),
                 "타임라인 설정 조회 성공"
@@ -59,7 +59,6 @@ public class ClubTimelineController {
             @PathVariable Long clubId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubTimelineService.updateAdminTimeline(clubId, requireUserKey(userContext)),
                 "타임라인 설정 저장 성공"
@@ -73,12 +72,4 @@ public class ClubTimelineController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }

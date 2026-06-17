@@ -1,5 +1,6 @@
 package semo.back.service.feature.schedule.act;
 
+import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import semo.back.service.feature.schedule.vo.UpsertScheduleEventRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleVoteRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
+@RequirePrincipalRole
 @RestController
 @RequestMapping("/api/semo/v1/clubs/{clubId}/schedule")
 @RequiredArgsConstructor
@@ -39,7 +41,6 @@ public class ClubScheduleController {
             @RequestParam(required = false) Integer month,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.getClubSchedule(clubId, requireUserKey(userContext), year, month),
                 "캘린더 조회 성공"
@@ -52,7 +53,6 @@ public class ClubScheduleController {
             @PathVariable Long eventId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.getScheduleEventDetail(clubId, eventId, requireUserKey(userContext)),
                 "일정 상세 조회 성공"
@@ -65,7 +65,6 @@ public class ClubScheduleController {
             @Valid @RequestBody UpsertScheduleEventRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.createScheduleEvent(clubId, requireUserKey(userContext), request),
                 "일정 생성 성공"
@@ -79,7 +78,6 @@ public class ClubScheduleController {
             @Valid @RequestBody UpsertScheduleEventRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.updateScheduleEvent(clubId, eventId, requireUserKey(userContext), request),
                 "일정 수정 성공"
@@ -92,7 +90,6 @@ public class ClubScheduleController {
             @PathVariable Long eventId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubScheduleService.deleteScheduleEvent(clubId, eventId, requireUserKey(userContext));
         return ResponseDataDTO.of(null, "일정 삭제 성공");
     }
@@ -104,7 +101,6 @@ public class ClubScheduleController {
             @Valid @RequestBody UpdateScheduleEventParticipationRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.updateScheduleEventParticipation(clubId, eventId, requireUserKey(userContext), request),
                 "일정 참석 상태 저장 성공"
@@ -117,7 +113,6 @@ public class ClubScheduleController {
             @PathVariable Long voteId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.getScheduleVoteDetail(clubId, voteId, requireUserKey(userContext)),
                 "투표 상세 조회 성공"
@@ -130,7 +125,6 @@ public class ClubScheduleController {
             @Valid @RequestBody UpsertScheduleVoteRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.createScheduleVote(clubId, requireUserKey(userContext), request),
                 "투표 생성 성공"
@@ -144,7 +138,6 @@ public class ClubScheduleController {
             @Valid @RequestBody UpsertScheduleVoteRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.updateScheduleVote(clubId, voteId, requireUserKey(userContext), request),
                 "투표 수정 성공"
@@ -157,7 +150,6 @@ public class ClubScheduleController {
             @PathVariable Long voteId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         clubScheduleService.deleteScheduleVote(clubId, voteId, requireUserKey(userContext));
         return ResponseDataDTO.of(null, "투표 삭제 성공");
     }
@@ -169,7 +161,6 @@ public class ClubScheduleController {
             @Valid @RequestBody SubmitScheduleVoteSelectionRequest request,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.submitScheduleVoteSelection(clubId, voteId, requireUserKey(userContext), request),
                 "투표 저장 성공"
@@ -182,7 +173,6 @@ public class ClubScheduleController {
             @PathVariable Long voteId,
             UserContext userContext
     ) {
-        requireUserRole(userContext);
         return ResponseDataDTO.of(
                 clubScheduleService.closeScheduleVote(clubId, voteId, requireUserKey(userContext)),
                 "투표 종료 성공"
@@ -196,12 +186,4 @@ public class ClubScheduleController {
         return userContext.getUserKey();
     }
 
-    private void requireUserRole(UserContext userContext) {
-        if (userContext == null || !userContext.isAuthenticated()) {
-            throw new SemoException.UnauthorizedException("Login required");
-        }
-        if (!userContext.isUser()) {
-            throw new SemoException.ForbiddenException("USER role required");
-        }
-    }
 }
