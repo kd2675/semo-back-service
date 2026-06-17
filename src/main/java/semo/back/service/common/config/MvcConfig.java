@@ -1,16 +1,19 @@
 package semo.back.service.common.config;
 
-import auth.common.core.context.RequirePrincipalRoleInterceptor;
+import auth.common.core.context.RequirePrincipalRoleFilter;
 import auth.common.core.context.UserContextArgumentResolver;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,9 +42,15 @@ public class MvcConfig implements WebMvcConfigurer {
         resolvers.add(new UserContextArgumentResolver());
     }
 
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new RequirePrincipalRoleInterceptor());
+    @Bean
+    public FilterRegistrationBean<RequirePrincipalRoleFilter> requirePrincipalRoleFilter(
+            @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping
+    ) {
+        FilterRegistrationBean<RequirePrincipalRoleFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new RequirePrincipalRoleFilter(handlerMapping));
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 50);
+        registration.addUrlPatterns("/*");
+        return registration;
     }
 
     @Bean
