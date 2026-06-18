@@ -41,3 +41,13 @@ out/
 AGENTS*
 /.sisyphus/
 GEMINI*
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Local agent/tool artifacts
+.codex/
+.claude/
+artifacts/
