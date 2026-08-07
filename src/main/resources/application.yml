@@ -2,9 +2,11 @@ spring:
   application:
     name: semo-back-service
   profiles:
-    active: local
+    active: local-direct
     group:
       local: local
+      local-direct:
+        - local
       test: test
       dev: dev
       prod: prod

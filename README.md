@@ -22,8 +22,11 @@
   - `role management`
   - `admin activity log`
 - 인증 방식
-  - Gateway가 전달한 헤더를 `UserContextArgumentResolver`로 복원
-  - 컨트롤러는 `UserContext` 기반으로 `USER` 권한을 검사
+  - `local-direct`: Semo 프론트가 access token의 사용자 이름/식별자/역할 헤더를 전달
+  - `local`: Cloud Gateway가 JWT를 검증하고 사용자 식별 헤더를 재주입
+  - 두 모드 모두 `UserContextArgumentResolver`에서 동일한 `UserContext`로 복원
+  - 컨트롤러는 `UserContext` 기반으로 `USER` 권한을 검사하며 공통 권한 계층상 `ADMIN`도 허용
+  - 전역 `ADMIN`의 로그인 허용과 클럽 `OWNER`/`ADMIN` 권한은 분리하며, 클럽 운영 권한은 멤버십으로 판정
 - 이미지 처리
   - 프론트/이미지 서버에서 임시 업로드
   - 백엔드는 `ImageFinalizeClient`로 `/files/finalize` 호출
@@ -67,12 +70,15 @@
 
 | Profile | Port |
 |---|---:|
+| `local-direct` | `20280` |
 | `local` | `20280` |
 | `dev` | `20280` |
 | `prod` | `10280` |
 | `test` | `30280` |
 
-- 기본 profile: `local`
+- 기본 profile: `local-direct`
+- `local-direct`는 `local` DB 설정을 재사용하면서 Eureka 등록/탐색을 끄고 `SEMO_AUTH_BASE_URL`로 auth 서버를 직접 찾습니다.
+- Cloud Gateway/Eureka 경유가 필요하면 기존 `local` profile을 사용합니다.
 - 테스트 profile: H2 in-memory datasource 사용
 - `muse-back-service`와 기본 포트가 같아서 로컬 동시 실행 시 포트 조정이 필요합니다.
 
@@ -268,6 +274,7 @@
 
 ```bash
 ./gradlew :semo-back-service:bootRun
+./gradlew :semo-back-service:bootRun --args='--spring.profiles.active=local-direct'
 ./gradlew :semo-back-service:bootRun --args='--spring.profiles.active=local'
 ./gradlew :semo-back-service:bootRun --args='--spring.profiles.active=dev'
 ./gradlew :semo-back-service:bootRun --args='--spring.profiles.active=prod'

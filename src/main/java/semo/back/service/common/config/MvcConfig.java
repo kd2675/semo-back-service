@@ -3,6 +3,7 @@ package semo.back.service.common.config;
 import auth.common.core.context.RequirePrincipalRoleFilter;
 import auth.common.core.context.UserContextArgumentResolver;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -11,11 +12,13 @@ import org.springframework.core.Ordered;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -32,6 +35,9 @@ import java.util.List;
 @ComponentScan(basePackages = {"semo.back.service"})
 public class MvcConfig implements WebMvcConfigurer {
 
+    @Value("${semo.cors.allowed-origins:}")
+    private String allowedOrigins;
+
     /**
      * UserContext ArgumentResolver 등록
      * - 컨트롤러에서 UserContext를 파라미터로 받을 수 있게 함
@@ -40,6 +46,24 @@ public class MvcConfig implements WebMvcConfigurer {
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
         resolvers.add(new UserContextArgumentResolver());
+    }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList();
+        if (origins.isEmpty()) {
+            return;
+        }
+
+        registry.addMapping("/**")
+                .allowedOrigins(origins.toArray(String[]::new))
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 
     @Bean
