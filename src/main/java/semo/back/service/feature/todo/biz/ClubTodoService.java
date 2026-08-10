@@ -15,6 +15,8 @@ import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 import semo.back.service.feature.todo.biz.policy.ClubTodoPermissionService;
 import semo.back.service.feature.todo.biz.support.ClubTodoCommandSupport;
 import semo.back.service.feature.todo.biz.support.ClubTodoViewSupport;
@@ -73,6 +75,7 @@ public class ClubTodoService {
     private final ClubProfileRepository clubProfileRepository;
     private final ClubTodoCommandSupport clubTodoCommandSupport;
     private final ClubTodoViewSupport clubTodoViewSupport;
+    private final ClubNotificationPublisher clubNotificationPublisher;
 
     public ClubTodoResponse getTodos(Long clubId, String userKey) {
         return getTodos(clubId, userKey, CLAIMABLE_PAGE_SIZE);
@@ -486,12 +489,12 @@ public class ClubTodoService {
             throw new SemoException.ForbiddenException("업무 신청을 검토할 권한이 없습니다.");
         }
 
-        TodoItem todoItem = requireTodoItem(clubId, todoItemId);
+        TodoItem todoItem = requireTodoItemForUpdate(clubId, todoItemId);
         if (!ASSIGNMENT_MODE_OPEN_SUPPORT.equals(todoItem.getAssignmentMode())) {
             throw new SemoException.ValidationException("신청형 업무만 신청을 검토할 수 있습니다.");
         }
 
-        TodoItemApplication application = requireTodoItemApplication(todoItemId, todoItemApplicationId);
+        TodoItemApplication application = requireTodoItemApplicationForUpdate(todoItemId, todoItemApplicationId);
         if (!APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus())) {
             throw new SemoException.ValidationException("대기 중인 신청만 검토할 수 있습니다.");
         }
@@ -502,6 +505,7 @@ public class ClubTodoService {
         String reviewNote = clubTodoCommandSupport.trimToNull(request.reviewNote());
         LocalDateTime reviewedAt = LocalDateTime.now();
 
+        List<TodoItemApplication> automaticallyRejectedApplications = List.of();
         if (APPLICATION_STATUS_SELECTED.equals(nextStatus)) {
             if (todoItem.getAssignedClubProfileId() != null || !STATUS_OPEN.equals(todoItem.getStatusCode())) {
                 throw new SemoException.ValidationException("현재 선정할 수 없는 업무 상태입니다.");
@@ -521,7 +525,7 @@ public class ClubTodoService {
                     .completedByClubProfileId(null)
                     .completedAt(null)
                     .build());
-            rejectOtherPendingApplications(
+            automaticallyRejectedApplications = rejectOtherPendingApplications(
                     todoItemId,
                     todoItemApplicationId,
                     access.clubProfile().getClubProfileId(),
@@ -531,6 +535,14 @@ public class ClubTodoService {
 
         application.review(nextStatus, reviewNote, access.clubProfile().getClubProfileId(), reviewedAt);
         TodoItemApplication saved = todoItemApplicationRepository.save(application);
+        notifyTodoApplicationReview(clubId, todoItem, saved, nextStatus, reviewNote);
+        automaticallyRejectedApplications.forEach(rejectedApplication -> notifyTodoApplicationReview(
+                clubId,
+                todoItem,
+                rejectedApplication,
+                APPLICATION_STATUS_REJECTED,
+                rejectedApplication.getReviewNote()
+        ));
 
         ClubActivityContextHolder.setDetails(
                 "'" + todoItem.getTitle() + "' 업무 신청을 처리했습니다.",
@@ -802,9 +814,23 @@ public class ClubTodoService {
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TodoItem", "todoItemId", todoItemId));
     }
 
+    private TodoItem requireTodoItemForUpdate(Long clubId, Long todoItemId) {
+        return todoItemRepository.findForUpdate(todoItemId, clubId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException("TodoItem", "todoItemId", todoItemId));
+    }
+
     private TodoItemApplication requireTodoItemApplication(Long todoItemId, Long todoItemApplicationId) {
         return todoItemApplicationRepository.findById(todoItemApplicationId)
                 .filter(application -> Objects.equals(application.getTodoItemId(), todoItemId))
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException(
+                        "TodoItemApplication",
+                        "todoItemApplicationId",
+                        todoItemApplicationId
+                ));
+    }
+
+    private TodoItemApplication requireTodoItemApplicationForUpdate(Long todoItemId, Long todoItemApplicationId) {
+        return todoItemApplicationRepository.findForUpdate(todoItemId, todoItemApplicationId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException(
                         "TodoItemApplication",
                         "todoItemApplicationId",
@@ -824,7 +850,7 @@ public class ClubTodoService {
         }
     }
 
-    private void rejectOtherPendingApplications(
+    private List<TodoItemApplication> rejectOtherPendingApplications(
             Long todoItemId,
             Long selectedApplicationId,
             Long actorClubProfileId,
@@ -835,17 +861,48 @@ public class ClubTodoService {
                         todoItemId,
                         APPLICATION_STATUS_APPLIED
                 );
-        pendingApplications.stream()
+        List<TodoItemApplication> rejectedApplications = pendingApplications.stream()
                 .filter(application -> !Objects.equals(application.getTodoItemApplicationId(), selectedApplicationId))
-                .forEach(application -> application.review(
-                        APPLICATION_STATUS_REJECTED,
-                        reviewNote,
-                        actorClubProfileId,
-                        LocalDateTime.now()
-                ));
-        if (!pendingApplications.isEmpty()) {
-            todoItemApplicationRepository.saveAll(pendingApplications);
+                .toList();
+        LocalDateTime reviewedAt = LocalDateTime.now();
+        rejectedApplications.forEach(application -> application.review(
+                APPLICATION_STATUS_REJECTED,
+                reviewNote,
+                actorClubProfileId,
+                reviewedAt
+        ));
+        if (!rejectedApplications.isEmpty()) {
+            todoItemApplicationRepository.saveAll(rejectedApplications);
         }
+        return rejectedApplications;
+    }
+
+    private void notifyTodoApplicationReview(
+            Long clubId,
+            TodoItem todoItem,
+            TodoItemApplication application,
+            String status,
+            String reviewNote
+    ) {
+        boolean selected = APPLICATION_STATUS_SELECTED.equals(status);
+        String resultLabel = selected ? "선정" : "미선정";
+        String message = "'" + todoItem.getTitle() + "' 업무 신청 결과: " + resultLabel;
+        if (reviewNote != null && !reviewNote.isBlank()) {
+            message += " · " + reviewNote;
+        }
+        clubNotificationPublisher.notifyClubProfile(
+                application.getClubProfileId(),
+                new NotificationCommand(
+                        clubId,
+                        "TODO_APPLICATION_REVIEW",
+                        "업무 신청 결과가 도착했습니다",
+                        message,
+                        "TODO_APPLICATION",
+                        application.getTodoItemApplicationId(),
+                        "/clubs/" + clubId + "/more/todos",
+                        "todo-application:" + application.getTodoItemApplicationId() + ":" + status
+                )
+        );
     }
 
     private void rejectActiveApplications(Long todoItemId, Long actorClubProfileId, String reviewNote) {

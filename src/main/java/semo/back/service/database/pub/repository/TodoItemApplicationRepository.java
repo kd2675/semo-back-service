@@ -1,6 +1,8 @@
 package semo.back.service.database.pub.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import semo.back.service.database.pub.entity.TodoItemApplication;
 
@@ -12,6 +14,15 @@ public interface TodoItemApplicationRepository extends JpaRepository<TodoItemApp
     List<TodoItemApplication> findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(Long todoItemId);
 
     Optional<TodoItemApplication> findByTodoItemIdAndClubProfileId(Long todoItemId, Long clubProfileId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select application
+            from TodoItemApplication application
+            where application.todoItemApplicationId = :todoItemApplicationId
+              and application.todoItemId = :todoItemId
+            """)
+    Optional<TodoItemApplication> findForUpdate(Long todoItemId, Long todoItemApplicationId);
 
     List<TodoItemApplication> findByTodoItemIdIn(Collection<Long> todoItemIds);
 

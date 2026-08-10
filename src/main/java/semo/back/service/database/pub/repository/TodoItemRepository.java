@@ -1,7 +1,9 @@
 package semo.back.service.database.pub.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import semo.back.service.database.pub.entity.TodoItem;
 
@@ -18,6 +20,15 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
     List<TodoItem> findTop5ByClubIdAndCompletedByClubProfileIdOrderByTodoItemIdDesc(Long clubId, Long completedByClubProfileId);
 
     Optional<TodoItem> findByTodoItemIdAndClubId(Long todoItemId, Long clubId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select todo
+            from TodoItem todo
+            where todo.todoItemId = :todoItemId
+              and todo.clubId = :clubId
+            """)
+    Optional<TodoItem> findForUpdate(Long todoItemId, Long clubId);
 
     @Query("""
             select t

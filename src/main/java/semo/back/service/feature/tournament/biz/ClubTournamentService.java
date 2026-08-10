@@ -15,6 +15,8 @@ import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 import semo.back.service.feature.share.biz.ClubContentShareService;
 import semo.back.service.feature.tournament.biz.policy.ClubTournamentPermissionService;
 import semo.back.service.feature.tournament.biz.support.ClubTournamentSupport;
@@ -75,6 +77,7 @@ public class ClubTournamentService {
     private final ClubTournamentPermissionService clubTournamentPermissionService;
     private final ClubContentShareService clubContentShareService;
     private final ClubTournamentSupport clubTournamentSupport;
+    private final ClubNotificationPublisher clubNotificationPublisher;
 
     public ClubTournamentHomeResponse getTournamentHome(Long clubId, String userKey) {
         requireTournamentFeature(clubId);
@@ -215,7 +218,10 @@ public class ClubTournamentService {
     ) {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        TournamentRecord current = getTournament(clubId, tournamentRecordId);
+        TournamentRecord current = getTournamentForUpdate(clubId, tournamentRecordId);
+        if (!APPROVAL_PENDING.equals(current.getApprovalStatus())) {
+            throw new SemoException.ValidationException("승인 대기 중인 대회만 검토할 수 있습니다.");
+        }
         ClubTournamentPermissionService.TournamentActionPermission permission =
                 clubTournamentPermissionService.getActionPermission(access, current.getAuthorClubProfileId());
         if (!permission.canEdit()) {
@@ -326,6 +332,24 @@ public class ClubTournamentService {
                 .deleted(current.isDeleted())
                 .build());
         syncTournamentShares(saved);
+        boolean approved = APPROVAL_APPROVED.equals(approvalStatus);
+        String notificationMessage = "'" + saved.getTitle() + "' 대회가 " + (approved ? "승인" : "반려") + "되었습니다.";
+        if (!approved && rejectionReason != null) {
+            notificationMessage += " · 사유: " + rejectionReason;
+        }
+        clubNotificationPublisher.notifyClubProfile(
+                saved.getAuthorClubProfileId(),
+                new NotificationCommand(
+                        clubId,
+                        "TOURNAMENT_REVIEW",
+                        "대회 승인 검토가 완료되었습니다",
+                        notificationMessage,
+                        "TOURNAMENT",
+                        saved.getTournamentRecordId(),
+                        "/clubs/" + clubId + "/more/tournaments/" + saved.getTournamentRecordId(),
+                        "tournament:" + saved.getTournamentRecordId() + ":" + approvalStatus
+                )
+        );
         return buildTournamentDetail(access, saved);
     }
 
@@ -525,8 +549,10 @@ public class ClubTournamentService {
         if (!isTournamentApproved(tournament)) {
             throw new SemoException.ValidationException("승인된 대회만 참가 신청을 검토할 수 있습니다.");
         }
-        TournamentApplication current = tournamentApplicationRepository.findById(tournamentApplicationId)
-                .filter(application -> application.getTournamentRecordId().equals(tournamentRecordId))
+        TournamentApplication current = tournamentApplicationRepository.findForUpdate(
+                        tournamentRecordId,
+                        tournamentApplicationId
+                )
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TournamentApplication", "tournamentApplicationId", tournamentApplicationId));
         String nextStatus = clubTournamentSupport.normalizeApplicationReviewStatus(
                 request.applicationStatus()
@@ -537,6 +563,25 @@ public class ClubTournamentService {
         );
         current.review(nextStatus, access.clubProfile().getClubProfileId(), LocalDateTime.now());
         tournamentApplicationRepository.save(current);
+        String reviewNote = clubTournamentSupport.trimToNull(request.reviewNote());
+        String resultLabel = APPLICATION_APPROVED.equals(nextStatus) ? "승인" : "반려";
+        String notificationMessage = "'" + tournament.getTitle() + "' 참가 신청이 " + resultLabel + "되었습니다.";
+        if (reviewNote != null) {
+            notificationMessage += " · " + reviewNote;
+        }
+        clubNotificationPublisher.notifyClubProfile(
+                current.getClubProfileId(),
+                new NotificationCommand(
+                        clubId,
+                        "TOURNAMENT_APPLICATION_REVIEW",
+                        "대회 참가 신청 결과가 도착했습니다",
+                        notificationMessage,
+                        "TOURNAMENT_APPLICATION",
+                        current.getTournamentApplicationId(),
+                        "/clubs/" + clubId + "/more/tournaments/" + tournamentRecordId,
+                        "tournament-application:" + current.getTournamentApplicationId() + ":" + nextStatus
+                )
+        );
         return buildTournamentDetail(access, tournament);
     }
 

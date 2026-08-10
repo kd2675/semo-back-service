@@ -34,6 +34,8 @@ import semo.back.service.feature.bracket.vo.ReviewBracketRequest;
 import semo.back.service.feature.bracket.vo.UpsertBracketParticipantRequest;
 import semo.back.service.feature.bracket.vo.UpsertBracketRequest;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -80,6 +82,7 @@ public class ClubBracketService {
     private final ClubAccessResolver clubAccessResolver;
     private final ClubBracketPermissionService clubBracketPermissionService;
     private final ImageFileUrlResolver imageFileUrlResolver;
+    private final ClubNotificationPublisher clubNotificationPublisher;
 
     public ClubBracketHomeResponse getBracketHome(Long clubId, String userKey) {
         requireBracketFeature(clubId);
@@ -188,7 +191,7 @@ public class ClubBracketService {
     ) {
         requireBracketFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        BracketRecord current = getBracket(clubId, bracketRecordId);
+        BracketRecord current = getBracketForUpdate(clubId, bracketRecordId);
         if (!clubBracketPermissionService.canEditOwnBracket(access, current.getAuthorClubProfileId())) {
             throw new SemoException.ForbiddenException("대진표를 수정할 권한이 없습니다.");
         }
@@ -226,7 +229,7 @@ public class ClubBracketService {
     public BracketDetailResponse submitBracket(Long clubId, Long bracketRecordId, String userKey) {
         requireBracketFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        BracketRecord current = getBracket(clubId, bracketRecordId);
+        BracketRecord current = getBracketForUpdate(clubId, bracketRecordId);
         if (!clubBracketPermissionService.canEditOwnBracket(access, current.getAuthorClubProfileId())) {
             throw new SemoException.ForbiddenException("대진표를 제출할 권한이 없습니다.");
         }
@@ -273,7 +276,7 @@ public class ClubBracketService {
         if (!clubBracketPermissionService.canReviewBracket(access)) {
             throw new SemoException.ForbiddenException("대진표를 승인할 권한이 없습니다.");
         }
-        BracketRecord current = getBracket(clubId, bracketRecordId);
+        BracketRecord current = getBracketForUpdate(clubId, bracketRecordId);
         if (!APPROVAL_PENDING.equals(current.getApprovalStatus())) {
             throw new SemoException.ValidationException("승인 대기 중인 대진표만 검토할 수 있습니다.");
         }
@@ -306,6 +309,24 @@ public class ClubBracketService {
                 .participantCount(current.getParticipantCount())
                 .deleted(false)
                 .build());
+        boolean approved = APPROVAL_APPROVED.equals(approvalStatus);
+        String notificationMessage = "'" + saved.getTitle() + "' 대진표가 " + (approved ? "승인" : "반려") + "되었습니다.";
+        if (!approved && rejectionReason != null) {
+            notificationMessage += " · 사유: " + rejectionReason;
+        }
+        clubNotificationPublisher.notifyClubProfile(
+                saved.getAuthorClubProfileId(),
+                new NotificationCommand(
+                        clubId,
+                        "BRACKET_REVIEW",
+                        "대진표 승인 검토가 완료되었습니다",
+                        notificationMessage,
+                        "BRACKET",
+                        saved.getBracketRecordId(),
+                        "/clubs/" + clubId + "/more/brackets/" + saved.getBracketRecordId(),
+                        "bracket:" + saved.getBracketRecordId() + ":" + approvalStatus
+                )
+        );
         return buildDetail(access, saved);
     }
 
@@ -762,6 +783,11 @@ public class ClubBracketService {
 
     private BracketRecord getBracket(Long clubId, Long bracketRecordId) {
         return bracketRecordRepository.findByBracketRecordIdAndClubIdAndDeletedFalse(bracketRecordId, clubId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException("BracketRecord", "bracketRecordId", bracketRecordId));
+    }
+
+    private BracketRecord getBracketForUpdate(Long clubId, Long bracketRecordId) {
+        return bracketRecordRepository.findForUpdate(bracketRecordId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("BracketRecord", "bracketRecordId", bracketRecordId));
     }
 

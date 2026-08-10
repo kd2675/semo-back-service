@@ -42,6 +42,8 @@ import semo.back.service.feature.finance.vo.CreateFinanceObligationResponse;
 import semo.back.service.feature.finance.vo.CreateFinanceRequestRequest;
 import semo.back.service.feature.finance.vo.ReviewFinanceRequestRequest;
 import semo.back.service.feature.finance.vo.UpdateFinancePaymentStatusRequest;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -83,6 +85,7 @@ public class ClubFinanceService {
     private final ClubMemberRepository clubMemberRepository;
     private final ClubFinancePermissionService clubFinancePermissionService;
     private final ClubFinanceSupport clubFinanceSupport;
+    private final ClubNotificationPublisher clubNotificationPublisher;
 
     public ClubFinanceHomeResponse getFinance(Long clubId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
@@ -459,6 +462,24 @@ public class ClubFinanceService {
         ClubActivityContextHolder.setDetails(
                 updated.getTitle() + " 요청을 " + clubFinanceSupport.resolveRequestStatusLabel(updated.getStatusCode()) + " 처리했습니다.",
                 "재정 요청 검토에 실패했습니다."
+        );
+        String statusLabel = clubFinanceSupport.resolveRequestStatusLabel(updated.getStatusCode());
+        String notificationMessage = "'" + updated.getTitle() + "' 요청이 " + statusLabel + " 처리되었습니다.";
+        if (updated.getReviewNote() != null && !updated.getReviewNote().isBlank()) {
+            notificationMessage += " · " + updated.getReviewNote();
+        }
+        clubNotificationPublisher.notifyClubProfile(
+                updated.getRequesterClubProfileId(),
+                new NotificationCommand(
+                        clubId,
+                        "FINANCE_REQUEST_REVIEW",
+                        "재정 요청 검토가 완료되었습니다",
+                        notificationMessage,
+                        "FINANCE_REQUEST",
+                        updated.getFinanceRequestId(),
+                        "/clubs/" + clubId + "/more/finance",
+                        "finance-request:" + updated.getFinanceRequestId() + ":" + updated.getStatusCode()
+                )
         );
         return toFinanceRequestResponse(
                 updated,

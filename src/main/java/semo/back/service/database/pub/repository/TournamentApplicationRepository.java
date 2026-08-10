@@ -1,6 +1,8 @@
 package semo.back.service.database.pub.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import semo.back.service.database.pub.entity.TournamentApplication;
 
@@ -12,6 +14,15 @@ public interface TournamentApplicationRepository extends JpaRepository<Tournamen
     List<TournamentApplication> findByTournamentRecordIdOrderByCreateDateAscTournamentApplicationIdAsc(Long tournamentRecordId);
 
     Optional<TournamentApplication> findByTournamentRecordIdAndClubProfileId(Long tournamentRecordId, Long clubProfileId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select application
+            from TournamentApplication application
+            where application.tournamentApplicationId = :tournamentApplicationId
+              and application.tournamentRecordId = :tournamentRecordId
+            """)
+    Optional<TournamentApplication> findForUpdate(Long tournamentRecordId, Long tournamentApplicationId);
 
     List<TournamentApplication> findByTournamentRecordIdAndApplicationStatusOrderByCreateDateAscTournamentApplicationIdAsc(
             Long tournamentRecordId,

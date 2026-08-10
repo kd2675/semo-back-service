@@ -869,6 +869,69 @@ CREATE INDEX idx_club_dashboard_widget_sort
     ON club_dashboard_widget (club_id, visibility_scope, enabled, sort_order);
 
 -- ============================================================
+-- Persistent notification inbox
+-- Recipient uses the app profile so pre-membership events such as a
+-- rejected join request can still be delivered.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS club_notification (
+    club_notification_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    profile_id BIGINT NOT NULL,
+    club_id BIGINT NULL,
+    notification_type VARCHAR(50) NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    message VARCHAR(500) NOT NULL,
+    resource_type VARCHAR(50) NULL,
+    resource_id BIGINT NULL,
+    target_path VARCHAR(500) NULL,
+    event_key VARCHAR(190) NOT NULL,
+    read_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_notification_event UNIQUE (event_key),
+    CONSTRAINT fk_club_notification_profile FOREIGN KEY (profile_id) REFERENCES profile_user(profile_id),
+    CONSTRAINT fk_club_notification_club FOREIGN KEY (club_id) REFERENCES club(club_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_notification_recipient_feed
+    ON club_notification (profile_id, club_notification_id);
+
+CREATE INDEX idx_club_notification_recipient_unread
+    ON club_notification (profile_id, read_at, club_notification_id);
+
+-- ============================================================
+-- Common resource attachments
+-- Resource ownership is validated in the domain policy because the target is polymorphic.
+-- A soft-deleted record keeps its storage metadata for retention and audit purposes.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS resource_attachment (
+    resource_attachment_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    resource_type VARCHAR(40) NOT NULL,
+    resource_id BIGINT NOT NULL,
+    uploader_club_profile_id BIGINT NOT NULL,
+    file_name VARCHAR(500) NOT NULL,
+    original_file_name VARCHAR(255) NOT NULL,
+    content_type VARCHAR(150) NOT NULL,
+    size_bytes BIGINT NOT NULL,
+    visibility_scope VARCHAR(30) NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_by_club_profile_id BIGINT NULL,
+    deleted_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_resource_attachment_file UNIQUE (file_name),
+    CONSTRAINT fk_resource_attachment_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_resource_attachment_uploader FOREIGN KEY (uploader_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_resource_attachment_deleter FOREIGN KEY (deleted_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_resource_attachment_target
+    ON resource_attachment (club_id, resource_type, resource_id, deleted, resource_attachment_id);
+
+CREATE INDEX idx_resource_attachment_uploader
+    ON resource_attachment (uploader_club_profile_id, deleted, resource_attachment_id);
+
+-- ============================================================
 -- Club activity log
 -- Recent activity is stored as an append-only stream for admin home
 -- and future audit-style views. Actor is the user who triggered the

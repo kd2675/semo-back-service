@@ -20,6 +20,8 @@ import semo.back.service.feature.feedback.vo.ClubFeedbackHomeResponse;
 import semo.back.service.feature.feedback.vo.ClubFeedbackSummaryResponse;
 import semo.back.service.feature.feedback.vo.CreateClubFeedbackRequest;
 import semo.back.service.feature.feedback.vo.UpdateClubAdminFeedbackRequest;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -67,6 +69,7 @@ public class ClubFeedbackService {
     private final ClubFeatureService clubFeatureService;
     private final ClubFeedbackRepository clubFeedbackRepository;
     private final ClubProfileRepository clubProfileRepository;
+    private final ClubNotificationPublisher clubNotificationPublisher;
 
     public ClubFeedbackHomeResponse getFeedbackHome(Long clubId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
@@ -177,7 +180,8 @@ public class ClubFeedbackService {
     ) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         requireFeedbackFeature(clubId);
-        ClubFeedback current = getFeedback(clubId, feedbackId);
+        ClubFeedback current = clubFeedbackRepository.findForUpdate(feedbackId, clubId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubFeedback", "feedbackId", feedbackId));
         String feedbackType = normalizeFeedbackType(request == null ? null : request.feedbackType());
         String statusCode = normalizeStatusCode(request == null ? null : request.statusCode());
         String visibilityScope = normalizeVisibilityScope(request == null ? null : request.visibilityScope());
@@ -210,6 +214,31 @@ public class ClubFeedbackService {
                 .answeredAt(StringUtils.hasText(adminAnswer) ? now : null)
                 .deleted(false)
                 .build());
+
+        boolean firstAnswer = STATUS_ANSWERED.equals(statusCode)
+                && !STATUS_ANSWERED.equals(current.getStatusCode());
+        boolean justClosed = STATUS_CLOSED.equals(statusCode)
+                && !STATUS_CLOSED.equals(current.getStatusCode());
+        if (firstAnswer || justClosed) {
+            String statusLabel = toStatusLabel(statusCode);
+            String notificationMessage = "'" + updated.getTitle() + "' 피드백이 " + statusLabel + " 상태가 되었습니다.";
+            if (firstAnswer && StringUtils.hasText(adminAnswer)) {
+                notificationMessage += " · 답변: " + adminAnswer;
+            }
+            clubNotificationPublisher.notifyClubProfile(
+                    updated.getSubmitterClubProfileId(),
+                    new NotificationCommand(
+                            clubId,
+                            "FEEDBACK_STATUS",
+                            firstAnswer ? "피드백 답변이 도착했습니다" : "피드백 처리가 종료되었습니다",
+                            notificationMessage,
+                            "FEEDBACK",
+                            updated.getFeedbackId(),
+                            "/clubs/" + clubId + "/more/feedback",
+                            "feedback:" + updated.getFeedbackId() + ":" + statusCode
+                    )
+            );
+        }
 
         return toDetailResponse(
                 updated,

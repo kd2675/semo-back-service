@@ -30,6 +30,8 @@ import semo.back.service.feature.club.vo.ClubJoinRequestInboxItemResponse;
 import semo.back.service.feature.club.vo.ClubJoinRequestInboxResponse;
 import semo.back.service.feature.club.vo.ReviewClubJoinRequestRequest;
 import semo.back.service.feature.club.vo.SubmitClubJoinRequestRequest;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
+import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -69,6 +71,7 @@ public class ClubJoinRequestService {
     private final ImageFileUrlResolver imageFileUrlResolver;
     private final ClubClassificationSupport clubClassificationSupport;
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubNotificationPublisher clubNotificationPublisher;
 
     public ClubDiscoverResponse getDiscoverClubs(String userKey, String query) {
         ProfileUser profileUser = requireProfileUser(userKey);
@@ -225,7 +228,7 @@ public class ClubJoinRequestService {
             ReviewClubJoinRequestRequest request
     ) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        ClubJoinRequest joinRequest = clubJoinRequestRepository.findByClubJoinRequestIdAndClubId(clubJoinRequestId, clubId)
+        ClubJoinRequest joinRequest = clubJoinRequestRepository.findForUpdate(clubJoinRequestId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubJoinRequest", "clubJoinRequestId", clubJoinRequestId));
         if (!STATUS_PENDING.equals(joinRequest.getRequestStatus())) {
             throw new SemoException.ValidationException("대기 중인 가입 신청만 검토할 수 있습니다.");
@@ -240,6 +243,19 @@ public class ClubJoinRequestService {
                     .orElseThrow(() -> new SemoException.ResourceNotFoundException("ProfileUser", "profileId", joinRequest.getProfileId()));
             ClubMember membership = createMember(club, applicant);
             joinRequest.approve(access.profileUser().getProfileId(), now);
+            clubNotificationPublisher.notifyProfile(
+                    applicant.getProfileId(),
+                    new NotificationCommand(
+                            clubId,
+                            "JOIN_REQUEST_REVIEW",
+                            "가입 신청이 승인되었습니다",
+                            "'" + club.getName() + "' 가입이 승인되었습니다.",
+                            "JOIN_REQUEST",
+                            joinRequest.getClubJoinRequestId(),
+                            "/clubs/" + clubId,
+                            "join-request:" + joinRequest.getClubJoinRequestId() + ":" + STATUS_APPROVED
+                    )
+            );
             ClubActivityContextHolder.setDetails(
                     applicant.getDisplayName() + "의 가입 신청을 승인했습니다.",
                     applicant.getDisplayName() + "의 가입 신청 승인에 실패했습니다."
@@ -257,6 +273,19 @@ public class ClubJoinRequestService {
         joinRequest.reject(access.profileUser().getProfileId(), now);
         ProfileUser applicant = profileUserRepository.findById(joinRequest.getProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ProfileUser", "profileId", joinRequest.getProfileId()));
+        clubNotificationPublisher.notifyProfile(
+                applicant.getProfileId(),
+                new NotificationCommand(
+                        clubId,
+                        "JOIN_REQUEST_REVIEW",
+                        "가입 신청이 반려되었습니다",
+                        "'" + access.club().getName() + "' 가입 신청이 반려되었습니다.",
+                        "JOIN_REQUEST",
+                        joinRequest.getClubJoinRequestId(),
+                        "/",
+                        "join-request:" + joinRequest.getClubJoinRequestId() + ":" + STATUS_REJECTED
+                )
+        );
         ClubActivityContextHolder.setDetails(
                 applicant.getDisplayName() + "의 가입 신청을 반려했습니다.",
                 applicant.getDisplayName() + "의 가입 신청 반려에 실패했습니다."
