@@ -180,10 +180,10 @@ class ClubFeedbackServiceTest {
     }
 
     @Test
-    void adminUpdatePublishesAnswerAndStatus() {
+    void adminUpdateKeepsPrivateFeedbackPrivateAndMasksAnonymousAuthor() {
         String ownerUserKey = "feedback-owner-003";
         Long clubId = createFeedbackEnabledClub(ownerUserKey, "Feedback Admin Club");
-        ClubProfile memberProfile = createActiveMember(clubId, "feedback-member-003", "지후");
+        createActiveMember(clubId, "feedback-member-003", "지후");
 
         Long feedbackId = clubFeedbackService.createFeedback(
                 clubId,
@@ -203,22 +203,36 @@ class ClubFeedbackServiceTest {
                 new UpdateClubAdminFeedbackRequest(
                         "INCONVENIENCE",
                         "ANSWERED",
-                        "PUBLIC",
+                        "PRIVATE",
                         "조명 교체 일정을 잡겠습니다."
                 )
         );
 
         assertThat(updated.feedbackType()).isEqualTo("INCONVENIENCE");
         assertThat(updated.statusCode()).isEqualTo("ANSWERED");
-        assertThat(updated.visibilityScope()).isEqualTo("PUBLIC");
+        assertThat(updated.visibilityScope()).isEqualTo("PRIVATE");
         assertThat(updated.adminAnswer()).isEqualTo("조명 교체 일정을 잡겠습니다.");
         assertThat(updated.anonymous()).isTrue();
-        assertThat(updated.authorDisplayName()).isEqualTo(memberProfile.getDisplayName());
+        assertThat(updated.authorDisplayName()).isEqualTo("익명");
         assertThat(updated.answeredByDisplayName()).isNotBlank();
 
         var memberView = clubFeedbackService.getFeedbackDetail(clubId, feedbackId, "feedback-member-003");
-        assertThat(memberView.authorDisplayName()).isEqualTo("익명 제출");
+        assertThat(memberView.authorDisplayName()).isEqualTo("익명");
         assertThat(memberView.adminAnswer()).isEqualTo("조명 교체 일정을 잡겠습니다.");
+
+        assertThatThrownBy(() -> clubFeedbackService.updateAdminFeedback(
+                clubId,
+                feedbackId,
+                ownerUserKey,
+                new UpdateClubAdminFeedbackRequest(
+                        "INCONVENIENCE",
+                        "ANSWERED",
+                        "PUBLIC",
+                        "공개 전환을 시도합니다."
+                )
+        ))
+                .isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("제출자의 동의");
     }
 
     private Long createFeedbackEnabledClub(String ownerUserKey, String clubName) {

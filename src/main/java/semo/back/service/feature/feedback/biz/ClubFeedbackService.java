@@ -109,8 +109,8 @@ public class ClubFeedbackService {
         boolean anonymous = Boolean.TRUE.equals(request == null ? null : request.anonymous());
 
         ClubActivityContextHolder.setDetails(
-                "피드백 '" + title + "'을 등록했습니다.",
-                "피드백 '" + title + "'을 등록하지 못했습니다."
+                anonymous ? "비공개 익명 피드백을 등록했습니다." : "비공개 피드백을 등록했습니다.",
+                "비공개 피드백을 등록하지 못했습니다."
         );
 
         ClubFeedback saved = clubFeedbackRepository.save(ClubFeedback.builder()
@@ -182,6 +182,9 @@ public class ClubFeedbackService {
         String statusCode = normalizeStatusCode(request == null ? null : request.statusCode());
         String visibilityScope = normalizeVisibilityScope(request == null ? null : request.visibilityScope());
         String adminAnswer = trimToNull(request == null ? null : request.adminAnswer());
+        if (VISIBILITY_PRIVATE.equals(current.getVisibilityScope()) && VISIBILITY_PUBLIC.equals(visibilityScope)) {
+            throw new SemoException.ValidationException("제출자의 동의 없이 비공개 피드백을 공개할 수 없습니다.");
+        }
         if (STATUS_ANSWERED.equals(statusCode) && !StringUtils.hasText(adminAnswer)) {
             throw new SemoException.ValidationException("답변 완료 상태로 저장하려면 답변을 입력해주세요.");
         }
@@ -330,17 +333,11 @@ public class ClubFeedbackService {
             Map<Long, ClubProfile> profileById,
             boolean adminView
     ) {
-        ClubProfile profile = profileById.get(feedback.getSubmitterClubProfileId());
-        String actualName = profile == null ? "알 수 없는 회원" : profile.getDisplayName();
-        if (adminView) {
-            return actualName;
-        }
-        if (feedback.isAnonymous() && !isOwner(feedback, access)) {
+        if (feedback.isAnonymous()) {
             return "익명";
         }
-        if (feedback.isAnonymous()) {
-            return "익명 제출";
-        }
+        ClubProfile profile = profileById.get(feedback.getSubmitterClubProfileId());
+        String actualName = profile == null ? "알 수 없는 회원" : profile.getDisplayName();
         return actualName;
     }
 

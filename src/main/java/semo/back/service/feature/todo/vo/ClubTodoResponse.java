@@ -11,6 +11,7 @@ public record ClubTodoResponse(
         int myApplyingCount,
         int claimableOpenCount,
         int overdueCount,
+        boolean hasMoreClaimable,
         List<TodoSummaryResponse> myTodos,
         List<TodoSummaryResponse> claimableTodos,
         List<TodoSummaryResponse> recentCompletedTodos

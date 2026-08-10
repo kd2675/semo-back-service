@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubJoinRequest;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubProfile;
@@ -34,6 +35,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -282,7 +284,7 @@ class ClubJoinRequestServiceTest {
     }
 
     @Test
-    void getJoinRequestInboxReturnsPendingQueueForActiveMembers() {
+    void getJoinRequestInboxRejectsRegularMembers() {
         Long clubId = clubService.createClub(
                 "owner-join-201",
                 "Owner Queue",
@@ -297,17 +299,11 @@ class ClubJoinRequestServiceTest {
                 new SubmitClubJoinRequestRequest("가입 대기열 테스트")
         );
 
-        ClubJoinRequestInboxResponse response = clubJoinRequestService.getJoinRequestInbox(
+        assertThatThrownBy(() -> clubJoinRequestService.getJoinRequestInbox(
                 clubId,
                 "member-join-201"
-        );
-
-        assertThat(response.admin()).isFalse();
-        assertThat(response.pendingRequestCount()).isEqualTo(1);
-        assertThat(response.messageAttachedCount()).isEqualTo(1);
-        assertThat(response.requests()).hasSize(1);
-        assertThat(response.requests().getFirst().displayName()).isEqualTo("신규 신청자");
-        assertThat(response.requests().getFirst().requestStatus()).isEqualTo("PENDING");
+        ))
+                .isInstanceOf(SemoException.ForbiddenException.class);
     }
 
     @Test

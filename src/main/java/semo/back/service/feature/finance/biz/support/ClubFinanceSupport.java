@@ -226,6 +226,7 @@ public class ClubFinanceSupport {
     public String resolveExpenseTypeLabel(String expenseTypeCode) {
         return switch (expenseTypeCode) {
             case "ADMIN_EXPENSE" -> "운영 지출";
+            case "APPROVED_REQUEST" -> "승인 요청 연계";
             default -> "지출";
         };
     }

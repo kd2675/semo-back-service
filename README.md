@@ -111,7 +111,7 @@
 
 ## Semo Modular Pattern
 
-`semo`는 기능 단위를 클럽 공통 도메인에 섞지 않고 기능 경계로 나눕니다.
+`semo`는 기능의 데이터·권한 경계를 분리하되, 프론트 진입 화면까지 기능 key와 일대일로 만들지는 않습니다.
 
 - 기능 카탈로그: `feature_catalog`
 - 클럽별 활성화: `feature_activation`
@@ -124,10 +124,12 @@
   - `bracket_record`, `bracket_participant`
   - `club_schedule_event`, `club_schedule_vote`, `club_schedule_vote_option`
 
-프론트 경로도 이 구조를 그대로 따릅니다.
+독립적인 운영 흐름이 있는 기능은 아래 경로를 따릅니다.
 
 - 유저: `/clubs/{clubId}/more/<feature>`
 - 관리자: `/clubs/{clubId}/admin/more/<feature>`
+
+공지 API는 게시판, 일정·투표·참석 API는 캘린더 대표 화면에서 함께 사용합니다. 기능 활성화와 권한 판정은 각각의 feature key를 유지하며, 기존 `/more` 프론트 URL은 호환용 redirect로 남깁니다.
 
 ## Main API Map
 
@@ -203,7 +205,6 @@
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/attendance`
 - `GET /api/semo/v1/clubs/{clubId}/more/todos`
 - `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/apply`
-- `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/claim`
 - `DELETE /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/applications/me`
 - `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/complete`
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/todos`
@@ -211,6 +212,7 @@
 - `PUT /api/semo/v1/clubs/{clubId}/admin/more/todos/{todoItemId}`
 - `PUT /api/semo/v1/clubs/{clubId}/admin/more/todos/{todoItemId}/status`
 - `DELETE /api/semo/v1/clubs/{clubId}/admin/more/todos/{todoItemId}`
+  - 실제 삭제가 아니라 `CANCELED` 상태로 보관
 
 ### Finance / tournament / bracket / role management / activity
 - `GET /api/semo/v1/clubs/{clubId}/more/finance`
@@ -252,10 +254,14 @@
   - `src/main/resources/db/ddl/semo_ddl_all.sql`
 - Seed source of truth
   - `src/main/resources/db/seed/semo_seed_all.sql`
+- 운영 DB 단건 반영 SQL
+  - `src/main/resources/db/ops/semo_finance_request_expense_apply.sql`
+  - 승인된 정산 요청과 지출 원장을 연결하는 nullable FK/unique 컬럼을 추가하며, 배포 전 백업 후 1회 적용
 
 현재 seed에는 아래 카탈로그 성격의 데이터가 포함됩니다.
 
 - `feature_catalog`
+  - `JOIN_REQUEST`
   - `NOTICE`
   - `ATTENDANCE`
   - `TIMELINE`
@@ -264,6 +270,9 @@
   - `TOURNAMENT_RECORD`
   - `BRACKET`
   - `FINANCE`
+  - `TODO`
+  - `MEMBER_DIRECTORY`
+  - `FEEDBACK`
   - `ROLE_MANAGEMENT`
 - `feature_permission_catalog`
   - 공지, 투표, 대회, 대진표, 재정, 직책관리 권한
@@ -288,7 +297,7 @@
 ./gradlew :semo-back-service:test --rerun-tasks
 ```
 
-2026-05-21 현재 루트 wrapper 기준으로 `compileJava`와 `test --rerun-tasks`가 성공했습니다.
+2026-08-07 현재 루트 wrapper 기준으로 `compileJava`와 전체 테스트를 검증합니다.
 
 ## Test Coverage Snapshot
 
@@ -309,11 +318,11 @@
 - `schedule`
 - `timeline`
 - `todo`
+- `tournament`
+- `bracket`
 
 상대적으로 공백이 큰 영역도 있습니다.
 
-- `tournament`
-- `bracket`
 - `activity` 서비스
 - 여러 컨트롤러의 상세 API 계약 테스트
 

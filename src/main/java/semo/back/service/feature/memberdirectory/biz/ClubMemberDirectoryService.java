@@ -41,7 +41,15 @@ public class ClubMemberDirectoryService {
     private static final String FEATURE_MEMBER_DIRECTORY = "MEMBER_DIRECTORY";
     private static final DateTimeFormatter DATE_TIME_REQUEST_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm", Locale.KOREAN);
-    private static final MemberDirectorySettingsResponse DEFAULT_SETTINGS = new MemberDirectorySettingsResponse(true, true, true);
+    private static final MemberDirectorySettingsResponse DEFAULT_SETTINGS = new MemberDirectorySettingsResponse(true, true, false);
+    private static final Map<String, String> MEMBER_VISIBLE_ACTIVITY_LABELS = Map.of(
+            "공지관리", "공지를 관리했습니다.",
+            "일정관리", "일정을 관리했습니다.",
+            "투표관리", "투표에 참여하거나 관리했습니다.",
+            "출석관리", "출석 활동을 남겼습니다.",
+            "대회관리", "대회 활동을 남겼습니다.",
+            "대진표관리", "대진표 활동을 남겼습니다."
+    );
 
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
@@ -152,9 +160,13 @@ public class ClubMemberDirectoryService {
             if (log.getActorClubProfileId() == null || recentActivityByProfileId.containsKey(log.getActorClubProfileId())) {
                 continue;
             }
+            String publicDetail = MEMBER_VISIBLE_ACTIVITY_LABELS.get(log.getSubject());
+            if (publicDetail == null) {
+                continue;
+            }
             recentActivityByProfileId.put(log.getActorClubProfileId(), new MemberDirectoryRecentActivityResponse(
                     log.getSubject(),
-                    log.getDetailText(),
+                    publicDetail,
                     formatDateTimeValue(log.getCreatedAt()),
                     formatDateTimeLabel(log.getCreatedAt())
             ));

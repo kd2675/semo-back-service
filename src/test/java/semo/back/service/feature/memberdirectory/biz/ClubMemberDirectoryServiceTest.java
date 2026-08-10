@@ -172,6 +172,17 @@ class ClubMemberDirectoryServiceTest {
                 .errorMessage(null)
                 .build());
 
+        var defaultResponse = clubMemberDirectoryService.getMemberDirectory(clubId, ownerUserKey);
+        assertThat(defaultResponse.settings().showRecentActivity()).isFalse();
+        assertThat(defaultResponse.members()).allSatisfy(memberResponse ->
+                assertThat(memberResponse.recentActivity()).isNull()
+        );
+
+        clubMemberDirectoryService.updateAdminMemberDirectory(
+                clubId,
+                ownerUserKey,
+                new UpdateClubAdminMemberDirectorySettingsRequest(true, true, true)
+        );
         var response = clubMemberDirectoryService.getMemberDirectory(clubId, ownerUserKey);
 
         assertThat(response.featureEnabled()).isTrue();
@@ -187,7 +198,7 @@ class ClubMemberDirectoryServiceTest {
             assertThat(memberResponse.tagline()).isEqualTo("주말마다 나오는 운영진");
             assertThat(memberResponse.recentActivity()).isNotNull();
             assertThat(memberResponse.recentActivity().subject()).isEqualTo("공지관리");
-            assertThat(memberResponse.recentActivity().detail()).isEqualTo("공지 '주말 모임'을 생성했습니다.");
+            assertThat(memberResponse.recentActivity().detail()).isEqualTo("공지를 관리했습니다.");
         });
     }
 

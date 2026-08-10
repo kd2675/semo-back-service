@@ -34,7 +34,6 @@ import semo.back.service.feature.position.vo.ClubPositionHistoryResponse;
 import semo.back.service.feature.position.vo.ClubPositionDetailResponse;
 import semo.back.service.feature.position.vo.ClubPositionSummaryResponse;
 import semo.back.service.feature.position.vo.CreateClubPositionRequest;
-import semo.back.service.feature.position.vo.DeleteClubPositionHistoryRequest;
 import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 
 import java.time.LocalDateTime;
@@ -225,33 +224,6 @@ public class ClubPositionService {
                 histories.stream()
                         .map(history -> toHistoryResponse(history, displayNameByMemberId.get(history.getClubMemberId())))
                         .toList()
-        );
-    }
-
-    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
-    @RecordClubActivity(subject = "직책관리")
-    public void deletePositionHistory(
-            Long clubId,
-            Long positionHistoryId,
-            String userKey,
-            DeleteClubPositionHistoryRequest request
-    ) {
-        requireRoleManagementFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        ClubMemberPositionHistory history = clubMemberPositionHistoryRepository
-                .findByClubMemberPositionHistoryIdAndClubId(positionHistoryId, clubId)
-                .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubMemberPositionHistory", "positionHistoryId", positionHistoryId));
-        if (history.isDeleted()) {
-            return;
-        }
-        history.markDeleted(
-                access.clubProfile().getClubProfileId(),
-                LocalDateTime.now(),
-                trimToNull(request == null ? null : request.deleteReason())
-        );
-        ClubActivityContextHolder.setDetails(
-                "직책 보유 이력 '" + history.getPositionDisplayNameSnapshot() + "'을 삭제했습니다.",
-                "직책 보유 이력 삭제에 실패했습니다."
         );
     }
 
@@ -488,14 +460,14 @@ public class ClubPositionService {
 
     private String resolvePermissionGroupDisplayName(FeatureCatalog catalog) {
         return switch (catalog.getFeatureKey()) {
-            case FEATURE_NOTICE -> "공지관리";
-            case FEATURE_POLL -> "투표관리";
-            case FEATURE_SCHEDULE_MANAGE -> "일정관리";
-            case FEATURE_TOURNAMENT_RECORD -> "대회관리";
-            case FEATURE_BRACKET -> "대진표관리";
-            case FEATURE_TIMELINE -> "타임라인관리";
-            case FEATURE_FINANCE -> "재정관리";
-            case FEATURE_TODO -> "할 일관리";
+            case FEATURE_NOTICE -> "게시판 공지";
+            case FEATURE_POLL -> "캘린더 투표";
+            case FEATURE_SCHEDULE_MANAGE -> "캘린더 일정";
+            case FEATURE_TOURNAMENT_RECORD -> "대회 운영";
+            case FEATURE_BRACKET -> "대진표 초안";
+            case FEATURE_TIMELINE -> "운영 기록";
+            case FEATURE_FINANCE -> "회비·정산";
+            case FEATURE_TODO -> "업무 운영";
             default -> catalog.getDisplayName();
         };
     }

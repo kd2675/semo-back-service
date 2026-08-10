@@ -19,7 +19,6 @@ import semo.back.service.feature.position.vo.ClubAdminRoleManagementResponse;
 import semo.back.service.feature.position.vo.ClubPositionHistoryResponse;
 import semo.back.service.feature.position.vo.ClubPositionDetailResponse;
 import semo.back.service.feature.position.vo.CreateClubPositionRequest;
-import semo.back.service.feature.position.vo.DeleteClubPositionHistoryRequest;
 import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
@@ -50,17 +49,6 @@ public class ClubPositionAdminController {
                 clubPositionService.getPositionHistory(clubId, requireUserKey(userContext)),
                 "직책 보유 이력 조회 성공"
         );
-    }
-
-    @DeleteMapping("/history/{positionHistoryId}")
-    public ResponseDataDTO<Boolean> deletePositionHistory(
-            @PathVariable Long clubId,
-            @PathVariable Long positionHistoryId,
-            @Valid @RequestBody(required = false) DeleteClubPositionHistoryRequest request,
-            UserContext userContext
-    ) {
-        clubPositionService.deletePositionHistory(clubId, positionHistoryId, requireUserKey(userContext), request);
-        return ResponseDataDTO.of(true, "직책 보유 이력 삭제 성공");
     }
 
     @PostMapping

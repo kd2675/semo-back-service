@@ -414,6 +414,12 @@ class ClubFinanceServiceTest {
         assertThat(clubFinanceService.getAdminFinanceRequests(clubId, "finance-owner-007").items())
                 .singleElement()
                 .satisfies(item -> assertThat(item.reviewNote()).isEqualTo("확인 후 상환 예정"));
+        assertThat(clubFinanceService.getAdminFinanceExpenses(clubId, "finance-owner-007").items())
+                .singleElement()
+                .satisfies(item -> {
+                    assertThat(item.sourceRequestId()).isEqualTo(created.requestId());
+                    assertThat(item.expenseTypeCode()).isEqualTo("APPROVED_REQUEST");
+                });
     }
 
     @Test

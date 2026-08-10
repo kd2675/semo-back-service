@@ -17,20 +17,25 @@ import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.contentread.biz.ClubContentReadService;
 import semo.back.service.feature.notice.vo.ClubBoardFeedItemResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeFeedResponse;
 import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
 import semo.back.service.feature.schedule.biz.ClubScheduleService;
+import semo.back.service.feature.schedule.biz.policy.ClubSchedulePermissionService;
+import semo.back.service.feature.poll.biz.ClubPollPermissionService;
 import semo.back.service.feature.schedule.vo.ScheduleEventSummaryResponse;
 import semo.back.service.feature.schedule.vo.ScheduleVoteSummaryResponse;
 import semo.back.service.feature.tournament.biz.ClubTournamentService;
+import semo.back.service.feature.tournament.biz.policy.ClubTournamentPermissionService;
 import semo.back.service.feature.tournament.vo.TournamentSummaryResponse;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -44,8 +49,13 @@ public class ClubBoardFeedService {
     private static final String CONTENT_SCHEDULE_EVENT = "SCHEDULE_EVENT";
     private static final String CONTENT_SCHEDULE_VOTE = "SCHEDULE_VOTE";
     private static final String CONTENT_TOURNAMENT = "TOURNAMENT";
+    private static final String FEATURE_NOTICE = "NOTICE";
+    private static final String FEATURE_POLL = "POLL";
+    private static final String FEATURE_SCHEDULE_MANAGE = "SCHEDULE_MANAGE";
+    private static final String FEATURE_TOURNAMENT_RECORD = "TOURNAMENT_RECORD";
 
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubFeatureService clubFeatureService;
     private final ClubBoardItemRepository clubBoardItemRepository;
     private final ClubNoticeRepository clubNoticeRepository;
     private final ClubScheduleEventRepository clubScheduleEventRepository;
@@ -53,8 +63,12 @@ public class ClubBoardFeedService {
     private final TournamentRecordRepository tournamentRecordRepository;
     private final ClubContentReadService clubContentReadService;
     private final ClubNoticeService clubNoticeService;
+    private final ClubNoticePermissionService clubNoticePermissionService;
     private final ClubScheduleService clubScheduleService;
+    private final ClubSchedulePermissionService clubSchedulePermissionService;
+    private final ClubPollPermissionService clubPollPermissionService;
     private final ClubTournamentService clubTournamentService;
+    private final ClubTournamentPermissionService clubTournamentPermissionService;
 
     public ClubNoticeFeedResponse getBoardFeed(
             Long clubId,
@@ -65,6 +79,7 @@ public class ClubBoardFeedService {
             Integer size
     ) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        Set<String> enabledFeatureKeys = clubFeatureService.getEnabledFeatureKeys(clubId);
 
         int pageSize = normalizePageSize(size);
         List<ClubBoardItem> rows = clubBoardItemRepository.findFeedItems(
@@ -77,10 +92,10 @@ public class ClubBoardFeedService {
 
         boolean hasNext = rows.size() > pageSize;
         List<ClubBoardItem> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
-        Map<Long, ClubNoticeSummaryResponse> noticeById = loadNoticeSummaries(access, pageRows);
-        Map<Long, ScheduleEventSummaryResponse> eventById = loadEventSummaries(access, pageRows);
-        Map<Long, ScheduleVoteSummaryResponse> voteById = loadVoteSummaries(access, pageRows);
-        Map<Long, TournamentSummaryResponse> tournamentById = loadTournamentSummaries(access, pageRows);
+        Map<Long, ClubNoticeSummaryResponse> noticeById = loadNoticeSummaries(access, pageRows, enabledFeatureKeys);
+        Map<Long, ScheduleEventSummaryResponse> eventById = loadEventSummaries(access, pageRows, enabledFeatureKeys);
+        Map<Long, ScheduleVoteSummaryResponse> voteById = loadVoteSummaries(access, pageRows, enabledFeatureKeys);
+        Map<Long, TournamentSummaryResponse> tournamentById = loadTournamentSummaries(access, pageRows, enabledFeatureKeys);
         Map<Long, Integer> readCountByBoardItemId = clubContentReadService.getBoardReadCounts(
                 pageRows.stream().map(ClubBoardItem::getBoardItemId).toList()
         );
@@ -102,6 +117,14 @@ public class ClubBoardFeedService {
                 access.club().getClubId(),
                 access.club().getName(),
                 access.isAdmin(),
+                enabledFeatureKeys.contains(FEATURE_NOTICE)
+                        && clubNoticePermissionService.canCreateNotice(access),
+                enabledFeatureKeys.contains(FEATURE_SCHEDULE_MANAGE)
+                        && clubSchedulePermissionService.canCreateSchedule(access),
+                enabledFeatureKeys.contains(FEATURE_POLL)
+                        && clubPollPermissionService.canCreatePoll(access),
+                enabledFeatureKeys.contains(FEATURE_TOURNAMENT_RECORD)
+                        && clubTournamentPermissionService.canCreateTournament(access),
                 items,
                 lastRow == null ? null : lastRow.getBoardItemId(),
                 hasNext
@@ -110,8 +133,12 @@ public class ClubBoardFeedService {
 
     private Map<Long, ClubNoticeSummaryResponse> loadNoticeSummaries(
             ClubAccessResolver.ClubAccess access,
-            List<ClubBoardItem> rows
+            List<ClubBoardItem> rows,
+            Set<String> enabledFeatureKeys
     ) {
+        if (!enabledFeatureKeys.contains(FEATURE_NOTICE)) {
+            return Map.of();
+        }
         List<Long> noticeIds = rows.stream()
                 .filter(row -> CONTENT_NOTICE.equals(row.getContentType()))
                 .map(ClubBoardItem::getContentId)
@@ -134,8 +161,12 @@ public class ClubBoardFeedService {
 
     private Map<Long, ScheduleEventSummaryResponse> loadEventSummaries(
             ClubAccessResolver.ClubAccess access,
-            List<ClubBoardItem> rows
+            List<ClubBoardItem> rows,
+            Set<String> enabledFeatureKeys
     ) {
+        if (!enabledFeatureKeys.contains(FEATURE_SCHEDULE_MANAGE)) {
+            return Map.of();
+        }
         List<Long> eventIds = rows.stream()
                 .filter(row -> CONTENT_SCHEDULE_EVENT.equals(row.getContentType()))
                 .map(ClubBoardItem::getContentId)
@@ -158,8 +189,12 @@ public class ClubBoardFeedService {
 
     private Map<Long, ScheduleVoteSummaryResponse> loadVoteSummaries(
             ClubAccessResolver.ClubAccess access,
-            List<ClubBoardItem> rows
+            List<ClubBoardItem> rows,
+            Set<String> enabledFeatureKeys
     ) {
+        if (!enabledFeatureKeys.contains(FEATURE_POLL)) {
+            return Map.of();
+        }
         List<Long> voteIds = rows.stream()
                 .filter(row -> CONTENT_SCHEDULE_VOTE.equals(row.getContentType()))
                 .map(ClubBoardItem::getContentId)
@@ -181,8 +216,12 @@ public class ClubBoardFeedService {
 
     private Map<Long, TournamentSummaryResponse> loadTournamentSummaries(
             ClubAccessResolver.ClubAccess access,
-            List<ClubBoardItem> rows
+            List<ClubBoardItem> rows,
+            Set<String> enabledFeatureKeys
     ) {
+        if (!enabledFeatureKeys.contains(FEATURE_TOURNAMENT_RECORD)) {
+            return Map.of();
+        }
         List<Long> tournamentIds = rows.stream()
                 .filter(row -> CONTENT_TOURNAMENT.equals(row.getContentType()))
                 .map(ClubBoardItem::getContentId)

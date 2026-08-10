@@ -64,6 +64,7 @@ public class ClubTodoService {
     private static final String APPLICATION_STATUS_WITHDRAWN = "WITHDRAWN";
 
     private static final int CLAIMABLE_PAGE_SIZE = 8;
+    private static final int MAX_CLAIMABLE_PAGE_SIZE = 50;
 
     private final ClubAccessResolver clubAccessResolver;
     private final ClubTodoPermissionService clubTodoPermissionService;
@@ -74,14 +75,26 @@ public class ClubTodoService {
     private final ClubTodoViewSupport clubTodoViewSupport;
 
     public ClubTodoResponse getTodos(Long clubId, String userKey) {
+        return getTodos(clubId, userKey, CLAIMABLE_PAGE_SIZE);
+    }
+
+    public ClubTodoResponse getTodos(Long clubId, String userKey, Integer claimableSize) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireTodoFeature(clubId);
+
+        int normalizedClaimableSize = claimableSize == null
+                ? CLAIMABLE_PAGE_SIZE
+                : Math.max(1, Math.min(claimableSize, MAX_CLAIMABLE_PAGE_SIZE));
 
         List<TodoItem> myItems = todoItemRepository.findByClubIdAndAssignedClubProfileIdOrderByTodoItemIdDesc(
                 clubId,
                 access.clubProfile().getClubProfileId()
         );
-        List<TodoItem> claimableItems = todoItemRepository.findClaimableTodos(clubId, PageRequest.of(0, CLAIMABLE_PAGE_SIZE));
+        long claimableOpenCount = todoItemRepository.countClaimableTodos(clubId);
+        List<TodoItem> claimableItems = todoItemRepository.findClaimableTodos(
+                clubId,
+                PageRequest.of(0, normalizedClaimableSize)
+        );
         List<TodoItem> recentCompletedItems = todoItemRepository.findTop5ByClubIdAndCompletedByClubProfileIdOrderByTodoItemIdDesc(
                 clubId,
                 access.clubProfile().getClubProfileId()
@@ -108,6 +121,7 @@ public class ClubTodoService {
                 )
                 .distinct()
                 .sorted(clubTodoViewSupport.todoPriorityComparator())
+                .limit(normalizedClaimableSize)
                 .toList();
         List<Long> visibleTodoIds = Stream.of(myItems, prioritizedClaimableItems, recentCompletedItems)
                 .flatMap(Collection::stream)
@@ -186,8 +200,9 @@ public class ClubTodoService {
                         })
                         .filter(application -> APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus()))
                         .count(),
-                prioritizedClaimableTodos.size(),
+                Math.toIntExact(Math.min(claimableOpenCount, Integer.MAX_VALUE)),
                 (int) myItems.stream().filter(clubTodoViewSupport::isOverdue).count(),
+                claimableOpenCount > prioritizedClaimableTodos.size(),
                 myTodos,
                 prioritizedClaimableTodos,
                 recentCompletedTodos
@@ -758,12 +773,16 @@ public class ClubTodoService {
         }
 
         TodoItem current = requireTodoItem(clubId, todoItemId);
-        ClubActivityContextHolder.setDetails(
-                "'" + current.getTitle() + "' 할 일을 삭제했습니다.",
-                "'" + current.getTitle() + "' 할 일 삭제에 실패했습니다."
+        saveWithStatus(current, STATUS_CANCELED, access.clubProfile().getClubProfileId());
+        rejectActiveApplications(
+                current.getTodoItemId(),
+                access.clubProfile().getClubProfileId(),
+                "업무가 보관되었습니다."
         );
-        todoItemApplicationRepository.deleteByTodoItemId(todoItemId);
-        todoItemRepository.delete(current);
+        ClubActivityContextHolder.setDetails(
+                "'" + current.getTitle() + "' 할 일을 보관했습니다.",
+                "'" + current.getTitle() + "' 할 일 보관에 실패했습니다."
+        );
     }
 
     private void requireTodoFeature(Long clubId) {

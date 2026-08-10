@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
 import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
@@ -128,6 +129,7 @@ class ClubScheduleServiceTest {
                         null
                 )
         ).clubId();
+        enableScheduleFeatures(clubId, "schedule-owner-001");
 
         var createdEvent = clubScheduleService.createScheduleEvent(
                 clubId,
@@ -264,6 +266,7 @@ class ClubScheduleServiceTest {
                         null
                 )
         ).clubId();
+        enableScheduleFeatures(clubId, "schedule-owner-003");
 
         var createdEvent = clubScheduleService.createScheduleEvent(
                 clubId,
@@ -358,6 +361,7 @@ class ClubScheduleServiceTest {
                         null
                 )
         ).clubId();
+        enablePollFeature(clubId, "schedule-owner-006");
 
         clubScheduleService.createScheduleVote(
                 clubId,
@@ -393,8 +397,6 @@ class ClubScheduleServiceTest {
                 )
         );
 
-        enablePollFeature(clubId, "schedule-owner-006");
-
         var schedule = clubScheduleService.getClubSchedule(clubId, "schedule-owner-006", 2030, 8);
 
         assertThat(schedule.items())
@@ -420,6 +422,7 @@ class ClubScheduleServiceTest {
                         null
                 )
         ).clubId();
+        enablePollFeature(clubId, "schedule-owner-005");
 
         var createdVote = clubScheduleService.createScheduleVote(
                 clubId,
@@ -468,6 +471,7 @@ class ClubScheduleServiceTest {
                         null
                 )
         ).clubId();
+        enablePollFeature(clubId, "schedule-owner-002");
 
         var createdVote = clubScheduleService.createScheduleVote(
                 clubId,
@@ -521,6 +525,96 @@ class ClubScheduleServiceTest {
     }
 
     @Test
+    void updateVotePreservesResponsesAndRejectsOptionChangesAfterVotingStarts() {
+        Long clubId = clubService.createClub(
+                "schedule-owner-vote-preserve",
+                "Schedule Vote Owner",
+                new CreateClubRequest(
+                        "Vote Preservation Lab",
+                        "응답 보존 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+        enablePollFeature(clubId, "schedule-owner-vote-preserve");
+        LocalDate today = LocalDate.now();
+
+        var createdVote = clubScheduleService.createScheduleVote(
+                clubId,
+                "schedule-owner-vote-preserve",
+                new UpsertScheduleVoteRequest(
+                        "모임 시간 투표",
+                        today.minusDays(1).toString(),
+                        today.plusDays(2).toString(),
+                        null,
+                        null,
+                        List.of("오후 7시", "오후 8시"),
+                        false,
+                        true,
+                        true,
+                        true
+                )
+        );
+        Long firstOptionId = clubScheduleVoteOptionRepository
+                .findByVoteIdOrderBySortOrderAscVoteOptionIdAsc(createdVote.voteId())
+                .getFirst()
+                .getVoteOptionId();
+        clubScheduleService.submitScheduleVoteSelection(
+                clubId,
+                createdVote.voteId(),
+                "schedule-owner-vote-preserve",
+                new SubmitScheduleVoteSelectionRequest(firstOptionId)
+        );
+
+        clubScheduleService.updateScheduleVote(
+                clubId,
+                createdVote.voteId(),
+                "schedule-owner-vote-preserve",
+                new UpsertScheduleVoteRequest(
+                        "모임 시간 최종 확인",
+                        today.minusDays(1).toString(),
+                        today.plusDays(3).toString(),
+                        null,
+                        null,
+                        List.of("오후 7시", "오후 8시"),
+                        false,
+                        true,
+                        true,
+                        true
+                )
+        );
+
+        assertThat(clubScheduleVoteSelectionRepository.count()).isEqualTo(1);
+        assertThat(clubScheduleVoteOptionRepository
+                .findByVoteIdOrderBySortOrderAscVoteOptionIdAsc(createdVote.voteId())
+                .getFirst()
+                .getVoteOptionId()).isEqualTo(firstOptionId);
+
+        assertThatThrownBy(() -> clubScheduleService.updateScheduleVote(
+                clubId,
+                createdVote.voteId(),
+                "schedule-owner-vote-preserve",
+                new UpsertScheduleVoteRequest(
+                        "선택지 변경 시도",
+                        today.minusDays(1).toString(),
+                        today.plusDays(3).toString(),
+                        null,
+                        null,
+                        List.of("오후 6시", "오후 9시"),
+                        false,
+                        true,
+                        true,
+                        true
+                )
+        ))
+                .isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("선택지는 변경할 수 없습니다");
+        assertThat(clubScheduleVoteSelectionRepository.count()).isEqualTo(1);
+    }
+
+    @Test
     void downgradedMemberCannotManageOwnEventAndVoteWithoutAssignedPosition() {
         Long clubId = clubService.createClub(
                 "schedule-owner-004",
@@ -534,6 +628,7 @@ class ClubScheduleServiceTest {
                         null
                 )
         ).clubId();
+        enableScheduleFeatures(clubId, "schedule-owner-004");
 
         var createdEvent = clubScheduleService.createScheduleEvent(
                 clubId,
@@ -665,7 +760,15 @@ class ClubScheduleServiceTest {
         clubFeatureService.updateClubFeatures(
                 clubId,
                 userKey,
-                new UpdateClubFeaturesRequest(List.of("NOTICE", "POLL"))
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "POLL", "SCHEDULE_MANAGE"))
+        );
+    }
+
+    private void enableScheduleFeatures(Long clubId, String userKey) {
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                userKey,
+                new UpdateClubFeaturesRequest(List.of("SCHEDULE_MANAGE", "POLL"))
         );
     }
 }

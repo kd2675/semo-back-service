@@ -105,6 +105,19 @@ public class ClubFeatureService {
                 .orElse(false);
     }
 
+    public Set<String> getEnabledFeatureKeys(Long clubId) {
+        return clubFeatureRepository.findByClubId(clubId).stream()
+                .filter(ClubFeature::isEnabled)
+                .map(ClubFeature::getFeatureKey)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    public void requireFeatureEnabled(Long clubId, String featureKey, String displayName) {
+        if (!isFeatureEnabled(clubId, featureKey)) {
+            throw new SemoException.ForbiddenException(displayName + " 기능이 활성화되지 않았습니다.");
+        }
+    }
+
     private List<String> normalizeEnabledFeatureKeysInOrder(
             UpdateClubFeaturesRequest request,
             Set<String> allowedFeatureKeys
@@ -192,12 +205,11 @@ public class ClubFeatureService {
 
     private String toUserPath(Long clubId, String featureKey) {
         return switch (normalizeFeatureKey(featureKey)) {
-            case FEATURE_JOIN_REQUEST -> "/clubs/%d/more/join-requests".formatted(clubId);
-            case "ATTENDANCE" -> "/clubs/%d/more/attendance".formatted(clubId);
-            case "TIMELINE" -> "/clubs/%d/more/timeline".formatted(clubId);
-            case "NOTICE" -> "/clubs/%d/more/notices".formatted(clubId);
-            case "POLL" -> "/clubs/%d/more/polls".formatted(clubId);
-            case "SCHEDULE_MANAGE" -> "/clubs/%d/more/schedules".formatted(clubId);
+            case FEATURE_JOIN_REQUEST -> "/clubs/%d".formatted(clubId);
+            case "ATTENDANCE" -> "/clubs/%d/schedule".formatted(clubId);
+            case "TIMELINE" -> "/clubs/%d/profile/activity".formatted(clubId);
+            case "NOTICE" -> "/clubs/%d/board".formatted(clubId);
+            case "POLL", "SCHEDULE_MANAGE" -> "/clubs/%d/schedule".formatted(clubId);
             case "TOURNAMENT_RECORD" -> "/clubs/%d/more/tournaments".formatted(clubId);
             case "BRACKET" -> "/clubs/%d/more/brackets".formatted(clubId);
             case "FINANCE" -> "/clubs/%d/more/finance".formatted(clubId);
@@ -212,11 +224,10 @@ public class ClubFeatureService {
     private String toAdminPath(Long clubId, String featureKey) {
         return switch (normalizeFeatureKey(featureKey)) {
             case FEATURE_JOIN_REQUEST -> "/clubs/%d/admin/more/join-requests".formatted(clubId);
-            case "ATTENDANCE" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
-            case "TIMELINE" -> "/clubs/%d/admin/more/timeline".formatted(clubId);
-            case "NOTICE" -> "/clubs/%d/admin/more/notices".formatted(clubId);
-            case "POLL" -> "/clubs/%d/admin/more/polls".formatted(clubId);
-            case "SCHEDULE_MANAGE" -> "/clubs/%d/admin/more/schedules".formatted(clubId);
+            case "ATTENDANCE" -> "/clubs/%d/schedule".formatted(clubId);
+            case "TIMELINE" -> "/clubs/%d/admin/logs".formatted(clubId);
+            case "NOTICE" -> "/clubs/%d/board".formatted(clubId);
+            case "POLL", "SCHEDULE_MANAGE" -> "/clubs/%d/schedule".formatted(clubId);
             case "TOURNAMENT_RECORD" -> "/clubs/%d/admin/more/tournaments".formatted(clubId);
             case "BRACKET" -> "/clubs/%d/admin/more/brackets".formatted(clubId);
             case "FINANCE" -> "/clubs/%d/admin/more/finance".formatted(clubId);
@@ -229,6 +240,9 @@ public class ClubFeatureService {
     }
 
     private String resolveNavigationScope(FeatureCatalog catalog) {
+        if (catalog != null && FEATURE_JOIN_REQUEST.equals(normalizeFeatureKey(catalog.getFeatureKey()))) {
+            return NAVIGATION_SCOPE_ADMIN_ONLY;
+        }
         if (catalog == null || !StringUtils.hasText(catalog.getNavigationScope())) {
             return NAVIGATION_SCOPE_USER_AND_ADMIN;
         }

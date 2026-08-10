@@ -55,6 +55,7 @@ public class ClubNoticeService {
     private final ClubContentShareService clubContentShareService;
 
     public ClubNoticeDetailResponse getNoticeDetail(Long clubId, Long noticeId, String userKey) {
+        requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         Club club = getActiveClub(clubId);
         ClubNotice notice = getNotice(clubId, noticeId);

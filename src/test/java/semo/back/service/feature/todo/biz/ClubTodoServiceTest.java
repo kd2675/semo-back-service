@@ -646,6 +646,34 @@ class ClubTodoServiceTest {
     }
 
     @Test
+    void getTodos_claimableSizeSmallerThanOpenCount_reportsMoreItems() {
+        Long clubId = createEnabledClub("todo-owner-008a", "Todo Owner 8A", "Todo Club 8A");
+        addActiveMember(clubId, "todo-member-008a", "Todo Member 8A");
+        for (int index = 1; index <= 10; index++) {
+            clubTodoService.createTodo(
+                    clubId,
+                    "todo-owner-008a",
+                    new CreateClubTodoRequest(
+                            "모집 업무 " + index,
+                            null,
+                            "VOLUNTEER",
+                            "OPEN_SUPPORT",
+                            null,
+                            null
+                    )
+            );
+        }
+
+        var todos = clubTodoService.getTodos(clubId, "todo-member-008a", 3);
+
+        assertThat(List.of(
+                todos.claimableOpenCount(),
+                todos.claimableTodos().size(),
+                todos.hasMoreClaimable()
+        )).containsExactly(10, 3, true);
+    }
+
+    @Test
     void featureDisabled_allTodoApis_forbidden() {
         Long clubId = createClub("todo-owner-009", "Todo Owner 9", "Todo Club 9");
 
@@ -994,7 +1022,7 @@ class ClubTodoServiceTest {
     }
 
     @Test
-    void deleteTodo_admin_success_removesTodoAndApplications() {
+    void deleteTodo_admin_success_archivesTodoAndPreservesApplications() {
         Long clubId = createEnabledClub("todo-owner-015", "Todo Owner 15", "Todo Club 15");
         addActiveMember(clubId, "todo-member-015", "Todo Member 15");
 
@@ -1020,9 +1048,13 @@ class ClubTodoServiceTest {
 
         clubTodoService.deleteTodo(clubId, todoItemId, "todo-owner-015");
 
-        assertThat(todoItemRepository.findById(todoItemId)).isEmpty();
+        assertThat(todoItemRepository.findById(todoItemId))
+                .get()
+                .extracting(TodoItem::getStatusCode)
+                .isEqualTo("CANCELED");
         assertThat(todoItemApplicationRepository.findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId))
-                .isEmpty();
+                .singleElement()
+                .satisfies(application -> assertThat(application.getApplicationStatus()).isEqualTo("REJECTED"));
     }
 
     @Test
@@ -1046,7 +1078,10 @@ class ClubTodoServiceTest {
 
         clubTodoService.deleteTodo(clubId, todoItemId, "todo-member-016");
 
-        assertThat(todoItemRepository.findById(todoItemId)).isEmpty();
+        assertThat(todoItemRepository.findById(todoItemId))
+                .get()
+                .extracting(TodoItem::getStatusCode)
+                .isEqualTo("CANCELED");
     }
 
     @Test

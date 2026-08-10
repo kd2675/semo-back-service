@@ -131,7 +131,7 @@ class ClubBoardFeedServiceTest {
                         null
                 )
         ).clubId();
-        enableNoticeFeature(clubId, userKey);
+        enableBoardFeatures(clubId, userKey);
 
         var hiddenNotice = clubNoticeService.createNotice(
                 clubId,
@@ -227,6 +227,9 @@ class ClubBoardFeedServiceTest {
         );
 
         assertThat(firstPage.items()).hasSize(2);
+        assertThat(firstPage.canCreateNotice()).isTrue();
+        assertThat(firstPage.canCreateSchedule()).isTrue();
+        assertThat(firstPage.canCreatePoll()).isTrue();
         assertThat(firstPage.items().get(0).contentType()).isEqualTo("NOTICE");
         assertThat(firstPage.items().get(0).notice()).isNotNull();
         assertThat(firstPage.items().get(0).notice().noticeId()).isEqualTo(hiddenNotice.noticeId());
@@ -257,7 +260,7 @@ class ClubBoardFeedServiceTest {
                         null
                 )
         ).clubId();
-        enableNoticeFeature(clubId, userKey);
+        enableBoardFeatures(clubId, userKey);
 
         var pinnedNotice = clubNoticeService.createNotice(
                 clubId,
@@ -383,11 +386,11 @@ class ClubBoardFeedServiceTest {
                 .hasMessageContaining("잘못된 커서 값");
     }
 
-    private void enableNoticeFeature(Long clubId, String userKey) {
+    private void enableBoardFeatures(Long clubId, String userKey) {
         clubFeatureService.updateClubFeatures(
                 clubId,
                 userKey,
-                new UpdateClubFeaturesRequest(List.of("NOTICE"))
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "SCHEDULE_MANAGE", "POLL"))
         );
     }
 

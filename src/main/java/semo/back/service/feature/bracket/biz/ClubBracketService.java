@@ -639,6 +639,9 @@ public class ClubBracketService {
             ));
         }
         ensureUniqueSeeds(normalized);
+        if (normalized.stream().anyMatch(participant -> participant.seedNumber() > normalized.size())) {
+            throw new SemoException.ValidationException("시드 번호는 참가자 수 범위 안에서 지정해 주세요.");
+        }
         return normalized.stream()
                 .sorted(Comparator.comparingInt(BracketDraftParticipant::seedNumber))
                 .toList();
@@ -689,19 +692,14 @@ public class ClubBracketService {
         if (participants.isEmpty()) {
             return List.of();
         }
-        int bracketSize = 1;
-        while (bracketSize < participants.size()) {
-            bracketSize *= 2;
-        }
-        List<String> currentSlots = new ArrayList<>();
-        for (BracketParticipant participant : participants.stream()
-                .sorted(Comparator.comparingInt(BracketParticipant::getSeedNumber))
-                .toList()) {
-            currentSlots.add(participant.getDisplayName());
-        }
-        while (currentSlots.size() < bracketSize) {
-            currentSlots.add(null);
-        }
+        Map<Integer, String> participantNameBySeed = participants.stream()
+                .collect(Collectors.toMap(
+                        BracketParticipant::getSeedNumber,
+                        BracketParticipant::getDisplayName
+                ));
+        List<String> currentSlots = BracketSeedPlacement.orderSeeds(participants.size()).stream()
+                .map(participantNameBySeed::get)
+                .collect(Collectors.toCollection(ArrayList::new));
 
         List<BracketRoundResponse> rounds = new ArrayList<>();
         int roundNumber = 1;

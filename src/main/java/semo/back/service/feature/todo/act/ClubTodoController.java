@@ -39,23 +39,12 @@ public class ClubTodoController {
     @GetMapping("/more/todos")
     public ResponseDataDTO<ClubTodoResponse> getTodos(
             @PathVariable Long clubId,
+            @RequestParam(required = false) Integer claimableSize,
             UserContext userContext
     ) {
         return ResponseDataDTO.of(
-                clubTodoService.getTodos(clubId, requireUserKey(userContext)),
+                clubTodoService.getTodos(clubId, requireUserKey(userContext), claimableSize),
                 "할 일 조회 성공"
-        );
-    }
-
-    @PostMapping("/more/todos/{todoItemId}/claim")
-    public ResponseDataDTO<TodoActionResponse> claimTodo(
-            @PathVariable Long clubId,
-            @PathVariable Long todoItemId,
-            UserContext userContext
-    ) {
-        return ResponseDataDTO.of(
-                clubTodoService.claimTodo(clubId, todoItemId, requireUserKey(userContext)),
-                "업무 맡기 성공"
         );
     }
 
@@ -197,7 +186,7 @@ public class ClubTodoController {
             UserContext userContext
     ) {
         clubTodoService.deleteTodo(clubId, todoItemId, requireUserKey(userContext));
-        return ResponseDataDTO.of(null, "할 일 삭제 성공");
+        return ResponseDataDTO.of(null, "할 일 보관 성공");
     }
 
     private String requireUserKey(UserContext userContext) {

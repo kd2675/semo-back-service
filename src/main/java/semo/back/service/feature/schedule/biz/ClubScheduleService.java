@@ -21,6 +21,7 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionReposi
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.poll.biz.ClubPollPermissionService;
 import semo.back.service.feature.schedule.biz.policy.ClubSchedulePermissionService;
 import semo.back.service.feature.schedule.biz.support.ClubScheduleCalendarLoader;
@@ -50,12 +51,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubScheduleService {
+    private static final String FEATURE_POLL = "POLL";
+    private static final String FEATURE_SCHEDULE_MANAGE = "SCHEDULE_MANAGE";
+    private static final String FEATURE_NOTICE = "NOTICE";
+    private static final String FEATURE_TOURNAMENT_RECORD = "TOURNAMENT_RECORD";
     private static final String VISIBILITY_STATUS = "CLUB";
     private static final String EVENT_STATUS = "SCHEDULED";
     private static final String PARTICIPATION_GOING = "GOING";
@@ -69,6 +75,7 @@ public class ClubScheduleService {
     private final ClubScheduleVoteSelectionRepository clubScheduleVoteSelectionRepository;
     private final ClubCalendarItemRepository clubCalendarItemRepository;
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubFeatureService clubFeatureService;
     private final ClubSchedulePermissionService clubSchedulePermissionService;
     private final ClubPollPermissionService clubPollPermissionService;
     private final ClubContentShareService clubContentShareService;
@@ -78,7 +85,7 @@ public class ClubScheduleService {
 
     public ClubScheduleResponse getClubSchedule(Long clubId, String userKey, Integer year, Integer month) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        Long viewerClubProfileId = access.clubProfile().getClubProfileId();
+        Set<String> enabledFeatureKeys = clubFeatureService.getEnabledFeatureKeys(clubId);
         LocalDate today = LocalDate.now();
         LocalDate monthStartDate = clubScheduleViewSupport.resolveMonthStart(year, month);
         LocalDate monthEndDate = monthStartDate.withDayOfMonth(monthStartDate.lengthOfMonth());
@@ -93,9 +100,11 @@ public class ClubScheduleService {
                 monthEndDate
         );
         List<ClubCalendarFeedItemResponse> items = clubScheduleCalendarLoader.loadCalendarFeedItems(
-                access,
-                calendarItems
-        );
+                        access,
+                        calendarItems
+                ).stream()
+                .filter(item -> isCalendarContentEnabled(enabledFeatureKeys, item.contentType()))
+                .toList();
 
         List<ScheduleEventSummaryResponse> monthEvents = items.stream()
                 .map(ClubCalendarFeedItemResponse::event)
@@ -117,6 +126,10 @@ public class ClubScheduleService {
                 access.club().getClubId(),
                 access.club().getName(),
                 access.isAdmin(),
+                enabledFeatureKeys.contains(FEATURE_SCHEDULE_MANAGE)
+                        && clubSchedulePermissionService.canCreateSchedule(access),
+                enabledFeatureKeys.contains(FEATURE_POLL)
+                        && clubPollPermissionService.canCreatePoll(access),
                 monthStartDate.getYear(),
                 monthStartDate.getMonthValue(),
                 new ScheduleOverviewResponse(
@@ -139,6 +152,7 @@ public class ClubScheduleService {
     }
 
     public ScheduleEventDetailResponse getScheduleEventDetail(Long clubId, Long eventId, String userKey) {
+        requireScheduleFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleEvent event = getEvent(clubId, eventId);
         return buildEventDetailResponse(access, event);
@@ -174,6 +188,7 @@ public class ClubScheduleService {
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     @RecordClubActivity(subject = "일정관리")
     public ScheduleEventUpsertResponse createScheduleEvent(Long clubId, String userKey, UpsertScheduleEventRequest request) {
+        requireScheduleFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireEventCreatePermission(access);
         ClubScheduleCommandSupport.EventDraft draft = clubScheduleCommandSupport.toEventDraft(request);
@@ -221,6 +236,7 @@ public class ClubScheduleService {
             String userKey,
             UpsertScheduleEventRequest request
     ) {
+        requireScheduleFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleEvent current = getEvent(clubId, eventId);
         requireEventEditPermission(access, current.getAuthorClubProfileId());
@@ -265,6 +281,7 @@ public class ClubScheduleService {
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     @RecordClubActivity(subject = "일정관리")
     public void deleteScheduleEvent(Long clubId, Long eventId, String userKey) {
+        requireScheduleFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleEvent current = getEvent(clubId, eventId);
         requireEventDeletePermission(access, current.getAuthorClubProfileId());
@@ -278,6 +295,7 @@ public class ClubScheduleService {
     }
 
     public ScheduleVoteDetailResponse getScheduleVoteDetail(Long clubId, Long voteId, String userKey) {
+        requirePollFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote vote = getVote(clubId, voteId);
         return buildVoteDetailResponse(access, vote);
@@ -302,6 +320,7 @@ public class ClubScheduleService {
             String userKey,
             UpdateScheduleEventParticipationRequest request
     ) {
+        requireScheduleFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleEvent event = getEvent(clubId, eventId);
         if (!event.isParticipationEnabled()) {
@@ -337,6 +356,7 @@ public class ClubScheduleService {
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     @RecordClubActivity(subject = "투표관리")
     public ScheduleVoteUpsertResponse createScheduleVote(Long clubId, String userKey, UpsertScheduleVoteRequest request) {
+        requirePollFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireVoteCreatePermission(access);
         ClubScheduleCommandSupport.VoteDraft draft = clubScheduleCommandSupport.toVoteDraft(request);
@@ -347,7 +367,6 @@ public class ClubScheduleService {
         boolean postToBoard = clubScheduleCommandSupport.shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = clubScheduleCommandSupport.shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
         boolean pinned = clubScheduleCommandSupport.shouldPin(request.pinned());
-
         ClubScheduleVote vote = clubScheduleVoteRepository.save(ClubScheduleVote.builder()
                 .clubId(clubId)
                 .authorClubProfileId(access.clubProfile().getClubProfileId())
@@ -375,6 +394,7 @@ public class ClubScheduleService {
             String userKey,
             UpsertScheduleVoteRequest request
     ) {
+        requirePollFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote current = getVote(clubId, voteId);
         requireVoteEditPermission(access, current.getAuthorClubProfileId());
@@ -386,6 +406,15 @@ public class ClubScheduleService {
         boolean postToBoard = clubScheduleCommandSupport.shouldPostToBoard(request.postToBoard());
         boolean postToCalendar = clubScheduleCommandSupport.shouldPostVoteToCalendar(request.postToCalendar(), request.postToSchedule());
         boolean pinned = clubScheduleCommandSupport.shouldPin(request.pinned());
+        List<String> currentOptionLabels = clubScheduleVoteOptionRepository
+                .findByVoteIdOrderBySortOrderAscVoteOptionIdAsc(voteId)
+                .stream()
+                .map(ClubScheduleVoteOption::getOptionLabel)
+                .toList();
+        boolean optionsChanged = !currentOptionLabels.equals(draft.optionLabels());
+        if (optionsChanged && clubScheduleVoteSelectionRepository.existsByVoteId(voteId)) {
+            throw new SemoException.ValidationException("응답이 시작된 투표의 선택지는 변경할 수 없습니다.");
+        }
 
         ClubScheduleVote updated = clubScheduleVoteRepository.save(ClubScheduleVote.builder()
                 .voteId(current.getVoteId())
@@ -404,9 +433,10 @@ public class ClubScheduleService {
                 .build());
         syncVoteShares(updated);
 
-        clubScheduleVoteSelectionRepository.deleteByVoteId(voteId);
-        clubScheduleVoteOptionRepository.deleteByVoteId(voteId);
-        saveVoteOptions(voteId, draft.optionLabels());
+        if (optionsChanged) {
+            clubScheduleVoteOptionRepository.deleteByVoteId(voteId);
+            saveVoteOptions(voteId, draft.optionLabels());
+        }
 
         return toVoteUpsertResponse(updated, draft.optionLabels().size());
     }
@@ -414,6 +444,7 @@ public class ClubScheduleService {
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     @RecordClubActivity(subject = "투표관리")
     public void deleteScheduleVote(Long clubId, Long voteId, String userKey) {
+        requirePollFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote current = getVote(clubId, voteId);
         requireVoteDeletePermission(access, current.getAuthorClubProfileId());
@@ -430,6 +461,7 @@ public class ClubScheduleService {
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     @RecordClubActivity(subject = "투표관리")
     public ScheduleVoteDetailResponse closeScheduleVote(Long clubId, Long voteId, String userKey) {
+        requirePollFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote current = getVote(clubId, voteId);
         requireVoteClosePermission(access, current.getAuthorClubProfileId());
@@ -469,6 +501,7 @@ public class ClubScheduleService {
             String userKey,
             SubmitScheduleVoteSelectionRequest request
     ) {
+        requirePollFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ClubScheduleVote vote = getVote(clubId, voteId);
         if (!isVoteOpen(vote)) {
@@ -831,6 +864,25 @@ public class ClubScheduleService {
                 vote.isSharedToCalendar(),
                 vote.isPinned()
         );
+    }
+
+    private void requireScheduleFeature(Long clubId) {
+        clubFeatureService.requireFeatureEnabled(clubId, FEATURE_SCHEDULE_MANAGE, "일정");
+    }
+
+    private void requirePollFeature(Long clubId) {
+        clubFeatureService.requireFeatureEnabled(clubId, FEATURE_POLL, "투표");
+    }
+
+    private boolean isCalendarContentEnabled(Set<String> enabledFeatureKeys, String contentType) {
+        String featureKey = switch (contentType) {
+            case "NOTICE" -> FEATURE_NOTICE;
+            case "SCHEDULE_EVENT" -> FEATURE_SCHEDULE_MANAGE;
+            case "SCHEDULE_VOTE" -> FEATURE_POLL;
+            case "TOURNAMENT" -> FEATURE_TOURNAMENT_RECORD;
+            default -> null;
+        };
+        return featureKey != null && enabledFeatureKeys.contains(featureKey);
     }
 
     private void requireEventCreatePermission(ClubAccessResolver.ClubAccess access) {

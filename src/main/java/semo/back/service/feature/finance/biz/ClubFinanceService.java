@@ -70,6 +70,7 @@ public class ClubFinanceService {
     private static final String REQUEST_STATUS_APPROVED = "APPROVED";
     private static final String REQUEST_STATUS_REJECTED = "REJECTED";
     private static final String EXPENSE_TYPE_ADMIN = "ADMIN_EXPENSE";
+    private static final String EXPENSE_TYPE_APPROVED_REQUEST = "APPROVED_REQUEST";
     private static final String TARGET_SCOPE_ALL_ACTIVE_MEMBERS = "ALL_ACTIVE_MEMBERS";
     private static final String TARGET_SCOPE_SELECTED_MEMBERS = "SELECTED_MEMBERS";
 
@@ -416,11 +417,13 @@ public class ClubFinanceService {
             throw new SemoException.ForbiddenException("재정 요청을 검토할 권한이 없습니다.");
         }
 
-        FinanceRequest financeRequest = financeRequestRepository.findByFinanceRequestIdAndClubId(requestId, clubId)
+        FinanceRequest financeRequest = financeRequestRepository.findForUpdate(requestId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("FinanceRequest", "requestId", requestId));
         if (!REQUEST_STATUS_SUBMITTED.equals(financeRequest.getStatusCode())) {
             throw new SemoException.ValidationException("이미 검토가 완료된 재정 요청입니다.");
         }
+        String reviewStatus = clubFinanceSupport.normalizeReviewStatus(request.statusCode());
+        LocalDateTime reviewedAt = LocalDateTime.now();
         FinanceRequest updated = financeRequestRepository.save(FinanceRequest.builder()
                 .financeRequestId(financeRequest.getFinanceRequestId())
                 .clubId(financeRequest.getClubId())
@@ -431,11 +434,27 @@ public class ClubFinanceService {
                 .currencyCode(financeRequest.getCurrencyCode())
                 .relatedEventName(financeRequest.getRelatedEventName())
                 .note(financeRequest.getNote())
-                .statusCode(clubFinanceSupport.normalizeReviewStatus(request.statusCode()))
+                .statusCode(reviewStatus)
                 .reviewedByClubProfileId(access.clubProfile().getClubProfileId())
-                .reviewedAt(LocalDateTime.now())
+                .reviewedAt(reviewedAt)
                 .reviewNote(clubFinanceSupport.trimToNull(request.reviewNote()))
                 .build());
+
+        if (REQUEST_STATUS_APPROVED.equals(reviewStatus)) {
+            financeExpenseRepository.save(FinanceExpense.builder()
+                    .clubId(clubId)
+                    .enteredByClubProfileId(access.clubProfile().getClubProfileId())
+                    .sourceFinanceRequestId(updated.getFinanceRequestId())
+                    .expenseTypeCode(EXPENSE_TYPE_APPROVED_REQUEST)
+                    .categoryCode("REFUND_REQUEST".equals(updated.getRequestTypeCode()) ? "REFUND" : "OTHER")
+                    .title(updated.getTitle())
+                    .amount(updated.getAmount())
+                    .currencyCode(updated.getCurrencyCode())
+                    .spentAt(reviewedAt)
+                    .relatedEventName(updated.getRelatedEventName())
+                    .note(updated.getNote())
+                    .build());
+        }
 
         ClubActivityContextHolder.setDetails(
                 updated.getTitle() + " 요청을 " + clubFinanceSupport.resolveRequestStatusLabel(updated.getStatusCode()) + " 처리했습니다.",
@@ -463,6 +482,7 @@ public class ClubFinanceService {
         FinanceExpense saved = financeExpenseRepository.save(FinanceExpense.builder()
                 .clubId(clubId)
                 .enteredByClubProfileId(access.clubProfile().getClubProfileId())
+                .sourceFinanceRequestId(null)
                 .expenseTypeCode(EXPENSE_TYPE_ADMIN)
                 .categoryCode(clubFinanceSupport.normalizeExpenseCategory(request.categoryCode()))
                 .title(clubFinanceSupport.normalizeExpenseTitle(request.title()))
@@ -686,6 +706,7 @@ public class ClubFinanceService {
     ) {
         return new ClubFinanceExpenseResponse(
                 expense.getFinanceExpenseId(),
+                expense.getSourceFinanceRequestId(),
                 expense.getExpenseTypeCode(),
                 clubFinanceSupport.resolveExpenseTypeLabel(expense.getExpenseTypeCode()),
                 expense.getCategoryCode(),

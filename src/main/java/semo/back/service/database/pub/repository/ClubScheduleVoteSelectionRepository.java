@@ -12,5 +12,7 @@ public interface ClubScheduleVoteSelectionRepository extends JpaRepository<ClubS
 
     Optional<ClubScheduleVoteSelection> findByVoteIdAndClubProfileId(Long voteId, Long clubProfileId);
 
+    boolean existsByVoteId(Long voteId);
+
     void deleteByVoteId(Long voteId);
 }

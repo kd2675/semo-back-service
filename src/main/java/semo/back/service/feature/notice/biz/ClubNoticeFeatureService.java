@@ -52,6 +52,7 @@ public class ClubNoticeFeatureService {
     }
 
     public ClubNoticeHomeResponse getNoticeHome(Long clubId, String userKey, boolean pinnedOnly) {
+        clubNoticeService.requireNoticeFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
 
         List<ClubNotice> allNotices = access.isAdmin()

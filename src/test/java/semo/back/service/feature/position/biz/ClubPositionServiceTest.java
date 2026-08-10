@@ -185,7 +185,7 @@ class ClubPositionServiceTest {
         assertThat(response.permissionGroups())
                 .extracting(item -> item.featureKey() + ":" + item.displayName())
                 .containsExactly(
-                        "NOTICE:공지관리",
+                        "NOTICE:게시판 공지",
                         "ROLE_MANAGEMENT:직책관리"
                 );
         assertThat(response.positions()).singleElement().satisfies(position -> {

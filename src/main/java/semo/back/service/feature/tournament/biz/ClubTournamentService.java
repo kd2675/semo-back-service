@@ -40,6 +40,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -223,7 +224,8 @@ public class ClubTournamentService {
                 "대회 '" + current.getTitle() + "'을 수정했습니다.",
                 "대회 '" + current.getTitle() + "' 수정에 실패했습니다."
         );
-        boolean resubmitRequired = APPROVAL_REJECTED.equals(current.getApprovalStatus());
+        boolean resubmitRequired = APPROVAL_REJECTED.equals(current.getApprovalStatus())
+                || (APPROVAL_APPROVED.equals(current.getApprovalStatus()) && hasMaterialChanges(current, draft));
 
         TournamentRecord saved = tournamentRecordRepository.save(TournamentRecord.builder()
                 .tournamentRecordId(current.getTournamentRecordId())
@@ -439,7 +441,7 @@ public class ClubTournamentService {
     ) {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        TournamentRecord tournament = getTournament(clubId, tournamentRecordId);
+        TournamentRecord tournament = getTournamentForUpdate(clubId, tournamentRecordId);
         validateTournamentVisible(access, tournament);
         if (!isTournamentApproved(tournament)) {
             throw new SemoException.ValidationException("아직 승인되지 않은 대회입니다.");
@@ -765,6 +767,31 @@ public class ClubTournamentService {
     private TournamentRecord getTournament(Long clubId, Long tournamentRecordId) {
         return tournamentRecordRepository.findByTournamentRecordIdAndClubIdAndDeletedFalse(tournamentRecordId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TournamentRecord", "tournamentRecordId", tournamentRecordId));
+    }
+
+    private TournamentRecord getTournamentForUpdate(Long clubId, Long tournamentRecordId) {
+        return tournamentRecordRepository.findForUpdate(tournamentRecordId, clubId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException("TournamentRecord", "tournamentRecordId", tournamentRecordId));
+    }
+
+    private boolean hasMaterialChanges(
+            TournamentRecord current,
+            ClubTournamentSupport.TournamentDraft draft
+    ) {
+        return !Objects.equals(current.getTitle(), draft.title())
+                || !Objects.equals(current.getSummaryText(), draft.summaryText())
+                || !Objects.equals(current.getDetailText(), draft.detailText())
+                || !Objects.equals(current.getApplicationStartAt(), draft.applicationStartAt())
+                || !Objects.equals(current.getApplicationEndAt(), draft.applicationEndAt())
+                || !Objects.equals(current.getStartDate(), draft.startDate())
+                || !Objects.equals(current.getEndDate(), draft.endDate())
+                || !Objects.equals(current.getLocationLabel(), draft.locationLabel())
+                || !Objects.equals(current.getMatchFormat(), draft.matchFormat())
+                || !Objects.equals(current.getTeamMemberLimit(), draft.teamMemberLimit())
+                || !Objects.equals(current.getParticipantLimit(), draft.participantLimit())
+                || current.isFeeRequired() != draft.feeRequired()
+                || !Objects.equals(current.getFeeAmount(), draft.feeAmount())
+                || !Objects.equals(current.getFeeCurrencyCode(), draft.feeCurrencyCode());
     }
 
     private Map<Long, ClubProfile> loadClubProfiles(Collection<Long> clubProfileIds) {

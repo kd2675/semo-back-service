@@ -8,6 +8,8 @@ public record ClubScheduleResponse(
         Long clubId,
         String clubName,
         boolean admin,
+        boolean canCreateSchedule,
+        boolean canCreatePoll,
         int calendarYear,
         int calendarMonth,
         ScheduleOverviewResponse overview,

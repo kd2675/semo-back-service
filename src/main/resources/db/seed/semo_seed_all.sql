@@ -16,12 +16,12 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'JOIN_REQUEST',
-    '신규가입',
-    '가입 신청 대기열을 보고 승인 흐름을 운영합니다.',
+    '가입 신청',
+    '관리자가 가입 신청 대기열을 검토하고 승인 또는 반려합니다.',
     'group_add',
-    'USER_AND_ADMIN',
+    'ADMIN_ONLY',
     1,
-    58,
+    10,
     NOW(),
     NOW()
 FROM dual
@@ -44,12 +44,12 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'NOTICE',
-    '공지관리',
-    '공지 콘텐츠를 작성하고 게시판/캘린더에 공유합니다.',
+    '게시판 공지',
+    '대표 게시판에서 공지를 작성하고 공유 범위를 관리합니다.',
     'campaign',
     'USER_AND_ADMIN',
     1,
-    30,
+    20,
     NOW(),
     NOW()
 FROM dual
@@ -72,12 +72,12 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'ATTENDANCE',
-    '출석 체크',
-    '멤버 출석을 체크하고 출석 세션을 관리합니다.',
+    '일정 참석',
+    '대표 캘린더의 일정별 참가 응답과 참석 현황을 관리합니다.',
     'fact_check',
     'USER_AND_ADMIN',
     1,
-    10,
+    45,
     NOW(),
     NOW()
 FROM dual
@@ -100,12 +100,12 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'TIMELINE',
-    '타임라인',
-    '모임 전체 활동을 시간순 타임라인으로 확인합니다.',
+    '내 활동',
+    '멤버는 자신의 활동을 확인하고 운영진은 감사 로그에서 전체 활동을 조회합니다.',
     'timeline',
     'USER_AND_ADMIN',
     1,
-    20,
+    110,
     NOW(),
     NOW()
 FROM dual
@@ -129,7 +129,7 @@ INSERT INTO feature_catalog (
 SELECT
     'POLL',
     '투표',
-    '모임 투표를 작성, 공유, 관리합니다.',
+    '대표 캘린더에서 투표를 작성하고 응답 결과를 관리합니다.',
     'poll',
     'USER_AND_ADMIN',
     1,
@@ -156,12 +156,12 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'SCHEDULE_MANAGE',
-    '일정관리',
-    '일정 콘텐츠를 작성하고 게시판/캘린더에 공유합니다.',
+    '일정',
+    '대표 캘린더에서 일정을 작성하고 참가 응답을 관리합니다.',
     'edit_calendar',
     'USER_AND_ADMIN',
     1,
-    50,
+    30,
     NOW(),
     NOW()
 FROM dual
@@ -184,12 +184,12 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'TOURNAMENT_RECORD',
-    '대회기록',
-    '대회를 작성하고 관리자 승인 이후 참가신청과 참가 선수를 운영합니다.',
+    '대회 운영',
+    '대회 등록, 승인, 참가 신청과 참가자 확정을 한 흐름에서 운영합니다.',
     'emoji_events',
     'USER_AND_ADMIN',
     1,
-    55,
+    50,
     NOW(),
     NOW()
 FROM dual
@@ -212,12 +212,12 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'BRACKET',
-    '대진표',
-    '직접 작성하거나 대회 참가자를 불러와 대진표 초안을 만들고 관리자 승인을 받습니다.',
+    '대진표 초안',
+    '대회 참가자를 불러와 표준 시드 배치 초안을 만들고 관리자 승인을 받습니다.',
     'account_tree',
     'USER_AND_ADMIN',
     1,
-    57,
+    51,
     NOW(),
     NOW()
 FROM dual
@@ -240,12 +240,12 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'FINANCE',
-    '재정관리',
-    '커스텀 재정 항목을 발행하고 멤버별 납부 상태를 운영합니다.',
+    '회비·정산',
+    '회비 수납, 멤버 요청, 승인 지출과 지출 원장을 분리해 관리합니다.',
     'payments',
     'USER_AND_ADMIN',
     1,
-    58,
+    60,
     NOW(),
     NOW()
 FROM dual
@@ -273,7 +273,7 @@ SELECT
     'manage_accounts',
     'ADMIN_ONLY',
     1,
-    60,
+    100,
     NOW(),
     NOW()
 FROM dual
@@ -296,12 +296,12 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'MEMBER_DIRECTORY',
-    '회원 디렉터리',
-    '다른 회원의 직책, 한줄소개, 최근 활동을 한 화면에서 조회합니다.',
+    '멤버·조직',
+    '멤버가 공개한 프로필과 직책을 조회하며 최근 활동은 기본 비공개로 보호합니다.',
     'group_search',
     'USER_AND_ADMIN',
     1,
-    59,
+    80,
     NOW(),
     NOW()
 FROM dual
@@ -325,11 +325,11 @@ INSERT INTO feature_catalog (
 SELECT
     'FEEDBACK',
     '피드백',
-    '익명 또는 기명으로 건의, 불편 신고, 개선 요청을 남기고 운영 답변을 확인합니다.',
+    '비공개로 건의와 불편 신고를 접수하고 운영 답변을 확인합니다.',
     'forum',
     'USER_AND_ADMIN',
     1,
-    59,
+    90,
     NOW(),
     NOW()
 FROM dual
@@ -357,7 +357,7 @@ SELECT
     'assignment',
     'USER_AND_ADMIN',
     1,
-    59,
+    70,
     NOW(),
     NOW()
 FROM dual
@@ -366,6 +366,43 @@ WHERE NOT EXISTS (
     FROM feature_catalog
     WHERE feature_key = 'TODO'
 );
+
+-- Keep existing installations aligned with the current product navigation contract.
+UPDATE feature_catalog
+SET display_name = '가입 신청', description = '관리자가 가입 신청 대기열을 검토하고 승인 또는 반려합니다.', navigation_scope = 'ADMIN_ONLY', sort_order = 10, update_date = NOW()
+WHERE feature_key = 'JOIN_REQUEST';
+UPDATE feature_catalog
+SET display_name = '게시판 공지', description = '대표 게시판에서 공지를 작성하고 공유 범위를 관리합니다.', sort_order = 20, update_date = NOW()
+WHERE feature_key = 'NOTICE';
+UPDATE feature_catalog
+SET display_name = '일정', description = '대표 캘린더에서 일정을 작성하고 참가 응답을 관리합니다.', sort_order = 30, update_date = NOW()
+WHERE feature_key = 'SCHEDULE_MANAGE';
+UPDATE feature_catalog
+SET display_name = '투표', description = '대표 캘린더에서 투표를 작성하고 응답 결과를 관리합니다.', sort_order = 40, update_date = NOW()
+WHERE feature_key = 'POLL';
+UPDATE feature_catalog
+SET display_name = '일정 참석', description = '대표 캘린더의 일정별 참가 응답과 참석 현황을 관리합니다.', sort_order = 45, update_date = NOW()
+WHERE feature_key = 'ATTENDANCE';
+UPDATE feature_catalog
+SET display_name = '대회 운영', description = '대회 등록, 승인, 참가 신청과 참가자 확정을 한 흐름에서 운영합니다.', sort_order = 50, update_date = NOW()
+WHERE feature_key = 'TOURNAMENT_RECORD';
+UPDATE feature_catalog
+SET display_name = '대진표 초안', description = '대회 참가자를 불러와 표준 시드 배치 초안을 만들고 관리자 승인을 받습니다.', sort_order = 51, update_date = NOW()
+WHERE feature_key = 'BRACKET';
+UPDATE feature_catalog
+SET display_name = '회비·정산', description = '회비 수납, 멤버 요청, 승인 지출과 지출 원장을 분리해 관리합니다.', sort_order = 60, update_date = NOW()
+WHERE feature_key = 'FINANCE';
+UPDATE feature_catalog SET sort_order = 70, update_date = NOW() WHERE feature_key = 'TODO';
+UPDATE feature_catalog
+SET display_name = '멤버·조직', description = '멤버가 공개한 프로필과 직책을 조회하며 최근 활동은 기본 비공개로 보호합니다.', sort_order = 80, update_date = NOW()
+WHERE feature_key = 'MEMBER_DIRECTORY';
+UPDATE feature_catalog
+SET description = '비공개로 건의와 불편 신고를 접수하고 운영 답변을 확인합니다.', sort_order = 90, update_date = NOW()
+WHERE feature_key = 'FEEDBACK';
+UPDATE feature_catalog SET sort_order = 100, update_date = NOW() WHERE feature_key = 'ROLE_MANAGEMENT';
+UPDATE feature_catalog
+SET display_name = '내 활동', description = '멤버는 자신의 활동을 확인하고 운영진은 감사 로그에서 전체 활동을 조회합니다.', sort_order = 110, update_date = NOW()
+WHERE feature_key = 'TIMELINE';
 
 INSERT INTO feature_permission_catalog (
     permission_key,
@@ -1015,6 +1052,18 @@ INSERT INTO dashboard_widget_catalog (
 )
 SELECT 'ATTENDANCE_STATUS', 'Attendance Check', 'Check in and review attendance status.', 'fact_check', 'ATTENDANCE', 'USER_HOME', 1, 1, 40, 1, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'ATTENDANCE_STATUS');
+
+UPDATE dashboard_widget_catalog
+SET active = 0, update_date = NOW()
+WHERE widget_key = 'ATTENDANCE_STATUS';
+
+UPDATE dashboard_widget_catalog
+SET display_name = 'Bracket Draft', description = 'Approved bracket drafts and my latest pending draft.', update_date = NOW()
+WHERE widget_key = 'BRACKET_LATEST';
+
+UPDATE feature_permission_catalog
+SET display_name = '할 일 보관', description = '업무와 신청 이력을 보존한 채 운영 목록에서 보관합니다.', update_date = NOW()
+WHERE permission_key = 'TODO_DELETE_ANY';
 
 INSERT INTO dashboard_widget_catalog (
     widget_key,

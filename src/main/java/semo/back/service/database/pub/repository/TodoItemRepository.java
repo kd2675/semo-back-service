@@ -34,6 +34,16 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
     List<TodoItem> findClaimableTodos(Long clubId, Pageable pageable);
 
     @Query("""
+            select count(t)
+            from TodoItem t
+            where t.clubId = :clubId
+              and t.assignmentMode = 'OPEN_SUPPORT'
+              and t.assignedClubProfileId is null
+              and t.statusCode = 'OPEN'
+            """)
+    long countClaimableTodos(Long clubId);
+
+    @Query("""
             select t
             from TodoItem t
             where t.clubId = :clubId

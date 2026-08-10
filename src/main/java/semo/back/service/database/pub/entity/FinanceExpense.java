@@ -34,6 +34,9 @@ public class FinanceExpense extends CommonDateEntity {
     @Column(name = "entered_by_club_profile_id", nullable = false)
     private Long enteredByClubProfileId;
 
+    @Column(name = "source_finance_request_id", unique = true)
+    private Long sourceFinanceRequestId;
+
     @Column(name = "expense_type_code", nullable = false, length = 30)
     private String expenseTypeCode;
 

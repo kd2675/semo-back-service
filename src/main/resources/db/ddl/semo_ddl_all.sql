@@ -842,6 +842,7 @@ CREATE TABLE IF NOT EXISTS finance_expense (
     finance_expense_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     club_id BIGINT NOT NULL,
     entered_by_club_profile_id BIGINT NOT NULL,
+    source_finance_request_id BIGINT NULL,
     expense_type_code VARCHAR(30) NOT NULL,
     category_code VARCHAR(40) NOT NULL,
     title VARCHAR(200) NOT NULL,
@@ -853,7 +854,9 @@ CREATE TABLE IF NOT EXISTS finance_expense (
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT fk_finance_expense_club FOREIGN KEY (club_id) REFERENCES club(club_id),
-    CONSTRAINT fk_finance_expense_entered_by FOREIGN KEY (entered_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+    CONSTRAINT fk_finance_expense_entered_by FOREIGN KEY (entered_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_finance_expense_source_request FOREIGN KEY (source_finance_request_id) REFERENCES finance_request(finance_request_id),
+    CONSTRAINT uk_finance_expense_source_request UNIQUE (source_finance_request_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_finance_expense_club_spent

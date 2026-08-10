@@ -10,6 +10,7 @@ import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.notice.biz.ClubNoticeService;
 import semo.back.service.feature.schedule.biz.policy.ClubSchedulePermissionService;
 import semo.back.service.feature.notice.vo.ClubNoticeSummaryResponse;
@@ -29,7 +30,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubScheduleHomeService {
+    private static final String FEATURE_SCHEDULE_MANAGE = "SCHEDULE_MANAGE";
+
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubFeatureService clubFeatureService;
     private final ClubScheduleService clubScheduleService;
     private final ClubSchedulePermissionService clubSchedulePermissionService;
     private final ClubNoticeService clubNoticeService;
@@ -39,6 +43,7 @@ public class ClubScheduleHomeService {
     private final ClubContentShareService clubContentShareService;
 
     public ClubScheduleHomeResponse getScheduleHome(Long clubId, String userKey) {
+        clubFeatureService.requireFeatureEnabled(clubId, FEATURE_SCHEDULE_MANAGE, "일정");
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
 
         List<ClubScheduleEvent> events = loadHomeEvents(access, clubId);
