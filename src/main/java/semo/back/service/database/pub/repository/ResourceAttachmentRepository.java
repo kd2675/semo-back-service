@@ -25,4 +25,6 @@ public interface ResourceAttachmentRepository extends JpaRepository<ResourceAtta
     );
 
     Optional<ResourceAttachment> findByFileNameAndDeletedFalse(String fileName);
+
+    boolean existsByFileName(String fileName);
 }

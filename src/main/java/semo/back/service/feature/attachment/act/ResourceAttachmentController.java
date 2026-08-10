@@ -1,11 +1,16 @@
 package semo.back.service.feature.attachment.act;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import auth.common.core.context.RequirePrincipalRole;
 import auth.common.core.context.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -69,6 +74,28 @@ public class ResourceAttachmentController {
                 resourceAttachmentService.deleteAttachment(clubId, attachmentId, requireUserKey(userContext)),
                 "첨부파일 삭제 성공"
         );
+    }
+
+    @GetMapping("/{attachmentId}/download")
+    public ResponseEntity<byte[]> downloadAttachment(
+            @PathVariable Long clubId,
+            @PathVariable Long attachmentId,
+            UserContext userContext
+    ) {
+        ResourceAttachmentService.AttachmentDownload download = resourceAttachmentService.downloadAttachment(
+                clubId,
+                attachmentId,
+                requireUserKey(userContext)
+        );
+        ContentDisposition contentDisposition = ContentDisposition.attachment()
+                .filename(download.originalFileName(), StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(download.content().length)
+                .body(download.content());
     }
 
     private String requireUserKey(UserContext userContext) {

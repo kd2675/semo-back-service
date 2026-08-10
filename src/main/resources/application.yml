@@ -94,3 +94,6 @@ management:
 integration:
   image:
     base-url: http://localhost:8081
+    internal-token: ${ATTACHMENT_INTERNAL_TOKEN:local-semo-attachment-token}
+    orphan-reconcile-initial-delay-ms: 120000
+    orphan-reconcile-delay-ms: 900000

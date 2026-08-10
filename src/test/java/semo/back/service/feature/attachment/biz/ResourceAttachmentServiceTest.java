@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -17,7 +18,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.common.util.AttachmentFileUrlResolver;
 import semo.back.service.common.util.AttachmentFinalizeClient;
 import semo.back.service.common.util.AttachmentFinalizeClient.FinalizedAttachment;
 import semo.back.service.database.pub.entity.ClubProfile;
@@ -36,9 +36,6 @@ class ResourceAttachmentServiceTest {
     private ResourceAttachmentRepository resourceAttachmentRepository;
     @Mock
     private AttachmentFinalizeClient attachmentFinalizeClient;
-    @Mock
-    private AttachmentFileUrlResolver attachmentFileUrlResolver;
-
     @InjectMocks
     private ResourceAttachmentService resourceAttachmentService;
 
@@ -59,10 +56,8 @@ class ResourceAttachmentServiceTest {
         )).thenReturn(finalized());
         when(resourceAttachmentRepository.findByFileNameAndDeletedFalse(finalized().fileName()))
                 .thenReturn(Optional.empty());
-        when(resourceAttachmentRepository.save(any(ResourceAttachment.class)))
+        when(resourceAttachmentRepository.saveAndFlush(any(ResourceAttachment.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(attachmentFileUrlResolver.resolveDownloadUrl(finalized().fileName(), "운영 계획.pdf"))
-                .thenReturn("http://localhost:8081/files/final.pdf?downloadName=x");
 
         var response = resourceAttachmentService.createAttachment(
                 1L,
@@ -80,6 +75,7 @@ class ResourceAttachmentServiceTest {
                 .returns("application/pdf", item -> item.contentType())
                 .returns(128L, item -> item.sizeBytes())
                 .returns("OWNER_AND_ADMIN", item -> item.visibilityScope());
+        verify(attachmentFinalizeClient).confirmFinalizedAttachment(finalized().fileName());
     }
 
     @Test
@@ -125,9 +121,6 @@ class ResourceAttachmentServiceTest {
         when(clubAccessResolver.requireActiveMember(1L, "user-key")).thenReturn(access);
         when(resourceAttachmentRepository.findByFileNameAndDeletedFalse(existing.getFileName()))
                 .thenReturn(Optional.of(existing));
-        when(attachmentFileUrlResolver.resolveDownloadUrl(existing.getFileName(), existing.getOriginalFileName()))
-                .thenReturn("http://localhost:8081/files/final.pdf?downloadName=x");
-
         var response = resourceAttachmentService.createAttachment(
                 1L,
                 "user-key",
@@ -145,6 +138,69 @@ class ResourceAttachmentServiceTest {
                 .countByClubIdAndResourceTypeAndResourceIdAndDeletedFalse(any(), any(), any());
     }
 
+    @Test
+    void createAttachment_databaseFailure_deletesNewlyFinalizedFile() {
+        ClubAccessResolver.ClubAccess access = access(11L);
+        when(clubAccessResolver.requireActiveMember(1L, "user-key")).thenReturn(access);
+        when(resourceAttachmentPolicy.requireCanAttachForUpdate(access, "FEEDBACK", 31L))
+                .thenReturn("OWNER_AND_ADMIN");
+        when(resourceAttachmentRepository.countByClubIdAndResourceTypeAndResourceIdAndDeletedFalse(
+                1L,
+                "FEEDBACK",
+                31L
+        )).thenReturn(0L);
+        when(attachmentFinalizeClient.finalizeAttachment(any(), any())).thenReturn(finalized());
+        when(resourceAttachmentRepository.findByFileNameAndDeletedFalse(finalized().fileName()))
+                .thenReturn(Optional.empty());
+        doThrow(new IllegalStateException("database unavailable"))
+                .when(resourceAttachmentRepository)
+                .saveAndFlush(any(ResourceAttachment.class));
+
+        assertThatThrownBy(() -> resourceAttachmentService.createAttachment(
+                1L,
+                "user-key",
+                new CreateResourceAttachmentRequest(
+                        "FEEDBACK",
+                        31L,
+                        "temp/files/2026/08/10/file.pdf",
+                        "운영 계획.pdf"
+                )
+        )).isInstanceOf(IllegalStateException.class);
+
+        verify(attachmentFinalizeClient).deleteFinalizedAttachment(finalized().fileName());
+    }
+
+    @Test
+    void downloadAttachment_authorizedResource_readsThroughProtectedFileClient() {
+        ClubAccessResolver.ClubAccess access = mock(ClubAccessResolver.ClubAccess.class);
+        ResourceAttachment attachment = ResourceAttachment.builder()
+                .resourceAttachmentId(91L)
+                .clubId(1L)
+                .resourceType("FEEDBACK")
+                .resourceId(31L)
+                .uploaderClubProfileId(11L)
+                .fileName(finalized().fileName())
+                .originalFileName("운영 계획.pdf")
+                .contentType("application/pdf")
+                .sizeBytes(4L)
+                .visibilityScope("OWNER_AND_ADMIN")
+                .deleted(false)
+                .build();
+        when(clubAccessResolver.requireActiveMember(1L, "user-key")).thenReturn(access);
+        when(resourceAttachmentRepository.findByResourceAttachmentIdAndClubIdAndDeletedFalse(91L, 1L))
+                .thenReturn(Optional.of(attachment));
+        when(attachmentFinalizeClient.downloadAttachment(attachment.getFileName()))
+                .thenReturn(new byte[] {1, 2, 3, 4});
+
+        var download = resourceAttachmentService.downloadAttachment(1L, 91L, "user-key");
+
+        assertThat(download)
+                .returns("운영 계획.pdf", item -> item.originalFileName())
+                .returns("application/pdf", item -> item.contentType())
+                .returns(4, item -> item.content().length);
+        verify(resourceAttachmentPolicy).requireCanView(access, "FEEDBACK", 31L);
+    }
+
     private ClubAccessResolver.ClubAccess access(Long clubProfileId) {
         ClubProfile clubProfile = mock(ClubProfile.class);
         ClubAccessResolver.ClubAccess access = mock(ClubAccessResolver.ClubAccess.class);
@@ -160,7 +216,8 @@ class ResourceAttachmentServiceTest {
                 "application/pdf",
                 128L,
                 "http://localhost:8081/files/final.pdf",
-                false
+                false,
+                true
         );
     }
 }

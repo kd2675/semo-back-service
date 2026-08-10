@@ -17,6 +17,7 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
+    dialect: org.hibernate.dialect.H2Dialect
   batch:
     jdbc:
       initialize-schema: always
@@ -41,3 +42,7 @@ database:
     hibernate:
       ddl-auto: create-drop
       dialect: org.hibernate.dialect.H2Dialect
+
+integration:
+  image:
+    internal-token: test-semo-attachment-token

@@ -6,10 +6,13 @@ import java.util.List;
 import java.util.Locale;
 
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.common.util.AttachmentFileUrlResolver;
 import semo.back.service.common.util.AttachmentFinalizeClient;
 import semo.back.service.common.util.AttachmentFinalizeClient.FinalizedAttachment;
 import semo.back.service.database.pub.entity.ResourceAttachment;
@@ -23,6 +26,7 @@ import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ResourceAttachmentService {
+    private static final Logger logger = LoggerFactory.getLogger(ResourceAttachmentService.class);
     private static final int MAX_ATTACHMENTS_PER_RESOURCE = 10;
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -30,7 +34,6 @@ public class ResourceAttachmentService {
     private final ResourceAttachmentPolicy resourceAttachmentPolicy;
     private final ResourceAttachmentRepository resourceAttachmentRepository;
     private final AttachmentFinalizeClient attachmentFinalizeClient;
-    private final AttachmentFileUrlResolver attachmentFileUrlResolver;
 
     public List<ResourceAttachmentResponse> getAttachments(
             Long clubId,
@@ -84,28 +87,64 @@ public class ResourceAttachmentService {
                 request.tempFileName(),
                 targetDir
         );
+        boolean lifecycleRegistered = finalized.newlyFinalized()
+                && registerFinalizedAttachmentLifecycle(finalized.fileName());
         ResourceAttachment existing = resourceAttachmentRepository
                 .findByFileNameAndDeletedFalse(finalized.fileName())
                 .orElse(null);
         if (existing != null) {
+            confirmImmediatelyWhenUnmanaged(finalized, lifecycleRegistered);
             return requireSameAttachmentTarget(existing, clubId, resourceType, resourceId, access);
         }
 
-        ResourceAttachment saved = resourceAttachmentRepository.save(ResourceAttachment.builder()
-                .clubId(clubId)
-                .resourceType(resourceType)
-                .resourceId(resourceId)
-                .uploaderClubProfileId(access.clubProfile().getClubProfileId())
-                .fileName(finalized.fileName())
-                .originalFileName(originalFileName)
-                .contentType(finalized.contentType())
-                .sizeBytes(finalized.sizeBytes())
-                .visibilityScope(visibilityScope)
-                .deleted(false)
-                .deletedByClubProfileId(null)
-                .deletedAt(null)
-                .build());
-        return toResponse(saved);
+        try {
+            ResourceAttachment saved = resourceAttachmentRepository.saveAndFlush(ResourceAttachment.builder()
+                    .clubId(clubId)
+                    .resourceType(resourceType)
+                    .resourceId(resourceId)
+                    .uploaderClubProfileId(access.clubProfile().getClubProfileId())
+                    .fileName(finalized.fileName())
+                    .originalFileName(originalFileName)
+                    .contentType(finalized.contentType())
+                    .sizeBytes(finalized.sizeBytes())
+                    .visibilityScope(visibilityScope)
+                    .deleted(false)
+                    .deletedByClubProfileId(null)
+                    .deletedAt(null)
+                    .build());
+            confirmImmediatelyWhenUnmanaged(finalized, lifecycleRegistered);
+            return toResponse(saved);
+        } catch (RuntimeException exception) {
+            if (finalized.newlyFinalized() && !lifecycleRegistered) {
+                deleteFinalizedAttachmentSafely(finalized.fileName());
+            }
+            throw exception;
+        }
+    }
+
+    public AttachmentDownload downloadAttachment(Long clubId, Long attachmentId, String userKey) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        ResourceAttachment attachment = resourceAttachmentRepository
+                .findByResourceAttachmentIdAndClubIdAndDeletedFalse(attachmentId, clubId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException(
+                        "ResourceAttachment",
+                        "attachmentId",
+                        attachmentId
+                ));
+        resourceAttachmentPolicy.requireCanView(
+                access,
+                attachment.getResourceType(),
+                attachment.getResourceId()
+        );
+        byte[] content = attachmentFinalizeClient.downloadAttachment(attachment.getFileName());
+        if (content.length != attachment.getSizeBytes()) {
+            throw new SemoException.ValidationException("저장된 첨부파일 크기가 등록 정보와 일치하지 않습니다.");
+        }
+        return new AttachmentDownload(
+                attachment.getOriginalFileName(),
+                attachment.getContentType(),
+                content
+        );
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
@@ -199,13 +238,61 @@ public class ResourceAttachmentService {
                 attachment.getContentType(),
                 attachment.getSizeBytes(),
                 attachment.getVisibilityScope(),
-                attachmentFileUrlResolver.resolveDownloadUrl(
-                        attachment.getFileName(),
-                        attachment.getOriginalFileName()
-                ),
+                "/api/semo/v1/clubs/" + attachment.getClubId()
+                        + "/attachments/" + attachment.getResourceAttachmentId()
+                        + "/download",
                 attachment.getCreateDate() == null
                         ? null
                         : DATE_TIME_FORMATTER.format(attachment.getCreateDate())
         );
+    }
+
+    private boolean registerFinalizedAttachmentLifecycle(String fileName) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return false;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == TransactionSynchronization.STATUS_COMMITTED) {
+                    confirmFinalizedAttachmentSafely(fileName);
+                } else {
+                    deleteFinalizedAttachmentSafely(fileName);
+                }
+            }
+        });
+        return true;
+    }
+
+    private void confirmImmediatelyWhenUnmanaged(
+            FinalizedAttachment finalized,
+            boolean lifecycleRegistered
+    ) {
+        if (finalized.newlyFinalized() && !lifecycleRegistered) {
+            attachmentFinalizeClient.confirmFinalizedAttachment(finalized.fileName());
+        }
+    }
+
+    private void confirmFinalizedAttachmentSafely(String fileName) {
+        try {
+            attachmentFinalizeClient.confirmFinalizedAttachment(fileName);
+        } catch (RuntimeException exception) {
+            logger.warn("Failed to confirm finalized attachment. Reconciliation will retry: {}", fileName, exception);
+        }
+    }
+
+    private void deleteFinalizedAttachmentSafely(String fileName) {
+        try {
+            attachmentFinalizeClient.deleteFinalizedAttachment(fileName);
+        } catch (RuntimeException exception) {
+            logger.warn("Failed to remove rolled-back attachment. Reconciliation will retry: {}", fileName, exception);
+        }
+    }
+
+    public record AttachmentDownload(
+            String originalFileName,
+            String contentType,
+            byte[] content
+    ) {
     }
 }

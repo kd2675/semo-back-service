@@ -21,6 +21,10 @@
   - `bracket`
   - `role management`
   - `admin activity log`
+  - operating term / handover
+  - decision log
+  - persistent notification
+  - common resource attachment
 - 인증 방식
   - `local-direct`: Semo 프론트가 access token의 사용자 이름/식별자/역할 헤더를 전달
   - `local`: Cloud Gateway가 JWT를 검증하고 사용자 식별 헤더를 재주입
@@ -31,6 +35,13 @@
   - 프론트/이미지 서버에서 임시 업로드
   - 백엔드는 `ImageFinalizeClient`로 `/files/finalize` 호출
   - DB에는 `fileName` 중심으로 저장하고 URL은 `ImageFileUrlResolver`가 조합
+- 첨부파일 처리
+  - 프론트는 이미지 서버의 `/upload/temp-file`에 임시 업로드
+  - 백엔드는 동일한 `ATTACHMENT_INTERNAL_TOKEN`으로 이미지 서버의 내부 확정 API를 호출
+  - `resource_attachment` 저장 커밋 후 확정 표식을 제거하고, 롤백 시 파일을 보상 삭제
+  - 프로세스 중단으로 표식이 남으면 조정 작업이 DB 행 존재 여부에 따라 확정 또는 고아 삭제
+  - 다운로드는 공개 이미지 URL이 아니라 SEMO의 권한 검사 API를 거쳐 프록시
+  - 소프트 삭제 파일은 감사·보존 정책에 따라 물리 보존
 - 응답 계약
   - 성공 응답은 `web-common-core`의 `ResponseDataDTO`
   - 에러 응답은 `web-common-core`의 `ResponseErrorDTO`
@@ -63,6 +74,7 @@
   - 서비스 등록/발견
 - `image-back-server`
   - 이미지 확정 API `/files/finalize`
+  - 첨부 임시 업로드와 내부 확정·확인·조회·고아 정리 API
 - MySQL
   - 운영 데이터 저장소
 
@@ -106,6 +118,10 @@
 - `src/main/java/semo/back/service/feature/bracket`
 - `src/main/java/semo/back/service/feature/position`
 - `src/main/java/semo/back/service/feature/activity`
+- `src/main/java/semo/back/service/feature/attachment`
+- `src/main/java/semo/back/service/feature/notification`
+- `src/main/java/semo/back/service/feature/handover`
+- `src/main/java/semo/back/service/feature/decision`
 
 ## Semo Modular Pattern
 
@@ -205,6 +221,18 @@
 - `GET /api/semo/v1/clubs/{clubId}/admin/activity`
   - 클럽 관리자 감사 로그이며 기능 활성화 여부와 무관하게 항상 기록·조회
 
+### Notification / attachment
+- `GET /api/semo/v1/notifications`
+- `GET /api/semo/v1/notifications/summary`
+- `PUT /api/semo/v1/notifications/{notificationId}/read`
+- `PUT /api/semo/v1/notifications/read-all`
+- `GET /api/semo/v1/clubs/{clubId}/attachments`
+- `POST /api/semo/v1/clubs/{clubId}/attachments`
+- `GET /api/semo/v1/clubs/{clubId}/attachments/{attachmentId}/download`
+- `DELETE /api/semo/v1/clubs/{clubId}/attachments/{attachmentId}`
+
+첨부 목록과 다운로드는 모두 대상 업무·재정·피드백·인수인계·결정 기록의 실제 권한을 다시 판정합니다. 이미지 서버의 `semo/attachments/**` 최종 파일은 공개 `/files`로 조회할 수 없으며 내부 토큰 요청만 허용합니다. `dev`와 `prod`에서는 SEMO와 이미지 서버에 같은 `ATTACHMENT_INTERNAL_TOKEN`을 설정해야 합니다.
+
 ### Todo
 - `GET /api/semo/v1/clubs/{clubId}/more/todos`
 - `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/apply`
@@ -274,6 +302,8 @@
   - 재정 계좌·기간·예산·반복 청구·정정 전표와 세분화된 재정 권한을 추가하는 1회 운영 마이그레이션
   - `src/main/resources/db/ops/semo_tournament_operations_apply.sql`
   - 대회 팀 로스터·대기열·참가비 연결·시간표·체크인·결과 컬럼과 테이블을 추가하고 기존 신청자를 주장 로스터로 이관하는 1회 운영 마이그레이션
+  - `src/main/resources/db/ops/semo_todo_decision_operations_apply.sql`
+  - 인수인계 마이그레이션 이후 적용하며 업무 체크리스트·복수 담당자·댓글·반복·우선순위·일정/결정 연결과 결정 기록·참여자·관련 리소스·홈 위젯을 추가
   - `src/main/resources/db/ddl/semo_timeline_feature_remove.sql`
   - 폐기된 `TIMELINE` 카탈로그·활성화·권한 데이터만 외래 키 순서대로 제거
   - `src/main/resources/db/ddl/semo_schedule_attendance_integration.sql`

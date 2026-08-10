@@ -42,3 +42,7 @@ database:
           connection-timeout: 30000
           max-lifetime: 540000
           keepalive-time: 300000
+
+integration:
+  image:
+    internal-token: ${ATTACHMENT_INTERNAL_TOKEN}
