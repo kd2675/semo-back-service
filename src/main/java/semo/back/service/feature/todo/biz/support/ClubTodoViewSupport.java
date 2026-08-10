@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
+import semo.back.service.database.pub.entity.DecisionRecord;
 import semo.back.service.database.pub.entity.TodoItem;
 import semo.back.service.database.pub.entity.TodoItemApplication;
 import semo.back.service.database.pub.entity.TodoItemAssignee;
@@ -15,6 +16,7 @@ import semo.back.service.feature.todo.vo.TodoAssigneeResponse;
 import semo.back.service.feature.todo.vo.TodoItemApplicationResponse;
 import semo.back.service.feature.todo.vo.TodoSummaryResponse;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
@@ -138,6 +140,7 @@ public class ClubTodoViewSupport {
                 applicationCountByTodoItemId,
                 myApplicationByTodoItemId,
                 Map.of(),
+                Map.of(),
                 Map.of()
         );
     }
@@ -150,7 +153,8 @@ public class ClubTodoViewSupport {
             Map<Long, Integer> applicationCountByTodoItemId,
             Map<Long, TodoItemApplication> myApplicationByTodoItemId,
             Map<Long, List<Long>> assigneeIdsByTodoItemId,
-            Map<Long, ClubScheduleEvent> scheduleById
+            Map<Long, ClubScheduleEvent> scheduleById,
+            Map<Long, DecisionRecord> decisionById
     ) {
         TodoItemApplication myApplication = myApplicationByTodoItemId.get(item.getTodoItemId());
         String myApplicationStatus = myApplication == null ? null : myApplication.getApplicationStatus();
@@ -214,6 +218,16 @@ public class ClubTodoViewSupport {
                 recruitmentFull,
                 item.getLinkedScheduleEventId(),
                 resolveScheduleTitle(scheduleById, item.getLinkedScheduleEventId()),
+                item.getLinkedDecisionRecordId(),
+                resolveDecisionTitle(decisionById, item.getLinkedDecisionRecordId()),
+                normalizeRecurrenceFrequency(item.getRecurrenceFrequency()),
+                normalizeRecurrenceInterval(item.getRecurrenceInterval()),
+                formatDate(item.getRecurrenceEndDate()),
+                toRecurrenceLabel(
+                        item.getRecurrenceFrequency(),
+                        item.getRecurrenceInterval(),
+                        item.getRecurrenceEndDate()
+                ),
                 resolveDisplayName(profileById, item.getCreatedByClubProfileId()),
                 resolveDisplayName(profileById, item.getCompletedByClubProfileId()),
                 formatDateTime(item.getCompletedAt()),
@@ -328,6 +342,10 @@ public class ClubTodoViewSupport {
         return value == null ? null : value.format(REQUEST_DATE_TIME_FORMATTER);
     }
 
+    private String formatDate(LocalDate value) {
+        return value == null ? null : value.toString();
+    }
+
     private String formatDateTimeLabel(LocalDateTime value) {
         return value == null ? null : value.format(DATE_TIME_LABEL_FORMATTER);
     }
@@ -379,6 +397,33 @@ public class ClubTodoViewSupport {
                 : priorityCode.toUpperCase(Locale.ROOT);
     }
 
+    private String normalizeRecurrenceFrequency(String recurrenceFrequency) {
+        return recurrenceFrequency == null || recurrenceFrequency.isBlank()
+                ? "NONE"
+                : recurrenceFrequency.toUpperCase(Locale.ROOT);
+    }
+
+    private int normalizeRecurrenceInterval(Integer recurrenceInterval) {
+        return recurrenceInterval == null ? 1 : Math.max(1, recurrenceInterval);
+    }
+
+    private String toRecurrenceLabel(
+            String recurrenceFrequency,
+            Integer recurrenceInterval,
+            LocalDate recurrenceEndDate
+    ) {
+        String frequency = normalizeRecurrenceFrequency(recurrenceFrequency);
+        if ("NONE".equals(frequency)) {
+            return "반복 없음";
+        }
+        int interval = normalizeRecurrenceInterval(recurrenceInterval);
+        String unit = "WEEKLY".equals(frequency) ? "주" : "개월";
+        String label = interval == 1
+                ? "WEEKLY".equals(frequency) ? "매주" : "매월"
+                : interval + unit + "마다";
+        return recurrenceEndDate == null ? label : label + " · " + recurrenceEndDate + "까지";
+    }
+
     private List<Long> resolveAssigneeIds(
             TodoItem item,
             Map<Long, List<Long>> assigneeIdsByTodoItemId
@@ -398,5 +443,13 @@ public class ClubTodoViewSupport {
         }
         ClubScheduleEvent event = scheduleById.get(eventId);
         return event == null ? null : event.getTitle();
+    }
+
+    private String resolveDecisionTitle(Map<Long, DecisionRecord> decisionById, Long decisionRecordId) {
+        if (decisionRecordId == null) {
+            return null;
+        }
+        DecisionRecord decision = decisionById.get(decisionRecordId);
+        return decision == null ? null : decision.getTitle();
     }
 }

@@ -327,6 +327,11 @@ CREATE TABLE IF NOT EXISTS todo_item (
     work_start_at DATETIME NULL,
     work_end_at DATETIME NULL,
     linked_schedule_event_id BIGINT NULL,
+    linked_decision_record_id BIGINT NULL,
+    recurrence_frequency VARCHAR(20) NOT NULL DEFAULT 'NONE',
+    recurrence_interval INT NOT NULL DEFAULT 1,
+    recurrence_end_date DATE NULL,
+    recurrence_source_todo_item_id BIGINT NULL,
     completed_by_club_profile_id BIGINT NULL,
     completed_at DATETIME NULL,
     create_date DATETIME NOT NULL,
@@ -335,7 +340,9 @@ CREATE TABLE IF NOT EXISTS todo_item (
     CONSTRAINT fk_todo_item_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id),
     CONSTRAINT fk_todo_item_assigned_profile FOREIGN KEY (assigned_club_profile_id) REFERENCES club_profile(club_profile_id),
     CONSTRAINT fk_todo_item_assigned_by FOREIGN KEY (assigned_by_club_profile_id) REFERENCES club_profile(club_profile_id),
-    CONSTRAINT fk_todo_item_completed_by FOREIGN KEY (completed_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+    CONSTRAINT fk_todo_item_completed_by FOREIGN KEY (completed_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT uk_todo_item_recurrence_source UNIQUE (recurrence_source_todo_item_id),
+    CONSTRAINT fk_todo_item_recurrence_source FOREIGN KEY (recurrence_source_todo_item_id) REFERENCES todo_item(todo_item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_todo_item_status
@@ -346,6 +353,9 @@ CREATE INDEX idx_todo_item_assignment
 
 CREATE INDEX idx_todo_item_priority
     ON todo_item (club_id, status_code, priority_code, due_at, todo_item_id);
+
+CREATE INDEX idx_todo_item_recurrence
+    ON todo_item (club_id, recurrence_frequency, recurrence_end_date, todo_item_id);
 
 CREATE TABLE IF NOT EXISTS todo_item_assignee (
     todo_item_assignee_id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -1100,6 +1110,10 @@ CREATE INDEX idx_decision_record_review
 
 CREATE INDEX idx_decision_record_term
     ON decision_record (club_id, club_operating_term_id, status_code, decision_record_id);
+
+ALTER TABLE todo_item
+    ADD CONSTRAINT fk_todo_item_decision_record
+        FOREIGN KEY (linked_decision_record_id) REFERENCES decision_record(decision_record_id);
 
 CREATE TABLE IF NOT EXISTS decision_participant (
     decision_participant_id BIGINT AUTO_INCREMENT PRIMARY KEY,

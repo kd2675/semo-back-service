@@ -10,6 +10,7 @@ import semo.back.service.database.pub.entity.ClubMemberPosition;
 import semo.back.service.database.pub.entity.ClubPosition;
 import semo.back.service.database.pub.entity.ClubPositionPermission;
 import semo.back.service.database.pub.entity.ClubProfile;
+import semo.back.service.database.pub.entity.DecisionRecord;
 import semo.back.service.database.pub.entity.TodoItem;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
@@ -18,6 +19,7 @@ import semo.back.service.database.pub.repository.ClubPositionPermissionRepositor
 import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
+import semo.back.service.database.pub.repository.DecisionRecordRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.database.pub.repository.TodoItemApplicationRepository;
@@ -39,6 +41,7 @@ import semo.back.service.feature.todo.vo.UpdateClubTodoRequest;
 import semo.back.service.feature.todo.vo.UpdateTodoChecklistItemRequest;
 import semo.back.service.feature.todo.vo.UpdateTodoStatusRequest;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -82,6 +85,9 @@ class ClubTodoServiceTest {
     private TodoCommentRepository todoCommentRepository;
 
     @Autowired
+    private DecisionRecordRepository decisionRecordRepository;
+
+    @Autowired
     private ClubFeatureRepository clubFeatureRepository;
 
     @Autowired
@@ -115,6 +121,7 @@ class ClubTodoServiceTest {
         todoItemApplicationRepository.deleteAll();
         todoItemAssigneeRepository.deleteAll();
         todoItemRepository.deleteAll();
+        decisionRecordRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();
         clubPositionRepository.deleteAll();
@@ -1243,6 +1250,148 @@ class ClubTodoServiceTest {
         assertThat(collaboration.completedChecklistCount() == 1
                 && collaboration.totalChecklistCount() == 1
                 && collaboration.comments().size() == 1).isTrue();
+    }
+
+    @Test
+    void completeTodo_weeklyRecurrence_createsNextOccurrenceOnce() {
+        Long clubId = createEnabledClub("todo-owner-recurring", "Todo Owner Recurring", "Todo Club Recurring");
+        Long assigneeId = addActiveMember(clubId, "todo-member-recurring", "Todo Member Recurring");
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-recurring",
+                new CreateClubTodoRequest(
+                        "주간 장비 점검",
+                        "매주 장비 상태를 확인합니다.",
+                        "OPERATIONS",
+                        "DIRECT_ASSIGN",
+                        null,
+                        "2026-08-20T18:00:00",
+                        List.of(assigneeId),
+                        "HIGH",
+                        null,
+                        "2026-08-20T17:00:00",
+                        "2026-08-20T18:00:00",
+                        null,
+                        null,
+                        "WEEKLY",
+                        1,
+                        "2026-09-30"
+                )
+        ).todoItemId();
+        clubTodoCollaborationService.addChecklistItem(
+                clubId,
+                todoItemId,
+                "todo-owner-recurring",
+                new CreateTodoChecklistItemRequest("라켓 수량 확인")
+        );
+
+        clubTodoService.completeTodo(clubId, todoItemId, "todo-member-recurring");
+        TodoItem next = todoItemRepository.findByRecurrenceSourceTodoItemId(todoItemId).orElseThrow();
+
+        assertThat(List.of(
+                next.getDueAt(),
+                next.getWorkStartAt(),
+                next.getStatusCode(),
+                todoItemAssigneeRepository.countByTodoItemId(next.getTodoItemId()),
+                todoChecklistItemRepository.countByTodoItemId(next.getTodoItemId())
+        )).containsExactly(
+                LocalDateTime.parse("2026-08-27T18:00:00"),
+                LocalDateTime.parse("2026-08-27T17:00:00"),
+                "OPEN",
+                1L,
+                1L
+        );
+    }
+
+    @Test
+    void updateTodoStatus_reopenRecurringSourceWithNextOccurrence_throwsValidation() {
+        Long clubId = createEnabledClub("todo-owner-reopen", "Todo Owner Reopen", "Todo Club Reopen");
+        Long assigneeId = addActiveMember(clubId, "todo-member-reopen", "Todo Member Reopen");
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-reopen",
+                new CreateClubTodoRequest(
+                        "월간 기록 정리",
+                        null,
+                        "OPERATIONS",
+                        "DIRECT_ASSIGN",
+                        assigneeId,
+                        "2026-08-20T18:00:00",
+                        null,
+                        "NORMAL",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "MONTHLY",
+                        1,
+                        null
+                )
+        ).todoItemId();
+        clubTodoService.completeTodo(clubId, todoItemId, "todo-member-reopen");
+
+        assertThatThrownBy(() -> clubTodoService.updateTodoStatus(
+                clubId,
+                todoItemId,
+                "todo-owner-reopen",
+                new UpdateTodoStatusRequest("REOPEN")
+        )).hasMessageContaining("다음 반복 업무");
+    }
+
+    @Test
+    void createTodo_linkedMemberDecision_returnsDecisionTitle() {
+        Long clubId = createEnabledClub("todo-owner-decision", "Todo Owner Decision", "Todo Club Decision");
+        Long assigneeId = addActiveMember(clubId, "todo-member-decision", "Todo Member Decision");
+        Long ownerClubProfileId = findClubProfileId(clubId, "todo-owner-decision");
+        DecisionRecord decision = decisionRecordRepository.save(DecisionRecord.builder()
+                .clubId(clubId)
+                .clubOperatingTermId(null)
+                .recordType("DECISION")
+                .statusCode("CONFIRMED")
+                .visibilityScope("MEMBERS")
+                .title("정기 점검 운영 결정")
+                .decisionContent("매주 점검합니다.")
+                .backgroundContext(null)
+                .rationale(null)
+                .meetingAt(null)
+                .effectiveDate(LocalDate.of(2026, 8, 20))
+                .reviewDate(null)
+                .supersedesDecisionRecordId(null)
+                .createdByClubProfileId(ownerClubProfileId)
+                .confirmedByClubProfileId(ownerClubProfileId)
+                .confirmedAt(LocalDateTime.of(2026, 8, 10, 10, 0))
+                .archivedByClubProfileId(null)
+                .archivedAt(null)
+                .deleted(false)
+                .deletedByClubProfileId(null)
+                .deletedAt(null)
+                .build());
+
+        var created = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-decision",
+                new CreateClubTodoRequest(
+                        "결정 후속 업무",
+                        null,
+                        "OPERATIONS",
+                        "DIRECT_ASSIGN",
+                        assigneeId,
+                        null,
+                        null,
+                        "NORMAL",
+                        null,
+                        null,
+                        null,
+                        null,
+                        decision.getDecisionRecordId(),
+                        "NONE",
+                        1,
+                        null
+                )
+        );
+
+        assertThat(created.linkedDecisionTitle()).isEqualTo("정기 점검 운영 결정");
     }
 
     private Long createEnabledClub(String ownerUserKey, String ownerDisplayName, String clubName) {

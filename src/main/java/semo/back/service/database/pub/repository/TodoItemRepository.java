@@ -38,6 +38,8 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
 
     Optional<TodoItem> findByTodoItemIdAndClubId(Long todoItemId, Long clubId);
 
+    Optional<TodoItem> findByRecurrenceSourceTodoItemId(Long recurrenceSourceTodoItemId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select todo

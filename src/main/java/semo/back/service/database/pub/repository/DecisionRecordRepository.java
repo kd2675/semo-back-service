@@ -63,4 +63,15 @@ public interface DecisionRecordRepository extends JpaRepository<DecisionRecord, 
             order by decision.confirmedAt desc, decision.decisionRecordId desc
             """)
     List<DecisionRecord> findRecentConfirmed(Long clubId, Pageable pageable);
+
+    @Query("""
+            select decision
+            from DecisionRecord decision
+            where decision.clubId = :clubId
+              and decision.deleted = false
+              and decision.visibilityScope = 'MEMBERS'
+              and decision.statusCode in ('CONFIRMED', 'SUPERSEDED')
+            order by decision.confirmedAt desc, decision.decisionRecordId desc
+            """)
+    List<DecisionRecord> findTodoLinkOptions(Long clubId, Pageable pageable);
 }

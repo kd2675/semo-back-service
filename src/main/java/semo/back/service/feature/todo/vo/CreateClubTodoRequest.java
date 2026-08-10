@@ -22,8 +22,46 @@ public record CreateClubTodoRequest(
         Integer recruitmentCapacity,
         String workStartAt,
         String workEndAt,
-        Long linkedScheduleEventId
+        Long linkedScheduleEventId,
+        Long linkedDecisionRecordId,
+        String recurrenceFrequency,
+        Integer recurrenceInterval,
+        String recurrenceEndDate
 ) {
+    public CreateClubTodoRequest(
+            String title,
+            String description,
+            String todoType,
+            String assignmentMode,
+            Long assignedClubProfileId,
+            String dueAt,
+            List<Long> assignedClubProfileIds,
+            String priorityCode,
+            Integer recruitmentCapacity,
+            String workStartAt,
+            String workEndAt,
+            Long linkedScheduleEventId
+    ) {
+        this(
+                title,
+                description,
+                todoType,
+                assignmentMode,
+                assignedClubProfileId,
+                dueAt,
+                assignedClubProfileIds,
+                priorityCode,
+                recruitmentCapacity,
+                workStartAt,
+                workEndAt,
+                linkedScheduleEventId,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
     public CreateClubTodoRequest(
             String title,
             String description,
@@ -39,6 +77,10 @@ public record CreateClubTodoRequest(
                 assignmentMode,
                 assignedClubProfileId,
                 dueAt,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

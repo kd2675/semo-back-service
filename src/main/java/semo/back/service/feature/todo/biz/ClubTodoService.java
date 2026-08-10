@@ -8,11 +8,15 @@ import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
+import semo.back.service.database.pub.entity.DecisionRecord;
+import semo.back.service.database.pub.entity.TodoChecklistItem;
 import semo.back.service.database.pub.entity.TodoItem;
 import semo.back.service.database.pub.entity.TodoItemApplication;
 import semo.back.service.database.pub.entity.TodoItemAssignee;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
+import semo.back.service.database.pub.repository.DecisionRecordRepository;
+import semo.back.service.database.pub.repository.TodoChecklistItemRepository;
 import semo.back.service.database.pub.repository.TodoItemApplicationRepository;
 import semo.back.service.database.pub.repository.TodoItemAssigneeRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
@@ -31,6 +35,7 @@ import semo.back.service.feature.todo.vo.CreateTodoApplicationRequest;
 import semo.back.service.feature.todo.vo.ReviewTodoItemApplicationRequest;
 import semo.back.service.feature.todo.vo.TodoActionResponse;
 import semo.back.service.feature.todo.vo.TodoAssigneeResponse;
+import semo.back.service.feature.todo.vo.TodoDecisionOptionResponse;
 import semo.back.service.feature.todo.vo.TodoItemApplicationResponse;
 import semo.back.service.feature.todo.vo.TodoItemApplicationsResponse;
 import semo.back.service.feature.todo.vo.TodoMemberOptionResponse;
@@ -39,6 +44,7 @@ import semo.back.service.feature.todo.vo.TodoSummaryResponse;
 import semo.back.service.feature.todo.vo.UpdateClubTodoRequest;
 import semo.back.service.feature.todo.vo.UpdateTodoStatusRequest;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
@@ -71,6 +77,9 @@ public class ClubTodoService {
     private static final String APPLICATION_STATUS_SELECTED = "SELECTED";
     private static final String APPLICATION_STATUS_REJECTED = "REJECTED";
     private static final String APPLICATION_STATUS_WITHDRAWN = "WITHDRAWN";
+    private static final String RECURRENCE_NONE = "NONE";
+    private static final String RECURRENCE_WEEKLY = "WEEKLY";
+    private static final String RECURRENCE_MONTHLY = "MONTHLY";
 
     private static final int CLAIMABLE_PAGE_SIZE = 8;
     private static final int MAX_CLAIMABLE_PAGE_SIZE = 50;
@@ -81,8 +90,10 @@ public class ClubTodoService {
     private final TodoItemRepository todoItemRepository;
     private final TodoItemApplicationRepository todoItemApplicationRepository;
     private final TodoItemAssigneeRepository todoItemAssigneeRepository;
+    private final TodoChecklistItemRepository todoChecklistItemRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubScheduleEventRepository clubScheduleEventRepository;
+    private final DecisionRecordRepository decisionRecordRepository;
     private final ClubTodoCommandSupport clubTodoCommandSupport;
     private final ClubTodoViewSupport clubTodoViewSupport;
     private final ClubNotificationPublisher clubNotificationPublisher;
@@ -164,6 +175,9 @@ public class ClubTodoService {
         Map<Long, ClubScheduleEvent> scheduleById = resolveScheduleById(
                 List.of(myItems, prioritizedClaimableItems, recentCompletedItems)
         );
+        Map<Long, DecisionRecord> decisionById = resolveDecisionById(
+                List.of(myItems, prioritizedClaimableItems, recentCompletedItems)
+        );
         Map<Long, Integer> applicationCountByTodoItemId =
                 clubTodoViewSupport.resolveApplicationCountByTodoItemId(visibleApplications);
         Map<Long, TodoItemApplication> myApplicationByTodoItemId = myVisibleApplications.stream()
@@ -185,7 +199,8 @@ public class ClubTodoService {
                         applicationCountByTodoItemId,
                         myApplicationByTodoItemId,
                         assigneeIdsByTodoItemId,
-                        scheduleById
+                        scheduleById,
+                        decisionById
                 ))
                 .toList();
         List<TodoSummaryResponse> prioritizedClaimableTodos = prioritizedClaimableItems.stream()
@@ -197,7 +212,8 @@ public class ClubTodoService {
                         applicationCountByTodoItemId,
                         myApplicationByTodoItemId,
                         assigneeIdsByTodoItemId,
-                        scheduleById
+                        scheduleById,
+                        decisionById
                 ))
                 .toList();
         List<TodoSummaryResponse> recentCompletedTodos = recentCompletedItems.stream()
@@ -209,7 +225,8 @@ public class ClubTodoService {
                         applicationCountByTodoItemId,
                         myApplicationByTodoItemId,
                         assigneeIdsByTodoItemId,
-                        scheduleById
+                        scheduleById,
+                        decisionById
                 ))
                 .toList();
 
@@ -364,6 +381,7 @@ public class ClubTodoService {
         }
 
         TodoItem updated = saveWithStatus(current, STATUS_COMPLETED, access.clubProfile().getClubProfileId());
+        createNextRecurringTodo(updated, access.clubProfile().getClubProfileId());
         ClubActivityContextHolder.setDetails(
                 "'" + current.getTitle() + "' 업무를 완료했습니다.",
                 "'" + current.getTitle() + "' 업무를 완료하지 못했습니다."
@@ -433,6 +451,7 @@ public class ClubTodoService {
                 List.of(allAssignees)
         );
         Map<Long, ClubScheduleEvent> scheduleById = resolveScheduleById(List.of(allItems));
+        Map<Long, DecisionRecord> decisionById = resolveDecisionById(List.of(allItems));
         Map<Long, Integer> applicationCountByTodoItemId =
                 clubTodoViewSupport.resolveApplicationCountByTodoItemId(allApplications);
 
@@ -454,6 +473,7 @@ public class ClubTodoService {
                 (int) allItems.stream().filter(clubTodoViewSupport::isOverdue).count(),
                 availableMembers,
                 buildScheduleOptions(clubId),
+                buildDecisionOptions(clubId),
                 pageItems.stream()
                         .map(item -> clubTodoViewSupport.toSummaryResponse(
                                 item,
@@ -463,7 +483,8 @@ public class ClubTodoService {
                                 applicationCountByTodoItemId,
                                 Map.of(),
                                 assigneeIdsByTodoItemId,
-                                scheduleById
+                                scheduleById,
+                                decisionById
                         ))
                         .toList(),
                 lastItem == null ? null : lastItem.getTodoItemId(),
@@ -586,6 +607,11 @@ public class ClubTodoService {
                     .workStartAt(todoItem.getWorkStartAt())
                     .workEndAt(todoItem.getWorkEndAt())
                     .linkedScheduleEventId(todoItem.getLinkedScheduleEventId())
+                    .linkedDecisionRecordId(todoItem.getLinkedDecisionRecordId())
+                    .recurrenceFrequency(todoItem.getRecurrenceFrequency())
+                    .recurrenceInterval(todoItem.getRecurrenceInterval())
+                    .recurrenceEndDate(todoItem.getRecurrenceEndDate())
+                    .recurrenceSourceTodoItemId(todoItem.getRecurrenceSourceTodoItemId())
                     .completedByClubProfileId(null)
                     .completedAt(null)
                     .build());
@@ -656,7 +682,25 @@ public class ClubTodoService {
                 "업무 종료 시간 형식이 잘못되었습니다."
         );
         clubTodoCommandSupport.validateWorkWindow(workStartAt, workEndAt);
+        String recurrenceFrequency = clubTodoCommandSupport.normalizeRecurrenceFrequency(
+                request.recurrenceFrequency()
+        );
+        int recurrenceInterval = clubTodoCommandSupport.normalizeRecurrenceInterval(
+                recurrenceFrequency,
+                request.recurrenceInterval()
+        );
+        LocalDate recurrenceEndDate = clubTodoCommandSupport.parseDate(
+                request.recurrenceEndDate(),
+                "반복 종료일 형식이 잘못되었습니다."
+        );
+        validateRecurrence(
+                recurrenceFrequency,
+                recurrenceEndDate,
+                dueAt,
+                workStartAt
+        );
         validateLinkedScheduleEvent(clubId, request.linkedScheduleEventId());
+        validateLinkedDecisionRecord(clubId, request.linkedDecisionRecordId());
         Map<Long, ClubAccessResolver.ClubMemberSnapshot> activeMemberByProfileId = resolveActiveMembersByProfileId(clubId);
         List<Long> assignedClubProfileIds = resolveAssignedClubProfileIds(
                 assignmentMode,
@@ -688,6 +732,11 @@ public class ClubTodoService {
                 .workStartAt(workStartAt)
                 .workEndAt(workEndAt)
                 .linkedScheduleEventId(request.linkedScheduleEventId())
+                .linkedDecisionRecordId(request.linkedDecisionRecordId())
+                .recurrenceFrequency(recurrenceFrequency)
+                .recurrenceInterval(recurrenceInterval)
+                .recurrenceEndDate(recurrenceEndDate)
+                .recurrenceSourceTodoItemId(null)
                 .completedByClubProfileId(null)
                 .completedAt(null)
                 .build());
@@ -714,7 +763,8 @@ public class ClubTodoService {
                 Map.of(),
                 Map.of(),
                 resolveAssigneeIdsByTodoItemId(List.of(List.of(saved)), assignees),
-                resolveScheduleById(List.of(List.of(saved)))
+                resolveScheduleById(List.of(List.of(saved))),
+                resolveDecisionById(List.of(List.of(saved)))
         );
     }
 
@@ -751,7 +801,25 @@ public class ClubTodoService {
                 "업무 종료 시간 형식이 잘못되었습니다."
         );
         clubTodoCommandSupport.validateWorkWindow(workStartAt, workEndAt);
+        String recurrenceFrequency = clubTodoCommandSupport.normalizeRecurrenceFrequency(
+                request.recurrenceFrequency()
+        );
+        int recurrenceInterval = clubTodoCommandSupport.normalizeRecurrenceInterval(
+                recurrenceFrequency,
+                request.recurrenceInterval()
+        );
+        LocalDate recurrenceEndDate = clubTodoCommandSupport.parseDate(
+                request.recurrenceEndDate(),
+                "반복 종료일 형식이 잘못되었습니다."
+        );
+        validateRecurrence(
+                recurrenceFrequency,
+                recurrenceEndDate,
+                dueAt,
+                workStartAt
+        );
         validateLinkedScheduleEvent(clubId, request.linkedScheduleEventId());
+        validateLinkedDecisionRecord(clubId, request.linkedDecisionRecordId());
         Map<Long, ClubAccessResolver.ClubMemberSnapshot> activeMemberByProfileId = resolveActiveMembersByProfileId(clubId);
         List<TodoItemAssignee> currentAssignees = todoItemAssigneeRepository
                 .findByTodoItemIdOrderByTodoItemAssigneeIdAsc(todoItemId);
@@ -778,7 +846,11 @@ public class ClubTodoService {
                 || !Objects.equals(current.getPriorityCode(), priorityCode)
                 || !Objects.equals(current.getWorkStartAt(), workStartAt)
                 || !Objects.equals(current.getWorkEndAt(), workEndAt)
-                || !Objects.equals(current.getLinkedScheduleEventId(), request.linkedScheduleEventId());
+                || !Objects.equals(current.getLinkedScheduleEventId(), request.linkedScheduleEventId())
+                || !Objects.equals(current.getLinkedDecisionRecordId(), request.linkedDecisionRecordId())
+                || !Objects.equals(normalizedRecurrenceFrequency(current), recurrenceFrequency)
+                || normalizedRecurrenceInterval(current) != recurrenceInterval
+                || !Objects.equals(current.getRecurrenceEndDate(), recurrenceEndDate);
         boolean assignmentChanged = !Objects.equals(current.getAssignmentMode(), assignmentMode)
                 || !Objects.equals(currentAssigneeIds, assignedClubProfileIds)
                 || normalizedRecruitmentCapacity(current) != recruitmentCapacity;
@@ -816,14 +888,21 @@ public class ClubTodoService {
                 .workStartAt(workStartAt)
                 .workEndAt(workEndAt)
                 .linkedScheduleEventId(request.linkedScheduleEventId())
+                .linkedDecisionRecordId(request.linkedDecisionRecordId())
+                .recurrenceFrequency(recurrenceFrequency)
+                .recurrenceInterval(recurrenceInterval)
+                .recurrenceEndDate(recurrenceEndDate)
+                .recurrenceSourceTodoItemId(current.getRecurrenceSourceTodoItemId())
                 .completedByClubProfileId(null)
                 .completedAt(null)
                 .build());
-        List<TodoItemAssignee> updatedAssignees = replaceAssignees(
-                updated.getTodoItemId(),
-                assignedClubProfileIds,
-                access.clubProfile().getClubProfileId()
-        );
+        List<TodoItemAssignee> updatedAssignees = assignmentChanged
+                ? replaceAssignees(
+                        updated.getTodoItemId(),
+                        assignedClubProfileIds,
+                        access.clubProfile().getClubProfileId()
+                )
+                : currentAssignees;
 
         if (ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())
                 && ASSIGNMENT_MODE_DIRECT_ASSIGN.equals(assignmentMode)) {
@@ -854,7 +933,8 @@ public class ClubTodoService {
                 applicationCountByTodoItemId,
                 Map.of(),
                 resolveAssigneeIdsByTodoItemId(List.of(List.of(updated)), updatedAssignees),
-                resolveScheduleById(List.of(List.of(updated)))
+                resolveScheduleById(List.of(List.of(updated))),
+                resolveDecisionById(List.of(List.of(updated)))
         );
     }
 
@@ -872,9 +952,14 @@ public class ClubTodoService {
             throw new SemoException.ForbiddenException("할 일 상태를 변경할 권한이 없습니다.");
         }
 
-        TodoItem current = requireTodoItem(clubId, todoItemId);
+        TodoItem current = requireTodoItemForUpdate(clubId, todoItemId);
         String nextStatus = clubTodoCommandSupport.normalizeStatusCode(request.statusCode());
         clubTodoCommandSupport.validateStatusTransition(current, nextStatus);
+
+        if (STATUS_REOPEN.equals(nextStatus)
+                && todoItemRepository.findByRecurrenceSourceTodoItemId(current.getTodoItemId()).isPresent()) {
+            throw new SemoException.ValidationException("이미 다음 반복 업무가 생성되어 이전 회차를 다시 열 수 없습니다.");
+        }
 
         TodoItem updated;
         if (STATUS_REOPEN.equals(nextStatus)) {
@@ -905,6 +990,9 @@ public class ClubTodoService {
             );
         } else {
             updated = saveWithStatus(current, nextStatus, access.clubProfile().getClubProfileId());
+            if (STATUS_COMPLETED.equals(nextStatus)) {
+                createNextRecurringTodo(updated, access.clubProfile().getClubProfileId());
+            }
             ClubActivityContextHolder.setDetails(
                     "'" + current.getTitle() + "' 상태를 "
                             + clubTodoViewSupport.toStatusLabel(nextStatus)
@@ -1279,6 +1367,22 @@ public class ClubTodoService {
                 .collect(Collectors.toMap(ClubScheduleEvent::getEventId, Function.identity()));
     }
 
+    private Map<Long, DecisionRecord> resolveDecisionById(List<List<TodoItem>> itemGroups) {
+        List<Long> decisionRecordIds = itemGroups.stream()
+                .filter(Objects::nonNull)
+                .flatMap(Collection::stream)
+                .map(TodoItem::getLinkedDecisionRecordId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (decisionRecordIds.isEmpty()) {
+            return Map.of();
+        }
+        return decisionRecordRepository.findAllById(decisionRecordIds).stream()
+                .filter(decision -> !decision.isDeleted())
+                .collect(Collectors.toMap(DecisionRecord::getDecisionRecordId, Function.identity()));
+    }
+
     private void validateLinkedScheduleEvent(Long clubId, Long eventId) {
         if (eventId == null) {
             return;
@@ -1287,6 +1391,43 @@ public class ClubTodoService {
                 .orElseThrow(() -> new SemoException.ValidationException("같은 클럽의 일정만 업무에 연결할 수 있습니다."));
         if ("CANCELLED".equals(event.getEventStatus())) {
             throw new SemoException.ValidationException("취소된 일정은 업무에 연결할 수 없습니다.");
+        }
+    }
+
+    private void validateLinkedDecisionRecord(Long clubId, Long decisionRecordId) {
+        if (decisionRecordId == null) {
+            return;
+        }
+        DecisionRecord decision = decisionRecordRepository
+                .findByDecisionRecordIdAndClubIdAndDeletedFalse(decisionRecordId, clubId)
+                .orElseThrow(() -> new SemoException.ValidationException(
+                        "같은 클럽의 공개 확정 결정만 업무에 연결할 수 있습니다."
+                ));
+        if (!"MEMBERS".equals(decision.getVisibilityScope())
+                || (!"CONFIRMED".equals(decision.getStatusCode())
+                && !"SUPERSEDED".equals(decision.getStatusCode()))) {
+            throw new SemoException.ValidationException("멤버 공개 상태로 확정된 결정만 업무에 연결할 수 있습니다.");
+        }
+    }
+
+    private void validateRecurrence(
+            String recurrenceFrequency,
+            LocalDate recurrenceEndDate,
+            LocalDateTime dueAt,
+            LocalDateTime workStartAt
+    ) {
+        if (RECURRENCE_NONE.equals(recurrenceFrequency)) {
+            if (recurrenceEndDate != null) {
+                throw new SemoException.ValidationException("반복 종료일을 사용하려면 반복 주기를 선택해야 합니다.");
+            }
+            return;
+        }
+        LocalDate anchorDate = recurrenceAnchorDate(dueAt, workStartAt);
+        if (anchorDate == null) {
+            throw new SemoException.ValidationException("반복 업무는 마감일 또는 업무 시작 시간이 필요합니다.");
+        }
+        if (recurrenceEndDate != null && recurrenceEndDate.isBefore(anchorDate)) {
+            throw new SemoException.ValidationException("반복 종료일은 첫 업무 기준일보다 빠를 수 없습니다.");
         }
     }
 
@@ -1304,6 +1445,157 @@ public class ClubTodoService {
                         event.getStartAt().format(SCHEDULE_LABEL_FORMATTER)
                 ))
                 .toList();
+    }
+
+    private List<TodoDecisionOptionResponse> buildDecisionOptions(Long clubId) {
+        return decisionRecordRepository.findTodoLinkOptions(clubId, PageRequest.of(0, 40)).stream()
+                .map(decision -> new TodoDecisionOptionResponse(
+                        decision.getDecisionRecordId(),
+                        decision.getTitle(),
+                        decision.getStatusCode(),
+                        decision.getConfirmedAt() == null
+                                ? null
+                                : decision.getConfirmedAt().format(SCHEDULE_LABEL_FORMATTER)
+                ))
+                .toList();
+    }
+
+    private TodoItem createNextRecurringTodo(TodoItem completed, Long actorClubProfileId) {
+        String recurrenceFrequency = normalizedRecurrenceFrequency(completed);
+        if (!STATUS_COMPLETED.equals(completed.getStatusCode()) || RECURRENCE_NONE.equals(recurrenceFrequency)) {
+            return null;
+        }
+        TodoItem existing = todoItemRepository.findByRecurrenceSourceTodoItemId(completed.getTodoItemId())
+                .orElse(null);
+        if (existing != null) {
+            return existing;
+        }
+
+        int recurrenceInterval = normalizedRecurrenceInterval(completed);
+        LocalDateTime nextDueAt = shiftRecurringDateTime(
+                completed.getDueAt(),
+                recurrenceFrequency,
+                recurrenceInterval
+        );
+        LocalDateTime nextWorkStartAt = shiftRecurringDateTime(
+                completed.getWorkStartAt(),
+                recurrenceFrequency,
+                recurrenceInterval
+        );
+        LocalDateTime nextWorkEndAt = shiftRecurringDateTime(
+                completed.getWorkEndAt(),
+                recurrenceFrequency,
+                recurrenceInterval
+        );
+        LocalDate nextAnchorDate = recurrenceAnchorDate(nextDueAt, nextWorkStartAt);
+        if (nextAnchorDate == null
+                || completed.getRecurrenceEndDate() != null
+                && nextAnchorDate.isAfter(completed.getRecurrenceEndDate())) {
+            return null;
+        }
+
+        List<TodoItemAssignee> currentAssignees = todoItemAssigneeRepository
+                .findByTodoItemIdOrderByTodoItemAssigneeIdAsc(completed.getTodoItemId());
+        List<Long> nextAssigneeIds = ASSIGNMENT_MODE_DIRECT_ASSIGN.equals(completed.getAssignmentMode())
+                ? resolveAssigneeIds(completed, currentAssignees)
+                : List.of();
+        Long primaryAssigneeId = nextAssigneeIds.isEmpty() ? null : nextAssigneeIds.getFirst();
+        TodoItem next = todoItemRepository.save(TodoItem.builder()
+                .clubId(completed.getClubId())
+                .createdByClubProfileId(completed.getCreatedByClubProfileId())
+                .assignedClubProfileId(primaryAssigneeId)
+                .assignedByClubProfileId(primaryAssigneeId == null ? null : actorClubProfileId)
+                .todoType(completed.getTodoType())
+                .assignmentMode(completed.getAssignmentMode())
+                .statusCode(STATUS_OPEN)
+                .priorityCode(completed.getPriorityCode())
+                .recruitmentCapacity(completed.getRecruitmentCapacity())
+                .title(completed.getTitle())
+                .description(completed.getDescription())
+                .dueAt(nextDueAt)
+                .workStartAt(nextWorkStartAt)
+                .workEndAt(nextWorkEndAt)
+                .linkedScheduleEventId(null)
+                .linkedDecisionRecordId(completed.getLinkedDecisionRecordId())
+                .recurrenceFrequency(recurrenceFrequency)
+                .recurrenceInterval(recurrenceInterval)
+                .recurrenceEndDate(completed.getRecurrenceEndDate())
+                .recurrenceSourceTodoItemId(completed.getTodoItemId())
+                .completedByClubProfileId(null)
+                .completedAt(null)
+                .build());
+        replaceAssignees(next.getTodoItemId(), nextAssigneeIds, actorClubProfileId);
+        cloneChecklistForRecurringTodo(completed.getTodoItemId(), next.getTodoItemId());
+        notifyRecurringTodoAssignees(next, nextAssigneeIds);
+        return next;
+    }
+
+    private void cloneChecklistForRecurringTodo(Long sourceTodoItemId, Long nextTodoItemId) {
+        List<TodoChecklistItem> sourceItems = todoChecklistItemRepository
+                .findByTodoItemIdOrderBySortOrderAscTodoChecklistItemIdAsc(sourceTodoItemId);
+        if (sourceItems.isEmpty()) {
+            return;
+        }
+        todoChecklistItemRepository.saveAll(sourceItems.stream()
+                .map(item -> TodoChecklistItem.builder()
+                        .todoItemId(nextTodoItemId)
+                        .content(item.getContent())
+                        .sortOrder(item.getSortOrder())
+                        .completed(false)
+                        .completedByClubProfileId(null)
+                        .completedAt(null)
+                        .build())
+                .toList());
+    }
+
+    private void notifyRecurringTodoAssignees(TodoItem todoItem, List<Long> assigneeIds) {
+        assigneeIds.forEach(assigneeId -> clubNotificationPublisher.notifyClubProfile(
+                assigneeId,
+                new NotificationCommand(
+                        todoItem.getClubId(),
+                        "TODO_RECURRING_CREATED",
+                        "다음 반복 업무가 열렸습니다",
+                        "'" + todoItem.getTitle() + "' 다음 회차 업무를 확인해주세요.",
+                        "TODO_ITEM",
+                        todoItem.getTodoItemId(),
+                        "/clubs/" + todoItem.getClubId() + "/more/todos",
+                        "todo-recurring:" + todoItem.getTodoItemId()
+                )
+        ));
+    }
+
+    private LocalDate recurrenceAnchorDate(LocalDateTime dueAt, LocalDateTime workStartAt) {
+        if (workStartAt != null) {
+            return workStartAt.toLocalDate();
+        }
+        return dueAt == null ? null : dueAt.toLocalDate();
+    }
+
+    private LocalDateTime shiftRecurringDateTime(
+            LocalDateTime value,
+            String recurrenceFrequency,
+            int recurrenceInterval
+    ) {
+        if (value == null) {
+            return null;
+        }
+        return switch (recurrenceFrequency) {
+            case RECURRENCE_WEEKLY -> value.plusWeeks(recurrenceInterval);
+            case RECURRENCE_MONTHLY -> value.plusMonths(recurrenceInterval);
+            default -> value;
+        };
+    }
+
+    private String normalizedRecurrenceFrequency(TodoItem todoItem) {
+        return todoItem.getRecurrenceFrequency() == null || todoItem.getRecurrenceFrequency().isBlank()
+                ? RECURRENCE_NONE
+                : todoItem.getRecurrenceFrequency();
+    }
+
+    private int normalizedRecurrenceInterval(TodoItem todoItem) {
+        return todoItem.getRecurrenceInterval() == null
+                ? 1
+                : Math.max(1, todoItem.getRecurrenceInterval());
     }
 
     private TodoItem saveWithStatus(TodoItem current, String nextStatus, Long actorClubProfileId) {
@@ -1326,6 +1618,11 @@ public class ClubTodoService {
                 .workStartAt(current.getWorkStartAt())
                 .workEndAt(current.getWorkEndAt())
                 .linkedScheduleEventId(current.getLinkedScheduleEventId())
+                .linkedDecisionRecordId(current.getLinkedDecisionRecordId())
+                .recurrenceFrequency(current.getRecurrenceFrequency())
+                .recurrenceInterval(current.getRecurrenceInterval())
+                .recurrenceEndDate(current.getRecurrenceEndDate())
+                .recurrenceSourceTodoItemId(current.getRecurrenceSourceTodoItemId())
                 .completedByClubProfileId(completedByClubProfileId)
                 .completedAt(completedAt)
                 .build());
@@ -1353,6 +1650,11 @@ public class ClubTodoService {
                 .workStartAt(current.getWorkStartAt())
                 .workEndAt(current.getWorkEndAt())
                 .linkedScheduleEventId(current.getLinkedScheduleEventId())
+                .linkedDecisionRecordId(current.getLinkedDecisionRecordId())
+                .recurrenceFrequency(current.getRecurrenceFrequency())
+                .recurrenceInterval(current.getRecurrenceInterval())
+                .recurrenceEndDate(current.getRecurrenceEndDate())
+                .recurrenceSourceTodoItemId(current.getRecurrenceSourceTodoItemId())
                 .completedByClubProfileId(null)
                 .completedAt(null)
                 .build());

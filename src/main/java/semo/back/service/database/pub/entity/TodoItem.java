@@ -13,6 +13,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import semo.back.service.common.jpa.CommonDateEntity;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -73,6 +74,23 @@ public class TodoItem extends CommonDateEntity {
 
     @Column(name = "linked_schedule_event_id")
     private Long linkedScheduleEventId;
+
+    @Column(name = "linked_decision_record_id")
+    private Long linkedDecisionRecordId;
+
+    @Builder.Default
+    @Column(name = "recurrence_frequency", nullable = false, length = 20)
+    private String recurrenceFrequency = "NONE";
+
+    @Builder.Default
+    @Column(name = "recurrence_interval", nullable = false)
+    private Integer recurrenceInterval = 1;
+
+    @Column(name = "recurrence_end_date")
+    private LocalDate recurrenceEndDate;
+
+    @Column(name = "recurrence_source_todo_item_id")
+    private Long recurrenceSourceTodoItemId;
 
     @Column(name = "completed_by_club_profile_id")
     private Long completedByClubProfileId;

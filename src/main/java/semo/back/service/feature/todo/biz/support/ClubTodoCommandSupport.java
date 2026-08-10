@@ -5,7 +5,9 @@ import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.TodoItem;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Set;
@@ -21,6 +23,7 @@ public class ClubTodoCommandSupport {
     private static final Set<String> ALLOWED_TODO_TYPES = Set.of("VOLUNTEER", "OPERATIONS");
     private static final Set<String> ALLOWED_PRIORITY_CODES = Set.of("LOW", "NORMAL", "HIGH", "URGENT");
     private static final Set<String> ALLOWED_ASSIGNMENT_MODES = Set.of("DIRECT_ASSIGN", "OPEN_SUPPORT");
+    private static final Set<String> ALLOWED_RECURRENCE_FREQUENCIES = Set.of("NONE", "WEEKLY", "MONTHLY");
     private static final Set<String> TERMINAL_STATUSES = Set.of(STATUS_COMPLETED, STATUS_CANCELED);
     private static final Set<String> ADMIN_FILTERABLE_STATUSES = Set.of(
             STATUS_OPEN,
@@ -104,6 +107,41 @@ public class ClubTodoCommandSupport {
             throw new SemoException.ValidationException("모집 인원은 1명 이상 100명 이하여야 합니다.");
         }
         return recruitmentCapacity;
+    }
+
+    public String normalizeRecurrenceFrequency(String recurrenceFrequency) {
+        String normalized = trimToNull(recurrenceFrequency);
+        if (normalized == null) {
+            return "NONE";
+        }
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        if (!ALLOWED_RECURRENCE_FREQUENCIES.contains(normalized)) {
+            throw new SemoException.ValidationException("지원하지 않는 반복 주기입니다.");
+        }
+        return normalized;
+    }
+
+    public int normalizeRecurrenceInterval(String recurrenceFrequency, Integer recurrenceInterval) {
+        if ("NONE".equals(recurrenceFrequency)) {
+            return 1;
+        }
+        int normalized = recurrenceInterval == null ? 1 : recurrenceInterval;
+        if (normalized < 1 || normalized > 12) {
+            throw new SemoException.ValidationException("반복 간격은 1 이상 12 이하여야 합니다.");
+        }
+        return normalized;
+    }
+
+    public LocalDate parseDate(String value, String errorMessage) {
+        String normalized = trimToNull(value);
+        if (normalized == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(normalized);
+        } catch (DateTimeParseException exception) {
+            throw new SemoException.ValidationException(errorMessage);
+        }
     }
 
     public void validateWorkWindow(LocalDateTime workStartAt, LocalDateTime workEndAt) {
