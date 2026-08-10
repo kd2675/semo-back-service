@@ -276,7 +276,7 @@ class ClubJoinRequestServiceTest {
     }
 
     @Test
-    void getJoinRequestInboxRejectsRegularMembers() {
+    void getAdminJoinRequestInbox_regularMember_throwsForbidden() {
         Long clubId = clubService.createClub(
                 "owner-join-201",
                 "Owner Queue",
@@ -291,7 +291,7 @@ class ClubJoinRequestServiceTest {
                 new SubmitClubJoinRequestRequest("가입 대기열 테스트")
         );
 
-        assertThatThrownBy(() -> clubJoinRequestService.getJoinRequestInbox(
+        assertThatThrownBy(() -> clubJoinRequestService.getAdminJoinRequestInbox(
                 clubId,
                 "member-join-201"
         ))

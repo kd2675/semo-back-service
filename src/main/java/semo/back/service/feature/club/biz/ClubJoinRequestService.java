@@ -209,11 +209,6 @@ public class ClubJoinRequestService {
         );
     }
 
-    public ClubJoinRequestInboxResponse getJoinRequestInbox(Long clubId, String userKey) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        return buildJoinRequestInboxResponse(access);
-    }
-
     public ClubJoinRequestInboxResponse getAdminJoinRequestInbox(Long clubId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         return buildJoinRequestInboxResponse(access);

@@ -25,17 +25,6 @@ import web.common.core.response.base.dto.ResponseDataDTO;
 public class ClubJoinRequestFeatureController {
     private final ClubJoinRequestService clubJoinRequestService;
 
-    @GetMapping("/more/join-requests")
-    public ResponseDataDTO<ClubJoinRequestInboxResponse> getJoinRequestInbox(
-            @PathVariable Long clubId,
-            UserContext userContext
-    ) {
-        return ResponseDataDTO.of(
-                clubJoinRequestService.getJoinRequestInbox(clubId, requireUserKey(userContext)),
-                "가입 신청 대기열 조회 성공"
-        );
-    }
-
     @GetMapping("/admin/more/join-requests")
     public ResponseDataDTO<ClubJoinRequestInboxResponse> getAdminJoinRequestInbox(
             @PathVariable Long clubId,

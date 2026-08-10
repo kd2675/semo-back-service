@@ -8,6 +8,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import web.common.core.response.base.dto.ResponseErrorDTO;
 import web.common.core.response.base.exception.GeneralException;
 import web.common.core.response.base.vo.Code;
@@ -48,6 +49,14 @@ public class GlobalExceptionHandler {
 
         ResponseErrorDTO errorResponse = ResponseErrorDTO.of(Code.VALIDATION_ERROR, "Validation failed");
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<ResponseErrorDTO> handleNoHandlerFoundException(NoHandlerFoundException ex) {
+        log.warn("Endpoint not found: method={}, path={}", ex.getHttpMethod(), ex.getRequestURL());
+
+        ResponseErrorDTO errorResponse = ResponseErrorDTO.of(Code.NOT_FOUND, "Endpoint not found");
+        return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(Exception.class)

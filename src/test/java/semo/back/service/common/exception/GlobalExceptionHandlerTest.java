@@ -1,8 +1,10 @@
 package semo.back.service.common.exception;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import web.common.core.response.base.dto.ResponseErrorDTO;
 import web.common.core.response.base.vo.Code;
 
@@ -36,5 +38,18 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().getSuccess()).isFalse();
         assertThat(response.getBody().getCode()).isEqualTo(Code.INTERNAL_SERVER_ERROR.getCode());
         assertThat(response.getBody().getMessage()).isEqualTo("An unexpected error occurred");
+    }
+
+    @Test
+    void handleNoHandlerFoundException_returnsNotFoundWrapper() {
+        ResponseEntity<ResponseErrorDTO> response = globalExceptionHandler.handleNoHandlerFoundException(
+                new NoHandlerFoundException("GET", "/api/semo/v1/missing", HttpHeaders.EMPTY)
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getSuccess()).isFalse();
+        assertThat(response.getBody().getCode()).isEqualTo(Code.NOT_FOUND.getCode());
+        assertThat(response.getBody().getMessage()).isEqualTo("Endpoint not found");
     }
 }
