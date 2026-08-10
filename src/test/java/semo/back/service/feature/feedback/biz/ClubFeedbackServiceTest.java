@@ -12,6 +12,7 @@ import semo.back.service.database.pub.repository.ClubFeedbackRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
+import semo.back.service.database.pub.repository.ClubNotificationRepository;
 import semo.back.service.database.pub.repository.ClubPositionPermissionRepository;
 import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
@@ -62,6 +63,9 @@ class ClubFeedbackServiceTest {
     private ClubMemberRepository clubMemberRepository;
 
     @Autowired
+    private ClubNotificationRepository clubNotificationRepository;
+
+    @Autowired
     private ClubPositionPermissionRepository clubPositionPermissionRepository;
 
     @Autowired
@@ -81,6 +85,7 @@ class ClubFeedbackServiceTest {
 
     @BeforeEach
     void setUp() {
+        clubNotificationRepository.deleteAll();
         clubFeedbackRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
@@ -215,6 +220,15 @@ class ClubFeedbackServiceTest {
         assertThat(updated.anonymous()).isTrue();
         assertThat(updated.authorDisplayName()).isEqualTo("익명");
         assertThat(updated.answeredByDisplayName()).isNotBlank();
+
+        assertThat(clubNotificationRepository.findAll())
+                .singleElement()
+                .satisfies(notification -> {
+                    assertThat(notification.getNotificationType()).isEqualTo("FEEDBACK_STATUS");
+                    assertThat(notification.getTitle()).isEqualTo("피드백 답변이 도착했습니다");
+                    assertThat(notification.getResourceId()).isEqualTo(feedbackId);
+                    assertThat(notification.getTargetPath()).isEqualTo("/clubs/" + clubId + "/more/feedback");
+                });
 
         var memberView = clubFeedbackService.getFeedbackDetail(clubId, feedbackId, "feedback-member-003");
         assertThat(memberView.authorDisplayName()).isEqualTo("익명");

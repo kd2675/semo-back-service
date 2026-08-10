@@ -186,6 +186,7 @@ public class ClubFeedbackService {
         String statusCode = normalizeStatusCode(request == null ? null : request.statusCode());
         String visibilityScope = normalizeVisibilityScope(request == null ? null : request.visibilityScope());
         String adminAnswer = trimToNull(request == null ? null : request.adminAnswer());
+        String previousStatusCode = current.getStatusCode();
         if (VISIBILITY_PRIVATE.equals(current.getVisibilityScope()) && VISIBILITY_PUBLIC.equals(visibilityScope)) {
             throw new SemoException.ValidationException("제출자의 동의 없이 비공개 피드백을 공개할 수 없습니다.");
         }
@@ -216,9 +217,9 @@ public class ClubFeedbackService {
                 .build());
 
         boolean firstAnswer = STATUS_ANSWERED.equals(statusCode)
-                && !STATUS_ANSWERED.equals(current.getStatusCode());
+                && !STATUS_ANSWERED.equals(previousStatusCode);
         boolean justClosed = STATUS_CLOSED.equals(statusCode)
-                && !STATUS_CLOSED.equals(current.getStatusCode());
+                && !STATUS_CLOSED.equals(previousStatusCode);
         if (firstAnswer || justClosed) {
             String statusLabel = toStatusLabel(statusCode);
             String notificationMessage = "'" + updated.getTitle() + "' 피드백이 " + statusLabel + " 상태가 되었습니다.";
