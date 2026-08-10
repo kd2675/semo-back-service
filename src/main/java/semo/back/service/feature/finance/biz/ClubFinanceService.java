@@ -184,7 +184,8 @@ public class ClubFinanceService {
                 recentPayments,
                 nextPayableObligation,
                 openObligations,
-                paymentHistory
+                paymentHistory,
+                clubFinanceOperationsService.getScheduleOptions(clubId)
         );
     }
 
@@ -438,6 +439,7 @@ public class ClubFinanceService {
                         .build())
                 .toList();
         financePaymentRepository.saveAll(payments);
+        notifyObligationCreated(obligation, payments);
 
         ClubActivityContextHolder.setDetails(
                 title + " 재정 항목을 " + payments.size() + "명에게 발행했습니다.",
@@ -717,6 +719,7 @@ public class ClubFinanceService {
                 nextCategoryCode,
                 nextAmount,
                 spentAt,
+                period == null ? null : period.getFinancePeriodId(),
                 linkedEvent == null ? null : linkedEvent.getEventId(),
                 account == null ? null : account.getFinanceAccountId(),
                 nextNote,
@@ -780,6 +783,7 @@ public class ClubFinanceService {
                 null,
                 null,
                 null,
+                null,
                 "VOIDED",
                 reason
         ));
@@ -810,6 +814,11 @@ public class ClubFinanceService {
         List<FinancePayment> payments = financePaymentRepository.findByFinanceObligationIdOrderByFinancePaymentIdDesc(obligationId);
         if (!canDeleteObligation(payments)) {
             throw new SemoException.ValidationException("아직 아무도 처리하지 않은 재정 항목만 삭제할 수 있습니다.");
+        }
+        if (financeObligationRepository
+                .findByRecurrenceSourceFinanceObligationId(obligation.getFinanceObligationId())
+                .isPresent()) {
+            throw new SemoException.ValidationException("다음 반복 회비가 생성된 재정 항목은 삭제할 수 없습니다.");
         }
 
         financePaymentRepository.deleteAll(payments);
@@ -1349,20 +1358,24 @@ public class ClubFinanceService {
                         .build())
                 .toList();
         financePaymentRepository.saveAll(nextPayments);
-        for (FinancePayment nextPayment : nextPayments) {
+        notifyObligationCreated(next, nextPayments);
+    }
+
+    private void notifyObligationCreated(FinanceObligation obligation, List<FinancePayment> payments) {
+        for (FinancePayment payment : payments) {
             clubNotificationPublisher.notifyClubProfile(
-                    nextPayment.getClubProfileId(),
+                    payment.getClubProfileId(),
                     new NotificationCommand(
-                            next.getClubId(),
+                            obligation.getClubId(),
                             "FINANCE_OBLIGATION_CREATED",
                             "새 회비·분담금이 발행되었습니다",
-                            "'" + next.getTitle() + "' "
-                                    + clubFinanceSupport.formatAmount(next.getAmount(), next.getCurrencyCode())
-                                    + " · 마감 " + clubFinanceSupport.formatDateTimeLabel(next.getDueAt()),
+                            "'" + obligation.getTitle() + "' "
+                                    + clubFinanceSupport.formatAmount(obligation.getAmount(), obligation.getCurrencyCode())
+                                    + " · 마감 " + clubFinanceSupport.formatDateTimeLabel(obligation.getDueAt()),
                             "FINANCE_OBLIGATION",
-                            next.getFinanceObligationId(),
-                            "/clubs/" + next.getClubId() + "/more/finance",
-                            "finance-obligation:" + next.getFinanceObligationId() + ":" + nextPayment.getClubProfileId()
+                            obligation.getFinanceObligationId(),
+                            "/clubs/" + obligation.getClubId() + "/more/finance",
+                            "finance-obligation:" + obligation.getFinanceObligationId() + ":" + payment.getClubProfileId()
                     )
             );
         }
@@ -1474,6 +1487,7 @@ public class ClubFinanceService {
             String nextCategoryCode,
             BigDecimal nextAmount,
             LocalDateTime nextSpentAt,
+            Long nextFinancePeriodId,
             Long nextScheduleEventId,
             Long nextFinanceAccountId,
             String nextNote,
@@ -1493,6 +1507,8 @@ public class ClubFinanceService {
                 .nextAmount(nextAmount)
                 .previousSpentAt(expense.getSpentAt())
                 .nextSpentAt(nextSpentAt)
+                .previousFinancePeriodId(expense.getFinancePeriodId())
+                .nextFinancePeriodId(nextFinancePeriodId)
                 .previousScheduleEventId(expense.getLinkedScheduleEventId())
                 .nextScheduleEventId(nextScheduleEventId)
                 .previousFinanceAccountId(expense.getFinanceAccountId())
@@ -1524,6 +1540,12 @@ public class ClubFinanceService {
                 revision.getNextCategoryCode(),
                 clubFinanceSupport.formatDateTimeValue(revision.getPreviousSpentAt()),
                 clubFinanceSupport.formatDateTimeValue(revision.getNextSpentAt()),
+                revision.getPreviousFinancePeriodId(),
+                revision.getNextFinancePeriodId(),
+                revision.getPreviousFinanceAccountId(),
+                revision.getNextFinanceAccountId(),
+                revision.getPreviousScheduleEventId(),
+                revision.getNextScheduleEventId(),
                 revision.getPreviousStatusCode(),
                 revision.getNextStatusCode(),
                 revision.getReason(),

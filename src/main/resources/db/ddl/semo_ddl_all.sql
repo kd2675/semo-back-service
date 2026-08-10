@@ -588,6 +588,13 @@ CREATE TABLE IF NOT EXISTS tournament_application (
     club_profile_id BIGINT NOT NULL,
     application_status VARCHAR(20) NOT NULL DEFAULT 'APPLIED',
     application_note VARCHAR(500) NULL,
+    team_name VARCHAR(100) NULL,
+    waitlist_position INT NULL,
+    finance_payment_id BIGINT NULL,
+    checked_in_at DATETIME NULL,
+    checked_in_by_club_profile_id BIGINT NULL,
+    placement INT NULL,
+    result_note VARCHAR(1000) NULL,
     reviewed_by_club_profile_id BIGINT NULL,
     reviewed_at DATETIME NULL,
     create_date DATETIME NOT NULL,
@@ -595,11 +602,46 @@ CREATE TABLE IF NOT EXISTS tournament_application (
     CONSTRAINT uk_tournament_application UNIQUE (tournament_record_id, club_profile_id),
     CONSTRAINT fk_tournament_application_tournament FOREIGN KEY (tournament_record_id) REFERENCES tournament_record(tournament_record_id),
     CONSTRAINT fk_tournament_application_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id),
-    CONSTRAINT fk_tournament_application_reviewed_by FOREIGN KEY (reviewed_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+    CONSTRAINT fk_tournament_application_reviewed_by FOREIGN KEY (reviewed_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_tournament_application_checked_in_by FOREIGN KEY (checked_in_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT uk_tournament_application_finance_payment UNIQUE (finance_payment_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_tournament_application_status
     ON tournament_application (tournament_record_id, application_status, create_date);
+
+CREATE INDEX idx_tournament_application_waitlist
+    ON tournament_application (tournament_record_id, application_status, waitlist_position, tournament_application_id);
+
+CREATE TABLE IF NOT EXISTS tournament_roster_member (
+    tournament_roster_member_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tournament_application_id BIGINT NOT NULL,
+    club_profile_id BIGINT NOT NULL,
+    roster_role_code VARCHAR(20) NOT NULL DEFAULT 'MEMBER',
+    sort_order INT NOT NULL DEFAULT 0,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_tournament_roster_application_profile UNIQUE (tournament_application_id, club_profile_id),
+    CONSTRAINT fk_tournament_roster_application FOREIGN KEY (tournament_application_id) REFERENCES tournament_application(tournament_application_id),
+    CONSTRAINT fk_tournament_roster_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id),
+    KEY idx_tournament_roster_application (tournament_application_id, sort_order, tournament_roster_member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tournament_schedule_slot (
+    tournament_schedule_slot_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tournament_record_id BIGINT NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    court_label VARCHAR(100) NULL,
+    start_at DATETIME NOT NULL,
+    end_at DATETIME NOT NULL,
+    note VARCHAR(500) NULL,
+    created_by_club_profile_id BIGINT NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_tournament_schedule_tournament FOREIGN KEY (tournament_record_id) REFERENCES tournament_record(tournament_record_id),
+    CONSTRAINT fk_tournament_schedule_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    KEY idx_tournament_schedule_time (tournament_record_id, start_at, tournament_schedule_slot_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- Bracket
@@ -888,6 +930,7 @@ CREATE TABLE IF NOT EXISTS finance_obligation (
     recurrence_interval INT NOT NULL DEFAULT 1,
     recurrence_end_date DATE NULL,
     recurrence_source_finance_obligation_id BIGINT NULL,
+    source_tournament_application_id BIGINT NULL,
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT fk_finance_obligation_club FOREIGN KEY (club_id) REFERENCES club(club_id),
@@ -896,7 +939,9 @@ CREATE TABLE IF NOT EXISTS finance_obligation (
     CONSTRAINT fk_finance_obligation_account FOREIGN KEY (finance_account_id) REFERENCES finance_account(finance_account_id),
     CONSTRAINT fk_finance_obligation_schedule_event FOREIGN KEY (linked_schedule_event_id) REFERENCES club_schedule_event(event_id),
     CONSTRAINT fk_finance_obligation_recurrence_source FOREIGN KEY (recurrence_source_finance_obligation_id) REFERENCES finance_obligation(finance_obligation_id),
-    CONSTRAINT uk_finance_obligation_recurrence_source UNIQUE (recurrence_source_finance_obligation_id)
+    CONSTRAINT fk_finance_obligation_tournament_application FOREIGN KEY (source_tournament_application_id) REFERENCES tournament_application(tournament_application_id),
+    CONSTRAINT uk_finance_obligation_recurrence_source UNIQUE (recurrence_source_finance_obligation_id),
+    CONSTRAINT uk_finance_obligation_tournament_application UNIQUE (source_tournament_application_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_finance_obligation_club_sort
@@ -934,6 +979,10 @@ CREATE TABLE IF NOT EXISTS finance_payment (
 
 CREATE INDEX idx_finance_payment_status
     ON finance_payment (club_id, payment_status_code, finance_obligation_id);
+
+ALTER TABLE tournament_application
+    ADD CONSTRAINT fk_tournament_application_finance_payment
+        FOREIGN KEY (finance_payment_id) REFERENCES finance_payment(finance_payment_id);
 
 CREATE TABLE IF NOT EXISTS finance_request (
     finance_request_id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -1020,6 +1069,8 @@ CREATE TABLE IF NOT EXISTS finance_expense_revision (
     next_schedule_event_id BIGINT NULL,
     previous_finance_account_id BIGINT NULL,
     next_finance_account_id BIGINT NULL,
+    previous_finance_period_id BIGINT NULL,
+    next_finance_period_id BIGINT NULL,
     previous_note VARCHAR(1000) NULL,
     next_note VARCHAR(1000) NULL,
     previous_status_code VARCHAR(20) NOT NULL,
@@ -1033,7 +1084,9 @@ CREATE TABLE IF NOT EXISTS finance_expense_revision (
     CONSTRAINT fk_finance_expense_revision_previous_event FOREIGN KEY (previous_schedule_event_id) REFERENCES club_schedule_event(event_id),
     CONSTRAINT fk_finance_expense_revision_next_event FOREIGN KEY (next_schedule_event_id) REFERENCES club_schedule_event(event_id),
     CONSTRAINT fk_finance_expense_revision_previous_account FOREIGN KEY (previous_finance_account_id) REFERENCES finance_account(finance_account_id),
-    CONSTRAINT fk_finance_expense_revision_next_account FOREIGN KEY (next_finance_account_id) REFERENCES finance_account(finance_account_id)
+    CONSTRAINT fk_finance_expense_revision_next_account FOREIGN KEY (next_finance_account_id) REFERENCES finance_account(finance_account_id),
+    CONSTRAINT fk_finance_expense_revision_previous_period FOREIGN KEY (previous_finance_period_id) REFERENCES finance_period(finance_period_id),
+    CONSTRAINT fk_finance_expense_revision_next_period FOREIGN KEY (next_finance_period_id) REFERENCES finance_period(finance_period_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_finance_expense_revision_expense

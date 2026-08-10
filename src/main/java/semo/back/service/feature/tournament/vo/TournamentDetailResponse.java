@@ -6,6 +6,7 @@ public record TournamentDetailResponse(
         Long clubId,
         String clubName,
         boolean admin,
+        Long viewerClubProfileId,
         Long tournamentRecordId,
         String title,
         String summaryText,
@@ -50,6 +51,8 @@ public record TournamentDetailResponse(
         boolean canDelete,
         boolean canManageApplications,
         List<TournamentApplicationSummaryResponse> applications,
-        List<TournamentParticipantSummaryResponse> participants
+        List<TournamentParticipantSummaryResponse> participants,
+        List<TournamentScheduleSlotResponse> scheduleSlots,
+        List<TournamentRosterOptionResponse> availableRosterMembers
 ) {
 }

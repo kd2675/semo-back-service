@@ -5,6 +5,14 @@ public record TournamentParticipantSummaryResponse(
         String displayName,
         String avatarImageUrl,
         String avatarThumbnailUrl,
-        String approvedAtLabel
+        String approvedAtLabel,
+        String teamName,
+        Long financePaymentId,
+        String feePaymentStatusCode,
+        String feePaymentStatusLabel,
+        String checkedInAtLabel,
+        Integer placement,
+        String resultNote,
+        java.util.List<TournamentRosterMemberResponse> rosterMembers
 ) {
 }

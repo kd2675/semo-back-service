@@ -21,7 +21,9 @@ import semo.back.service.feature.tournament.vo.ReviewTournamentApplicationReques
 import semo.back.service.feature.tournament.vo.SubmitTournamentApplicationRequest;
 import semo.back.service.feature.tournament.vo.TournamentDetailResponse;
 import semo.back.service.feature.tournament.vo.TournamentUpsertResponse;
+import semo.back.service.feature.tournament.vo.UpdateTournamentApplicationOperationsRequest;
 import semo.back.service.feature.tournament.vo.UpsertTournamentRequest;
+import semo.back.service.feature.tournament.vo.UpsertTournamentScheduleSlotRequest;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
 @RequirePrincipalRole
@@ -134,6 +136,82 @@ public class ClubTournamentController {
                         request
                 ),
                 "참가 신청 검토 성공"
+        );
+    }
+
+    @PutMapping("/{tournamentRecordId}/applications/{tournamentApplicationId}/operations")
+    public ResponseDataDTO<TournamentDetailResponse> updateApplicationOperations(
+            @PathVariable Long clubId,
+            @PathVariable Long tournamentRecordId,
+            @PathVariable Long tournamentApplicationId,
+            @Valid @RequestBody UpdateTournamentApplicationOperationsRequest request,
+            UserContext userContext
+    ) {
+        return ResponseDataDTO.of(
+                clubTournamentService.updateApplicationOperations(
+                        clubId,
+                        tournamentRecordId,
+                        tournamentApplicationId,
+                        requireUserKey(userContext),
+                        request
+                ),
+                "참가자 운영 정보 저장 성공"
+        );
+    }
+
+    @PostMapping("/{tournamentRecordId}/schedule-slots")
+    public ResponseDataDTO<TournamentDetailResponse> createScheduleSlot(
+            @PathVariable Long clubId,
+            @PathVariable Long tournamentRecordId,
+            @Valid @RequestBody UpsertTournamentScheduleSlotRequest request,
+            UserContext userContext
+    ) {
+        return ResponseDataDTO.of(
+                clubTournamentService.createScheduleSlot(
+                        clubId,
+                        tournamentRecordId,
+                        requireUserKey(userContext),
+                        request
+                ),
+                "대회 일정 추가 성공"
+        );
+    }
+
+    @PutMapping("/{tournamentRecordId}/schedule-slots/{scheduleSlotId}")
+    public ResponseDataDTO<TournamentDetailResponse> updateScheduleSlot(
+            @PathVariable Long clubId,
+            @PathVariable Long tournamentRecordId,
+            @PathVariable Long scheduleSlotId,
+            @Valid @RequestBody UpsertTournamentScheduleSlotRequest request,
+            UserContext userContext
+    ) {
+        return ResponseDataDTO.of(
+                clubTournamentService.updateScheduleSlot(
+                        clubId,
+                        tournamentRecordId,
+                        scheduleSlotId,
+                        requireUserKey(userContext),
+                        request
+                ),
+                "대회 일정 수정 성공"
+        );
+    }
+
+    @DeleteMapping("/{tournamentRecordId}/schedule-slots/{scheduleSlotId}")
+    public ResponseDataDTO<TournamentDetailResponse> deleteScheduleSlot(
+            @PathVariable Long clubId,
+            @PathVariable Long tournamentRecordId,
+            @PathVariable Long scheduleSlotId,
+            UserContext userContext
+    ) {
+        return ResponseDataDTO.of(
+                clubTournamentService.deleteScheduleSlot(
+                        clubId,
+                        tournamentRecordId,
+                        scheduleSlotId,
+                        requireUserKey(userContext)
+                ),
+                "대회 일정 삭제 성공"
         );
     }
 

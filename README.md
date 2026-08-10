@@ -118,7 +118,7 @@
 - 기능 전용 테이블 예시
   - `club_schedule_event`, `club_event_participant`
   - `finance_obligation`, `finance_payment`
-  - `tournament_record`, `tournament_application`
+  - `tournament_record`, `tournament_application`, `tournament_roster_member`, `tournament_schedule_slot`
   - `bracket_record`, `bracket_participant`
   - `club_schedule_event`, `club_schedule_vote`, `club_schedule_vote_option`
 
@@ -233,6 +233,10 @@
 - `POST /api/semo/v1/clubs/{clubId}/more/tournaments/{tournamentRecordId}/applications`
 - `DELETE /api/semo/v1/clubs/{clubId}/more/tournaments/{tournamentRecordId}/applications/me`
 - `PUT /api/semo/v1/clubs/{clubId}/more/tournaments/{tournamentRecordId}/applications/{tournamentApplicationId}/review`
+- `PUT /api/semo/v1/clubs/{clubId}/more/tournaments/{tournamentRecordId}/applications/{tournamentApplicationId}/operations`
+- `POST /api/semo/v1/clubs/{clubId}/more/tournaments/{tournamentRecordId}/schedule-slots`
+- `PUT /api/semo/v1/clubs/{clubId}/more/tournaments/{tournamentRecordId}/schedule-slots/{scheduleSlotId}`
+- `DELETE /api/semo/v1/clubs/{clubId}/more/tournaments/{tournamentRecordId}/schedule-slots/{scheduleSlotId}`
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/tournaments`
 - `PUT /api/semo/v1/clubs/{clubId}/admin/more/tournaments/{tournamentRecordId}/review`
 - `DELETE /api/semo/v1/clubs/{clubId}/admin/more/tournaments/{tournamentRecordId}`
@@ -249,6 +253,13 @@
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/roles/{clubPositionId}`
 - `PUT /api/semo/v1/clubs/{clubId}/admin/more/roles/{clubPositionId}`
 - `DELETE /api/semo/v1/clubs/{clubId}/admin/more/roles/{clubPositionId}`
+- `GET /api/semo/v1/clubs/{clubId}/admin/operations-catalog`
+- `POST /api/semo/v1/clubs/{clubId}/admin/operations-catalog/presets/{presetKey}/apply`
+- `POST /api/semo/v1/clubs/{clubId}/admin/operations-catalog/templates/{templateKey}/apply`
+
+대회 신청은 개인전 또는 팀 로스터를 저장하며 정원 초과 시 대기 순번을 부여합니다. 취소·반려로 자리가 생기면 가장 앞선 대기 신청을 자동으로 검토 대기로 올립니다. 참가 승인 시 `FINANCE`가 활성화된 유료 대회는 참가비 청구와 결제 원장을 한 번만 생성하고, 운영자는 코트 시간표·체크인·순위·결과 메모를 기록합니다.
+
+운영 카탈로그의 프리셋은 기존 활성 기능을 보존하는 `MERGE`를 기본으로 기능 순서, 사용자 홈 위젯, 미생성 위임 직책과 권한을 함께 구성합니다. 운영 템플릿은 `TODO` 업무와 체크리스트를 실제 생성하며 필요한 도메인 기능이 비활성화된 경우 적용을 거부합니다.
 
 ## Schema and Seed Files
 
@@ -259,6 +270,10 @@
 - 운영 DB 단건 반영 SQL
   - `src/main/resources/db/ops/semo_finance_request_expense_apply.sql`
   - 승인된 정산 요청과 지출 원장을 연결하는 nullable FK/unique 컬럼을 추가하며, 배포 전 백업 후 1회 적용
+  - `src/main/resources/db/ops/semo_finance_operations_apply.sql`
+  - 재정 계좌·기간·예산·반복 청구·정정 전표와 세분화된 재정 권한을 추가하는 1회 운영 마이그레이션
+  - `src/main/resources/db/ops/semo_tournament_operations_apply.sql`
+  - 대회 팀 로스터·대기열·참가비 연결·시간표·체크인·결과 컬럼과 테이블을 추가하고 기존 신청자를 주장 로스터로 이관하는 1회 운영 마이그레이션
   - `src/main/resources/db/ddl/semo_timeline_feature_remove.sql`
   - 폐기된 `TIMELINE` 카탈로그·활성화·권한 데이터만 외래 키 순서대로 제거
   - `src/main/resources/db/ddl/semo_schedule_attendance_integration.sql`

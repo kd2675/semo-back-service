@@ -82,6 +82,9 @@ public class FinanceObligation extends CommonDateEntity {
     @Column(name = "recurrence_source_finance_obligation_id", unique = true)
     private Long recurrenceSourceFinanceObligationId;
 
+    @Column(name = "source_tournament_application_id", unique = true)
+    private Long sourceTournamentApplicationId;
+
     public void updateStatus(String statusCode) {
         this.statusCode = statusCode;
     }

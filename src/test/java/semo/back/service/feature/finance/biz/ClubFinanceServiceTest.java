@@ -9,6 +9,7 @@ import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
+import semo.back.service.database.pub.repository.ClubNotificationRepository;
 import semo.back.service.database.pub.repository.ClubPositionPermissionRepository;
 import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
@@ -95,6 +96,9 @@ class ClubFinanceServiceTest {
     private FinanceAccountRepository financeAccountRepository;
 
     @Autowired
+    private ClubNotificationRepository clubNotificationRepository;
+
+    @Autowired
     private ClubFeatureRepository clubFeatureRepository;
 
     @Autowired
@@ -123,6 +127,7 @@ class ClubFinanceServiceTest {
 
     @BeforeEach
     void setUp() {
+        clubNotificationRepository.deleteAll();
         financeExpenseRevisionRepository.deleteAll();
         financeExpenseRepository.deleteAll();
         financeRequestRepository.deleteAll();
@@ -167,6 +172,13 @@ class ClubFinanceServiceTest {
         assertThat(created.createdCount()).isEqualTo(2);
         assertThat(created.title()).isEqualTo("봄 대회 참가비");
         assertThat(created.obligationTypeCode()).isEqualTo("FEE");
+        assertThat(clubNotificationRepository.findAll())
+                .hasSize(2)
+                .allSatisfy(notification -> {
+                    assertThat(notification.getNotificationType()).isEqualTo("FINANCE_OBLIGATION_CREATED");
+                    assertThat(notification.getResourceId()).isEqualTo(created.obligationId());
+                    assertThat(notification.getTargetPath()).isEqualTo("/clubs/" + clubId + "/more/finance");
+                });
 
         var memberFinance = clubFinanceService.getFinance(clubId, "finance-member-001");
         assertThat(memberFinance.openObligations()).hasSize(1);

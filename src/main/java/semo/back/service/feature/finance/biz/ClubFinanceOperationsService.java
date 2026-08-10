@@ -64,13 +64,7 @@ public class ClubFinanceOperationsService {
                 .stream()
                 .map(this::toPeriodResponse)
                 .toList();
-        List<FinanceScheduleOptionResponse> scheduleOptions = clubScheduleEventRepository.findScheduledBetween(
-                        clubId,
-                        LocalDateTime.now().minusYears(1),
-                        LocalDateTime.now().plusYears(2)
-                ).stream()
-                .map(this::toScheduleOptionResponse)
-                .toList();
+        List<FinanceScheduleOptionResponse> scheduleOptions = getScheduleOptions(clubId);
 
         return new ClubFinanceOperationsResponse(
                 access.club().getClubId(),
@@ -88,6 +82,16 @@ public class ClubFinanceOperationsService {
                 periods,
                 scheduleOptions
         );
+    }
+
+    public List<FinanceScheduleOptionResponse> getScheduleOptions(Long clubId) {
+        return clubScheduleEventRepository.findScheduledBetween(
+                        clubId,
+                        LocalDateTime.now().minusYears(1),
+                        LocalDateTime.now().plusYears(2)
+                ).stream()
+                .map(this::toScheduleOptionResponse)
+                .toList();
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)

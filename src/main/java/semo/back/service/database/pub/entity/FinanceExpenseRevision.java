@@ -76,6 +76,12 @@ public class FinanceExpenseRevision extends CommonDateEntity {
     @Column(name = "next_finance_account_id")
     private Long nextFinanceAccountId;
 
+    @Column(name = "previous_finance_period_id")
+    private Long previousFinancePeriodId;
+
+    @Column(name = "next_finance_period_id")
+    private Long nextFinancePeriodId;
+
     @Column(name = "previous_note", length = 1000)
     private String previousNote;
 

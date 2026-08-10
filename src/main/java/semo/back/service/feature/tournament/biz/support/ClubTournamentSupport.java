@@ -45,8 +45,8 @@ public class ClubTournamentSupport {
 
         String matchFormat = normalizeMatchFormat(request.matchFormat());
         Integer teamMemberLimit = normalizeTeamMemberLimit(matchFormat, request.teamMemberLimit());
-        LocalDateTime applicationStartAt = parseRequiredDateTime(request.applicationStartAt());
-        LocalDateTime applicationEndAt = parseRequiredDateTime(request.applicationEndAt());
+        LocalDateTime applicationStartAt = parseDateTime(request.applicationStartAt());
+        LocalDateTime applicationEndAt = parseDateTime(request.applicationEndAt());
         LocalDate startDate = parseRequiredDate(request.startDate());
         LocalDate endDate = parseRequiredDate(request.endDate());
         if (applicationEndAt.isBefore(applicationStartAt)) {
@@ -196,7 +196,7 @@ public class ClubTournamentSupport {
         }
     }
 
-    private LocalDateTime parseRequiredDateTime(String value) {
+    public LocalDateTime parseDateTime(String value) {
         try {
             return LocalDateTime.parse(value, DATE_TIME_FORMATTER);
         } catch (DateTimeParseException exception) {

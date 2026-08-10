@@ -104,7 +104,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("ATTENDANCE"))
         );
 
-        assertThat(responses).hasSize(12);
+        assertThat(responses).hasSize(14);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -119,7 +119,9 @@ class ClubFeatureServiceTest {
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false"
+                        "ROLE_MANAGEMENT:false",
+                        "HANDOVER:false",
+                        "DECISION_LOG:false"
                 );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "ATTENDANCE")).isTrue();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "NOTICE")).isFalse();
@@ -214,7 +216,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("NOTICE"))
         );
 
-        assertThat(responses).hasSize(12);
+        assertThat(responses).hasSize(14);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -229,7 +231,9 @@ class ClubFeatureServiceTest {
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false"
+                        "ROLE_MANAGEMENT:false",
+                        "HANDOVER:false",
+                        "DECISION_LOG:false"
                 );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "NOTICE")).isTrue();
     }
@@ -255,7 +259,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("POLL"))
         );
 
-        assertThat(responses).hasSize(12);
+        assertThat(responses).hasSize(14);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -270,7 +274,9 @@ class ClubFeatureServiceTest {
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false"
+                        "ROLE_MANAGEMENT:false",
+                        "HANDOVER:false",
+                        "DECISION_LOG:false"
                 );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "POLL")).isTrue();
     }
@@ -296,7 +302,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("SCHEDULE_MANAGE"))
         );
 
-        assertThat(responses).hasSize(12);
+        assertThat(responses).hasSize(14);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -311,7 +317,9 @@ class ClubFeatureServiceTest {
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false"
+                        "ROLE_MANAGEMENT:false",
+                        "HANDOVER:false",
+                        "DECISION_LOG:false"
                 );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")).isTrue();
     }
@@ -337,7 +345,7 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("MEMBER_DIRECTORY"))
         );
 
-        assertThat(responses).hasSize(12);
+        assertThat(responses).hasSize(14);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
@@ -352,7 +360,9 @@ class ClubFeatureServiceTest {
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:true",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false"
+                        "ROLE_MANAGEMENT:false",
+                        "HANDOVER:false",
+                        "DECISION_LOG:false"
                 );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "MEMBER_DIRECTORY")).isTrue();
     }

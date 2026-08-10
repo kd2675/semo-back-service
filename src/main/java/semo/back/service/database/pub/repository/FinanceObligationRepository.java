@@ -61,6 +61,8 @@ public interface FinanceObligationRepository extends JpaRepository<FinanceObliga
 
     Optional<FinanceObligation> findByRecurrenceSourceFinanceObligationId(Long recurrenceSourceFinanceObligationId);
 
+    Optional<FinanceObligation> findBySourceTournamentApplicationId(Long sourceTournamentApplicationId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select obligation

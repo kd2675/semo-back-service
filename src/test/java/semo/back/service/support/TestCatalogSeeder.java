@@ -121,6 +121,24 @@ public final class TestCatalogSeeder {
                         .navigationScope("ADMIN_ONLY")
                         .active(true)
                         .sortOrder(100)
+                        .build(),
+                FeatureCatalog.builder()
+                        .featureKey("HANDOVER")
+                        .displayName("인수인계")
+                        .description("임기, 집행부, 미완료 운영 항목과 다음 담당자 메모를 관리합니다.")
+                        .iconName("handshake")
+                        .navigationScope("ADMIN_ONLY")
+                        .active(true)
+                        .sortOrder(110)
+                        .build(),
+                FeatureCatalog.builder()
+                        .featureKey("DECISION_LOG")
+                        .displayName("결정 기록")
+                        .description("회의와 주요 결정의 배경, 시행일, 관련 업무와 후속 조치를 기록합니다.")
+                        .iconName("gavel")
+                        .navigationScope("USER_AND_ADMIN")
+                        .active(true)
+                        .sortOrder(120)
                         .build()
         ));
     }

@@ -15,6 +15,7 @@ public record ClubFinanceHomeResponse(
         List<ClubFinanceUserObligationResponse> recentPayments,
         ClubFinanceUserObligationResponse nextPayableObligation,
         List<ClubFinanceUserObligationResponse> openObligations,
-        List<ClubFinanceUserObligationResponse> paymentHistory
+        List<ClubFinanceUserObligationResponse> paymentHistory,
+        List<FinanceScheduleOptionResponse> scheduleOptions
 ) {
 }
