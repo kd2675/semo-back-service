@@ -653,7 +653,7 @@ public class ClubTodoService {
         );
     }
 
-    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @Transactional(transactionManager = "pubTransactionManager")
     @RecordClubActivity(subject = "할 일관리")
     public TodoSummaryResponse createTodo(Long clubId, String userKey, CreateClubTodoRequest request) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);

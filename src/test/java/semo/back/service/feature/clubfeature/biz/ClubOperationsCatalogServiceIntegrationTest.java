@@ -34,6 +34,7 @@ import semo.back.service.feature.clubfeature.vo.ApplyClubOperationTemplateReques
 import semo.back.service.feature.clubfeature.vo.ApplyClubPresetRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static semo.back.service.support.TestCatalogSeeder.seedDashboardWidgetCatalogs;
 import static semo.back.service.support.TestCatalogSeeder.seedFeatureCatalogs;
 
@@ -192,6 +193,25 @@ class ClubOperationsCatalogServiceIntegrationTest {
                         "현장 체크인",
                         "결과·순위 확정 및 공유"
                 );
+    }
+
+    @Test
+    void applySportsPreset_widgetConfigurationFailure_rollsBackEntirePreset() {
+        Long clubId = createClub("preset-owner-003", "롤백 관리자", "프리셋 롤백 테스트");
+        var beforeFeatures = clubFeatureRepository.findByClubId(clubId);
+        dashboardWidgetCatalogRepository.deleteAll();
+
+        assertThatThrownBy(() -> clubOperationsCatalogService.applyPreset(
+                clubId,
+                "SPORTS",
+                "preset-owner-003",
+                new ApplyClubPresetRequest("MERGE")
+        )).hasMessageContaining("위젯 카탈로그");
+
+        assertThat(clubFeatureRepository.findByClubId(clubId))
+                .usingRecursiveFieldByFieldElementComparator()
+                .containsExactlyInAnyOrderElementsOf(beforeFeatures);
+        assertThat(clubPositionRepository.findByClubIdOrderByDisplayNameAscClubPositionIdAsc(clubId)).isEmpty();
     }
 
     private Long createClub(String userKey, String displayName, String clubName) {

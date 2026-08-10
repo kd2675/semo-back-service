@@ -2,7 +2,6 @@ package semo.back.service.feature.clubfeature.biz;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
@@ -49,7 +48,7 @@ public class ClubFeatureService {
         return getClubFeatureResponses(clubId);
     }
 
-    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @Transactional(transactionManager = "pubTransactionManager")
     @RecordClubActivity(subject = "기능관리", failureDetail = "활성 기능 구성을 업데이트하지 못했습니다.")
     public List<ClubFeatureResponse> updateClubFeatures(Long clubId, String userKey, UpdateClubFeaturesRequest request) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);

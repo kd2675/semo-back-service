@@ -107,7 +107,7 @@ public class ClubPositionService {
         return buildPositionDetail(access, clubPositionId);
     }
 
-    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @Transactional(transactionManager = "pubTransactionManager")
     @RecordClubActivity(subject = "직책관리")
     public ClubPositionDetailResponse createPosition(Long clubId, String userKey, CreateClubPositionRequest request) {
         requireRoleManagementFeature(clubId);

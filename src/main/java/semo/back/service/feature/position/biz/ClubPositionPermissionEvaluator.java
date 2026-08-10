@@ -40,9 +40,6 @@ public class ClubPositionPermissionEvaluator {
     public static final String PERMISSION_BRACKET_REVIEW = "BRACKET_REVIEW";
     public static final String PERMISSION_BRACKET_DELETE_ANY = "BRACKET_DELETE_ANY";
     public static final String PERMISSION_FINANCE_VIEW = "FINANCE_VIEW";
-    public static final String PERMISSION_FINANCE_ISSUE = "FINANCE_ISSUE";
-    public static final String PERMISSION_FINANCE_MARK_PAID = "FINANCE_MARK_PAID";
-    public static final String PERMISSION_FINANCE_MARK_WAIVED = "FINANCE_MARK_WAIVED";
     public static final String PERMISSION_FINANCE_BILLING_ISSUE = "FINANCE_BILLING_ISSUE";
     public static final String PERMISSION_FINANCE_REQUEST_REVIEW = "FINANCE_REQUEST_REVIEW";
     public static final String PERMISSION_FINANCE_EXPENSE_CREATE = "FINANCE_EXPENSE_CREATE";

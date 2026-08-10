@@ -176,6 +176,43 @@ INSERT INTO feature_permission_catalog
 SELECT 'FINANCE_PERIOD_CLOSE', 'FINANCE', '예산과 기간 마감', '재정 기간, 예산, 계좌를 설정하고 기간을 마감합니다.', 'CLUB', 1, 26, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_PERIOD_CLOSE');
 
+-- 기존 직책의 광범위 권한을 세분 권한으로 손실 없이 이관합니다.
+INSERT INTO club_position_permission (club_position_id, permission_key, create_date, update_date)
+SELECT legacy.club_position_id, replacement.permission_key, NOW(), NOW()
+FROM club_position_permission legacy
+CROSS JOIN (
+    SELECT 'FINANCE_BILLING_ISSUE' AS permission_key
+    UNION ALL SELECT 'FINANCE_REQUEST_REVIEW'
+    UNION ALL SELECT 'FINANCE_EXPENSE_CREATE'
+) replacement
+WHERE legacy.permission_key = 'FINANCE_ISSUE'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM club_position_permission current_permission
+      WHERE current_permission.club_position_id = legacy.club_position_id
+        AND current_permission.permission_key = replacement.permission_key
+  );
+
+INSERT INTO club_position_permission (club_position_id, permission_key, create_date, update_date)
+SELECT DISTINCT legacy.club_position_id, 'FINANCE_PAYMENT_UPDATE', NOW(), NOW()
+FROM club_position_permission legacy
+WHERE legacy.permission_key IN ('FINANCE_MARK_PAID', 'FINANCE_MARK_WAIVED')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM club_position_permission current_permission
+      WHERE current_permission.club_position_id = legacy.club_position_id
+        AND current_permission.permission_key = 'FINANCE_PAYMENT_UPDATE'
+  );
+
+UPDATE feature_permission_catalog
+SET active = 0,
+    description = CASE permission_key
+        WHEN 'FINANCE_ISSUE' THEN '세분화된 재정 권한으로 이관된 비활성 호환 권한입니다.'
+        ELSE 'FINANCE_PAYMENT_UPDATE로 이관된 비활성 호환 권한입니다.'
+    END,
+    update_date = NOW()
+WHERE permission_key IN ('FINANCE_ISSUE', 'FINANCE_MARK_PAID', 'FINANCE_MARK_WAIVED');
+
 -- Post-apply verification. Every query must return the expected object/column/index.
 SELECT table_name
 FROM information_schema.tables
@@ -198,3 +235,26 @@ WHERE permission_key IN (
     'FINANCE_PAYMENT_UPDATE', 'FINANCE_EXPORT', 'FINANCE_PERIOD_CLOSE'
 )
 ORDER BY permission_key;
+
+SELECT permission_key, active
+FROM feature_permission_catalog
+WHERE permission_key IN ('FINANCE_ISSUE', 'FINANCE_MARK_PAID', 'FINANCE_MARK_WAIVED')
+ORDER BY permission_key;
+
+SELECT legacy.club_position_id, legacy.permission_key
+FROM club_position_permission legacy
+WHERE legacy.permission_key = 'FINANCE_ISSUE'
+  AND EXISTS (
+      SELECT 1
+      FROM (
+          SELECT 'FINANCE_BILLING_ISSUE' AS permission_key
+          UNION ALL SELECT 'FINANCE_REQUEST_REVIEW'
+          UNION ALL SELECT 'FINANCE_EXPENSE_CREATE'
+      ) required_permission
+      WHERE NOT EXISTS (
+          SELECT 1
+          FROM club_position_permission migrated
+          WHERE migrated.club_position_id = legacy.club_position_id
+            AND migrated.permission_key = required_permission.permission_key
+      )
+  );

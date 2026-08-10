@@ -61,7 +61,7 @@ public class ClubTodoCollaborationService {
         return buildResponse(access, todoItem);
     }
 
-    @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
+    @Transactional(transactionManager = "pubTransactionManager")
     @RecordClubActivity(subject = "할 일")
     public TodoChecklistItemResponse addChecklistItem(
             Long clubId,

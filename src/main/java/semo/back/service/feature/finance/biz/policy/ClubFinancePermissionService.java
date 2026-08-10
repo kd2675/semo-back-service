@@ -16,9 +16,6 @@ import java.util.Set;
 public class ClubFinancePermissionService {
     public static final String FEATURE_FINANCE = "FINANCE";
     public static final String PERMISSION_FINANCE_VIEW = "FINANCE_VIEW";
-    public static final String PERMISSION_FINANCE_ISSUE = "FINANCE_ISSUE";
-    public static final String PERMISSION_FINANCE_MARK_PAID = "FINANCE_MARK_PAID";
-    public static final String PERMISSION_FINANCE_MARK_WAIVED = "FINANCE_MARK_WAIVED";
     public static final String PERMISSION_FINANCE_BILLING_ISSUE = "FINANCE_BILLING_ISSUE";
     public static final String PERMISSION_FINANCE_REQUEST_REVIEW = "FINANCE_REQUEST_REVIEW";
     public static final String PERMISSION_FINANCE_EXPENSE_CREATE = "FINANCE_EXPENSE_CREATE";
@@ -48,35 +45,35 @@ public class ClubFinancePermissionService {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_FINANCE_BILLING_ISSUE, PERMISSION_FINANCE_ISSUE);
+        return hasRolePermission(access, PERMISSION_FINANCE_BILLING_ISSUE);
     }
 
     public boolean canReviewRequests(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_FINANCE_REQUEST_REVIEW, PERMISSION_FINANCE_ISSUE);
+        return hasRolePermission(access, PERMISSION_FINANCE_REQUEST_REVIEW);
     }
 
     public boolean canCreateExpenses(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_FINANCE_EXPENSE_CREATE, PERMISSION_FINANCE_ISSUE);
+        return hasRolePermission(access, PERMISSION_FINANCE_EXPENSE_CREATE);
     }
 
     public boolean canMarkPaid(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_FINANCE_PAYMENT_UPDATE, PERMISSION_FINANCE_MARK_PAID);
+        return hasRolePermission(access, PERMISSION_FINANCE_PAYMENT_UPDATE);
     }
 
     public boolean canMarkWaived(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_FINANCE_PAYMENT_UPDATE, PERMISSION_FINANCE_MARK_WAIVED);
+        return hasRolePermission(access, PERMISSION_FINANCE_PAYMENT_UPDATE);
     }
 
     public boolean canUpdatePayments(ClubAccessResolver.ClubAccess access) {

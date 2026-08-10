@@ -663,7 +663,7 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'FINANCE_ISSUE', 'FINANCE', '재정 항목 발행', '재정 항목을 생성하고 대상 멤버에게 발행합니다.', 'CLUB', 1, 20, NOW(), NOW()
+SELECT 'FINANCE_ISSUE', 'FINANCE', '레거시 재정 발행', '세분화된 재정 권한으로 이관된 비활성 호환 권한입니다.', 'CLUB', 0, 20, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_ISSUE');
 
 INSERT INTO feature_permission_catalog (
@@ -677,7 +677,7 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'FINANCE_MARK_PAID', 'FINANCE', '재정 납부 처리', '재정 항목을 납부 완료 상태로 변경합니다.', 'CLUB', 1, 30, NOW(), NOW()
+SELECT 'FINANCE_MARK_PAID', 'FINANCE', '레거시 납부 처리', 'FINANCE_PAYMENT_UPDATE로 이관된 비활성 호환 권한입니다.', 'CLUB', 0, 30, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_MARK_PAID');
 
 INSERT INTO feature_permission_catalog (
@@ -691,38 +691,75 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'FINANCE_MARK_WAIVED', 'FINANCE', '재정 면제 처리', '재정 항목을 면제 상태로 변경합니다.', 'CLUB', 1, 40, NOW(), NOW()
+SELECT 'FINANCE_MARK_WAIVED', 'FINANCE', '레거시 면제 처리', 'FINANCE_PAYMENT_UPDATE로 이관된 비활성 호환 권한입니다.', 'CLUB', 0, 40, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_MARK_WAIVED');
 
 INSERT INTO feature_permission_catalog
-    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+    (permission_key, feature_key, display_name, description, ownership_scope, active, sort_order, create_date, update_date)
 SELECT 'FINANCE_BILLING_ISSUE', 'FINANCE', '청구 발행', '회비와 분담금 청구를 생성하고 대상 멤버에게 발행합니다.', 'CLUB', 1, 21, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_BILLING_ISSUE');
 
 INSERT INTO feature_permission_catalog
-    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+    (permission_key, feature_key, display_name, description, ownership_scope, active, sort_order, create_date, update_date)
 SELECT 'FINANCE_REQUEST_REVIEW', 'FINANCE', '정산 요청 검토', '멤버가 제출한 선지출·환불·정산 요청을 승인하거나 반려합니다.', 'CLUB', 1, 22, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_REQUEST_REVIEW');
 
 INSERT INTO feature_permission_catalog
-    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+    (permission_key, feature_key, display_name, description, ownership_scope, active, sort_order, create_date, update_date)
 SELECT 'FINANCE_EXPENSE_CREATE', 'FINANCE', '지출 입력 및 정정', '지출을 입력하고 증빙과 정정·취소 이력을 관리합니다.', 'CLUB', 1, 23, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_EXPENSE_CREATE');
 
 INSERT INTO feature_permission_catalog
-    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+    (permission_key, feature_key, display_name, description, ownership_scope, active, sort_order, create_date, update_date)
 SELECT 'FINANCE_PAYMENT_UPDATE', 'FINANCE', '수납 상태 변경', '납부 상태와 결제 수단을 변경합니다.', 'CLUB', 1, 31, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_PAYMENT_UPDATE');
 
 INSERT INTO feature_permission_catalog
-    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+    (permission_key, feature_key, display_name, description, ownership_scope, active, sort_order, create_date, update_date)
 SELECT 'FINANCE_EXPORT', 'FINANCE', '재정 내보내기', '기간별 청구·수납·지출 내역을 CSV로 내보냅니다.', 'CLUB', 1, 50, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_EXPORT');
 
 INSERT INTO feature_permission_catalog
-    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+    (permission_key, feature_key, display_name, description, ownership_scope, active, sort_order, create_date, update_date)
 SELECT 'FINANCE_PERIOD_CLOSE', 'FINANCE', '예산 및 기간 마감', '예산을 관리하고 월·시즌 재정 기간을 마감합니다.', 'CLUB', 1, 60, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_PERIOD_CLOSE');
+
+-- 기존 광범위 재정 권한을 세분 권한으로 보존 이관한 뒤 더 이상 신규 직책에 노출하지 않습니다.
+INSERT INTO club_position_permission (club_position_id, permission_key, create_date, update_date)
+SELECT legacy.club_position_id, replacement.permission_key, NOW(), NOW()
+FROM club_position_permission legacy
+CROSS JOIN (
+    SELECT 'FINANCE_BILLING_ISSUE' AS permission_key
+    UNION ALL SELECT 'FINANCE_REQUEST_REVIEW'
+    UNION ALL SELECT 'FINANCE_EXPENSE_CREATE'
+) replacement
+WHERE legacy.permission_key = 'FINANCE_ISSUE'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM club_position_permission current_permission
+      WHERE current_permission.club_position_id = legacy.club_position_id
+        AND current_permission.permission_key = replacement.permission_key
+  );
+
+INSERT INTO club_position_permission (club_position_id, permission_key, create_date, update_date)
+SELECT DISTINCT legacy.club_position_id, 'FINANCE_PAYMENT_UPDATE', NOW(), NOW()
+FROM club_position_permission legacy
+WHERE legacy.permission_key IN ('FINANCE_MARK_PAID', 'FINANCE_MARK_WAIVED')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM club_position_permission current_permission
+      WHERE current_permission.club_position_id = legacy.club_position_id
+        AND current_permission.permission_key = 'FINANCE_PAYMENT_UPDATE'
+  );
+
+UPDATE feature_permission_catalog
+SET active = 0,
+    description = CASE permission_key
+        WHEN 'FINANCE_ISSUE' THEN '세분화된 재정 권한으로 이관된 비활성 호환 권한입니다.'
+        ELSE 'FINANCE_PAYMENT_UPDATE로 이관된 비활성 호환 권한입니다.'
+    END,
+    update_date = NOW()
+WHERE permission_key IN ('FINANCE_ISSUE', 'FINANCE_MARK_PAID', 'FINANCE_MARK_WAIVED');
 
 INSERT INTO feature_permission_catalog (
     permission_key,

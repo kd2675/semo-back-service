@@ -234,6 +234,7 @@ public class ClubOperationsCatalogService {
         );
     }
 
+    @Transactional(transactionManager = "pubTransactionManager")
     public ApplyClubPresetResponse applyPreset(
             Long clubId,
             String presetKey,
@@ -276,6 +277,7 @@ public class ClubOperationsCatalogService {
         );
     }
 
+    @Transactional(transactionManager = "pubTransactionManager")
     public ApplyClubOperationTemplateResponse applyTemplate(
             Long clubId,
             String templateKey,
