@@ -208,7 +208,6 @@ public class ClubFeatureService {
         return switch (normalizeFeatureKey(featureKey)) {
             case FEATURE_JOIN_REQUEST -> "/clubs/%d".formatted(clubId);
             case "ATTENDANCE" -> "/clubs/%d/schedule".formatted(clubId);
-            case "TIMELINE" -> "/clubs/%d/profile/activity".formatted(clubId);
             case "NOTICE" -> "/clubs/%d/board".formatted(clubId);
             case "POLL", "SCHEDULE_MANAGE" -> "/clubs/%d/schedule".formatted(clubId);
             case "TOURNAMENT_RECORD" -> "/clubs/%d/more/tournaments".formatted(clubId);
@@ -226,7 +225,6 @@ public class ClubFeatureService {
         return switch (normalizeFeatureKey(featureKey)) {
             case FEATURE_JOIN_REQUEST -> "/clubs/%d/admin/more/join-requests".formatted(clubId);
             case "ATTENDANCE" -> "/clubs/%d/schedule".formatted(clubId);
-            case "TIMELINE" -> "/clubs/%d/admin/logs".formatted(clubId);
             case "NOTICE" -> "/clubs/%d/board".formatted(clubId);
             case "POLL", "SCHEDULE_MANAGE" -> "/clubs/%d/schedule".formatted(clubId);
             case "TOURNAMENT_RECORD" -> "/clubs/%d/admin/more/tournaments".formatted(clubId);

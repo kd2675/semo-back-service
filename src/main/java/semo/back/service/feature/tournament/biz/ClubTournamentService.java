@@ -118,7 +118,10 @@ public class ClubTournamentService {
 
     public ClubAdminTournamentHomeResponse getAdminTournamentHome(Long clubId, String userKey) {
         requireTournamentFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        boolean canReview = clubTournamentPermissionService.canReviewTournament(access);
+        boolean canDelete = clubTournamentPermissionService.canDeleteTournament(access);
+        requireTournamentAdminToolAccess(canReview, canDelete);
         List<TournamentRecord> tournaments = tournamentRecordRepository
                 .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(clubId);
         TournamentContext context = buildTournamentContext(access, tournaments);
@@ -126,7 +129,9 @@ public class ClubTournamentService {
         return new ClubAdminTournamentHomeResponse(
                 access.club().getClubId(),
                 access.club().getName(),
-                true,
+                access.isAdmin(),
+                canReview,
+                canDelete,
                 context.summaries().size(),
                 (int) context.summaries().stream().filter(summary -> APPROVAL_PENDING.equals(summary.approvalStatus())).count(),
                 (int) context.summaries().stream().filter(summary -> APPROVAL_APPROVED.equals(summary.approvalStatus())).count(),
@@ -270,7 +275,7 @@ public class ClubTournamentService {
             ReviewTournamentRecordRequest request
     ) {
         requireTournamentFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         if (!clubTournamentPermissionService.canReviewTournament(access)) {
             throw new SemoException.ForbiddenException("대회 승인 검토 권한이 없습니다.");
         }
@@ -868,7 +873,15 @@ public class ClubTournamentService {
     private boolean canViewTournament(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
         return isTournamentApproved(tournament)
                 || access.isAdmin()
+                || clubTournamentPermissionService.canReviewTournament(access)
+                || clubTournamentPermissionService.canDeleteTournament(access)
                 || access.clubProfile().getClubProfileId().equals(tournament.getAuthorClubProfileId());
+    }
+
+    private void requireTournamentAdminToolAccess(boolean canReview, boolean canDelete) {
+        if (!canReview && !canDelete) {
+            throw new SemoException.ForbiddenException("대회 운영 도구에 접근할 권한이 없습니다.");
+        }
     }
 
     private void validateTournamentVisible(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {

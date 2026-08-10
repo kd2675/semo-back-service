@@ -7,27 +7,29 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.feature.schedule.biz.ClubScheduleHomeService;
-import semo.back.service.feature.schedule.vo.ClubScheduleHomeResponse;
+import semo.back.service.feature.poll.biz.ClubPollService;
+import semo.back.service.feature.schedule.vo.ClubScheduleVoteSummaryResponse;
 import web.common.core.response.base.dto.ResponseDataDTO;
 
 @RequirePrincipalRole
 @RestController
-@RequestMapping("/api/semo/v1/clubs/{clubId}/more/schedules")
+@RequestMapping("/api/semo/v1/clubs/{clubId}/schedule/votes/summary")
 @RequiredArgsConstructor
-public class ClubScheduleHomeController {
-    private final ClubScheduleHomeService clubScheduleHomeService;
+public class ClubScheduleVoteSummaryController {
+    private final ClubPollService clubPollService;
 
     @GetMapping
-    public ResponseDataDTO<ClubScheduleHomeResponse> getScheduleHome(
+    public ResponseDataDTO<ClubScheduleVoteSummaryResponse> getVoteSummary(
             @PathVariable Long clubId,
+            @RequestParam(required = false) String query,
             UserContext userContext
     ) {
         return ResponseDataDTO.of(
-                clubScheduleHomeService.getScheduleHome(clubId, requireUserKey(userContext)),
-                "캘린더 관리 홈 조회 성공"
+                clubPollService.getVoteSummary(clubId, requireUserKey(userContext), query),
+                "투표 요약 조회 성공"
         );
     }
 
@@ -37,5 +39,4 @@ public class ClubScheduleHomeController {
         }
         return userContext.getUserKey();
     }
-
 }

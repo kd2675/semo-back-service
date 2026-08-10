@@ -33,15 +33,6 @@ public final class TestCatalogSeeder {
                         .sortOrder(45)
                         .build(),
                 FeatureCatalog.builder()
-                        .featureKey("TIMELINE")
-                        .displayName("내 활동")
-                        .description("멤버는 자신의 활동을 확인하고 운영진은 감사 로그에서 전체 활동을 조회합니다.")
-                        .iconName("timeline")
-                        .navigationScope("USER_AND_ADMIN")
-                        .active(true)
-                        .sortOrder(110)
-                        .build(),
-                FeatureCatalog.builder()
                         .featureKey("NOTICE")
                         .displayName("게시판 공지")
                         .description("대표 게시판에서 공지를 작성하고 공유 범위를 관리합니다.")

@@ -1,4 +1,4 @@
-package semo.back.service.feature.timeline.biz;
+package semo.back.service.feature.activity.biz;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,42 +8,29 @@ import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.database.pub.entity.ClubActivityLog;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.ClubActivityLogRepository;
-import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
-import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
-import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
-import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
-
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static semo.back.service.feature.activity.biz.ClubActivityRecorder.STATUS_FAIL;
 import static semo.back.service.feature.activity.biz.ClubActivityRecorder.STATUS_SUCCESS;
-import static semo.back.service.support.TestCatalogSeeder.seedFeatureCatalogs;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class ClubTimelineServiceTest {
+class ClubMemberActivityServiceTest {
 
     @Autowired
-    private ClubTimelineService clubTimelineService;
+    private ClubMemberActivityService clubMemberActivityService;
 
     @Autowired
     private ClubService clubService;
 
     @Autowired
-    private ClubFeatureService clubFeatureService;
-
-    @Autowired
     private ClubActivityLogRepository clubActivityLogRepository;
-
-    @Autowired
-    private ClubFeatureRepository clubFeatureRepository;
 
     @Autowired
     private ClubProfileRepository clubProfileRepository;
@@ -57,22 +44,17 @@ class ClubTimelineServiceTest {
     @Autowired
     private ProfileUserRepository profileUserRepository;
 
-    @Autowired
-    private FeatureCatalogRepository featureCatalogRepository;
-
     @BeforeEach
     void setUp() {
         clubActivityLogRepository.deleteAll();
-        clubFeatureRepository.deleteAll();
         clubProfileRepository.deleteAll();
         clubMemberRepository.deleteAll();
         clubRepository.deleteAll();
         profileUserRepository.deleteAll();
-        seedFeatureCatalogs(featureCatalogRepository);
     }
 
     @Test
-    void timelineReturnsClubActivityFeedWithCursorPaging() {
+    void getMemberActivity_actorScopedFeed_returnsCursorPageWithoutFeatureToggle() {
         String ownerUserKey = "timeline-owner-001";
         Long clubId = clubService.createClub(
                 ownerUserKey,
@@ -87,11 +69,6 @@ class ClubTimelineServiceTest {
                 )
         ).clubId();
 
-        clubFeatureService.updateClubFeatures(
-                clubId,
-                ownerUserKey,
-                new UpdateClubFeaturesRequest(List.of("TIMELINE"))
-        );
         clubActivityLogRepository.deleteAll();
         Long ownerClubProfileId = clubProfileRepository.findAll().stream()
                 .map(ClubProfile::getClubProfileId)
@@ -135,7 +112,7 @@ class ClubTimelineServiceTest {
                 null
         );
 
-        var firstPage = clubTimelineService.getTimeline(clubId, ownerUserKey, null, null, 2);
+        var firstPage = clubMemberActivityService.getMemberActivity(clubId, ownerUserKey, null, null, 2);
 
         assertThat(firstPage.admin()).isTrue();
         assertThat(firstPage.hasNext()).isTrue();
@@ -150,7 +127,7 @@ class ClubTimelineServiceTest {
         assertThat(firstPage.entries().get(0).createdAtLabel()).isNotBlank();
         assertThat(firstPage.entries().get(1).activityId()).isEqualTo(middle.getClubActivityLogId());
 
-        var secondPage = clubTimelineService.getTimeline(
+        var secondPage = clubMemberActivityService.getMemberActivity(
                 clubId,
                 ownerUserKey,
                 firstPage.nextCursorCreatedAt(),

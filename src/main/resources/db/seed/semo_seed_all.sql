@@ -99,34 +99,6 @@ INSERT INTO feature_catalog (
     update_date
 )
 SELECT
-    'TIMELINE',
-    '내 활동',
-    '멤버는 자신의 활동을 확인하고 운영진은 감사 로그에서 전체 활동을 조회합니다.',
-    'timeline',
-    'USER_AND_ADMIN',
-    1,
-    110,
-    NOW(),
-    NOW()
-FROM dual
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM feature_catalog
-    WHERE feature_key = 'TIMELINE'
-);
-
-INSERT INTO feature_catalog (
-    feature_key,
-    display_name,
-    description,
-    icon_name,
-    navigation_scope,
-    active,
-    sort_order,
-    create_date,
-    update_date
-)
-SELECT
     'POLL',
     '투표',
     '대표 캘린더에서 투표를 작성하고 응답 결과를 관리합니다.',
@@ -400,10 +372,6 @@ UPDATE feature_catalog
 SET description = '비공개로 건의와 불편 신고를 접수하고 운영 답변을 확인합니다.', sort_order = 90, update_date = NOW()
 WHERE feature_key = 'FEEDBACK';
 UPDATE feature_catalog SET sort_order = 100, update_date = NOW() WHERE feature_key = 'ROLE_MANAGEMENT';
-UPDATE feature_catalog
-SET display_name = '내 활동', description = '멤버는 자신의 활동을 확인하고 운영진은 감사 로그에서 전체 활동을 조회합니다.', sort_order = 110, update_date = NOW()
-WHERE feature_key = 'TIMELINE';
-
 INSERT INTO feature_permission_catalog (
     permission_key,
     feature_key,
@@ -711,20 +679,6 @@ INSERT INTO feature_permission_catalog (
 )
 SELECT 'FINANCE_MARK_WAIVED', 'FINANCE', '재정 면제 처리', '재정 항목을 면제 상태로 변경합니다.', 'CLUB', 1, 40, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_MARK_WAIVED');
-
-INSERT INTO feature_permission_catalog (
-    permission_key,
-    feature_key,
-    display_name,
-    description,
-    ownership_scope,
-    active,
-    sort_order,
-    create_date,
-    update_date
-)
-SELECT 'TIMELINE_VIEW', 'TIMELINE', '타임라인 조회', '타임라인 화면을 확인합니다.', 'CLUB', 1, 10, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TIMELINE_VIEW');
 
 INSERT INTO feature_permission_catalog (
     permission_key,

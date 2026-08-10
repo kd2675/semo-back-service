@@ -47,17 +47,27 @@ class ClubMoreSummaryServiceTest {
         when(clubFeatureService.getClubFeatures(1L, "delegated-user")).thenReturn(List.of(
                 feature("FINANCE", 10),
                 feature("TODO", 20),
-                feature("ROLE_MANAGEMENT", 30)
+                feature("ROLE_MANAGEMENT", 30),
+                feature("TOURNAMENT_RECORD", 40),
+                feature("BRACKET", 50)
         ));
         when(clubPositionPermissionEvaluator.getPermissionKeysForMember(1L, 10L)).thenReturn(Set.of(
                 ClubPositionPermissionEvaluator.PERMISSION_FINANCE_VIEW,
                 ClubPositionPermissionEvaluator.PERMISSION_TODO_VIEW,
-                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_VIEW
+                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_VIEW,
+                ClubPositionPermissionEvaluator.PERMISSION_TOURNAMENT_REVIEW,
+                ClubPositionPermissionEvaluator.PERMISSION_BRACKET_DELETE_ANY
         ));
 
         var response = clubMoreSummaryService.getSummary(1L, "delegated-user");
 
-        assertThat(response.adminToolFeatureKeys()).containsExactly("FINANCE", "TODO", "ROLE_MANAGEMENT");
+        assertThat(response.adminToolFeatureKeys()).containsExactly(
+                "FINANCE",
+                "TODO",
+                "ROLE_MANAGEMENT",
+                "TOURNAMENT_RECORD",
+                "BRACKET"
+        );
     }
 
     private ClubFeatureResponse feature(String featureKey, int sortOrder) {

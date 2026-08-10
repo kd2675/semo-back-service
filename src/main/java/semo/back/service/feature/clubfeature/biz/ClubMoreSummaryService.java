@@ -58,6 +58,14 @@ public class ClubMoreSummaryService {
         permissions.put("FINANCE", Set.of(ClubPositionPermissionEvaluator.PERMISSION_FINANCE_VIEW));
         permissions.put("TODO", Set.of(ClubPositionPermissionEvaluator.PERMISSION_TODO_VIEW));
         permissions.put("ROLE_MANAGEMENT", Set.of(ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_VIEW));
+        permissions.put("TOURNAMENT_RECORD", Set.of(
+                ClubPositionPermissionEvaluator.PERMISSION_TOURNAMENT_REVIEW,
+                ClubPositionPermissionEvaluator.PERMISSION_TOURNAMENT_DELETE_ANY
+        ));
+        permissions.put("BRACKET", Set.of(
+                ClubPositionPermissionEvaluator.PERMISSION_BRACKET_REVIEW,
+                ClubPositionPermissionEvaluator.PERMISSION_BRACKET_DELETE_ANY
+        ));
         return Map.copyOf(permissions);
     }
 }

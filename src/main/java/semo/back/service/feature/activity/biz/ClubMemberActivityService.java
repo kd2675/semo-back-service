@@ -1,4 +1,4 @@
-package semo.back.service.feature.timeline.biz;
+package semo.back.service.feature.activity.biz;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -9,10 +9,8 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubActivityLog;
 import semo.back.service.database.pub.repository.ClubActivityLogRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
-import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
-import semo.back.service.feature.timeline.vo.ClubAdminTimelineResponse;
-import semo.back.service.feature.timeline.vo.ClubTimelineResponse;
-import semo.back.service.feature.timeline.vo.TimelineEntryResponse;
+import semo.back.service.feature.activity.vo.ClubMemberActivityEntryResponse;
+import semo.back.service.feature.activity.vo.ClubMemberActivityResponse;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -22,8 +20,7 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class ClubTimelineService {
-    private static final String FEATURE_TIMELINE = "TIMELINE";
+public class ClubMemberActivityService {
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 50;
     private static final DateTimeFormatter DATE_TIME_REQUEST_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -31,9 +28,8 @@ public class ClubTimelineService {
 
     private final ClubActivityLogRepository clubActivityLogRepository;
     private final ClubAccessResolver clubAccessResolver;
-    private final ClubFeatureService clubFeatureService;
 
-    public ClubTimelineResponse getTimeline(
+    public ClubMemberActivityResponse getMemberActivity(
             Long clubId,
             String userKey,
             String cursorCreatedAt,
@@ -41,7 +37,6 @@ public class ClubTimelineService {
             Integer size
     ) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        requireTimelineFeature(clubId);
 
         int pageSize = normalizePageSize(size);
         LocalDateTime parsedCursorCreatedAt = parseCursorDateTime(cursorCreatedAt);
@@ -55,12 +50,12 @@ public class ClubTimelineService {
 
         boolean hasNext = logs.size() > pageSize;
         List<ClubActivityLog> pageItems = hasNext ? logs.subList(0, pageSize) : logs;
-        List<TimelineEntryResponse> entries = pageItems.stream()
+        List<ClubMemberActivityEntryResponse> entries = pageItems.stream()
                 .map(this::toEntryResponse)
                 .toList();
 
         ClubActivityLog lastItem = pageItems.isEmpty() ? null : pageItems.get(pageItems.size() - 1);
-        return new ClubTimelineResponse(
+        return new ClubMemberActivityResponse(
                 access.club().getClubId(),
                 access.club().getName(),
                 isAdminRole(access.membership().getRoleCode()),
@@ -71,26 +66,8 @@ public class ClubTimelineService {
         );
     }
 
-    public ClubAdminTimelineResponse getAdminTimeline(Long clubId, String userKey) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        requireTimelineFeature(clubId);
-        return new ClubAdminTimelineResponse(
-                access.club().getClubId(),
-                access.club().getName()
-        );
-    }
-
-    public ClubAdminTimelineResponse updateAdminTimeline(Long clubId, String userKey) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        requireTimelineFeature(clubId);
-        return new ClubAdminTimelineResponse(
-                access.club().getClubId(),
-                access.club().getName()
-        );
-    }
-
-    private TimelineEntryResponse toEntryResponse(ClubActivityLog activityLog) {
-        return new TimelineEntryResponse(
+    private ClubMemberActivityEntryResponse toEntryResponse(ClubActivityLog activityLog) {
+        return new ClubMemberActivityEntryResponse(
                 activityLog.getClubActivityLogId(),
                 activityLog.getActorDisplayName(),
                 toAvatarLabel(activityLog.getActorDisplayName()),
@@ -100,13 +77,6 @@ public class ClubTimelineService {
                 formatDateTimeValue(activityLog.getCreatedAt()),
                 formatDateTime(activityLog.getCreatedAt())
         );
-    }
-
-    private boolean requireTimelineFeature(Long clubId) {
-        if (!clubFeatureService.isFeatureEnabled(clubId, FEATURE_TIMELINE)) {
-            throw new SemoException.ValidationException("타임라인 기능이 활성화되지 않았습니다.");
-        }
-        return true;
     }
 
     private LocalDateTime parseCursorDateTime(String value) {

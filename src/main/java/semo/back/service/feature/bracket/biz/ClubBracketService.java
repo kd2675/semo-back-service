@@ -113,7 +113,10 @@ public class ClubBracketService {
 
     public ClubAdminBracketHomeResponse getAdminBracketHome(Long clubId, String userKey) {
         requireBracketFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        boolean canReview = clubBracketPermissionService.canReviewBracket(access);
+        boolean canDelete = clubBracketPermissionService.canDeleteBracket(access);
+        requireBracketAdminToolAccess(canReview, canDelete);
         List<BracketRecord> brackets = bracketRecordRepository.findByClubIdAndDeletedFalseOrderByCreateDateDescBracketRecordIdDesc(clubId);
         BracketSnapshot snapshot = loadSnapshot(brackets);
         List<BracketSummaryResponse> summaries = brackets.stream()
@@ -122,7 +125,9 @@ public class ClubBracketService {
         return new ClubAdminBracketHomeResponse(
                 access.club().getClubId(),
                 access.club().getName(),
-                true,
+                access.isAdmin(),
+                canReview,
+                canDelete,
                 summaries.size(),
                 (int) summaries.stream().filter(summary -> APPROVAL_DRAFT.equals(summary.approvalStatus())).count(),
                 (int) summaries.stream().filter(summary -> APPROVAL_PENDING.equals(summary.approvalStatus())).count(),
@@ -264,7 +269,7 @@ public class ClubBracketService {
             ReviewBracketRequest request
     ) {
         requireBracketFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         if (!clubBracketPermissionService.canReviewBracket(access)) {
             throw new SemoException.ForbiddenException("대진표를 승인할 권한이 없습니다.");
         }
@@ -308,7 +313,7 @@ public class ClubBracketService {
     @RecordClubActivity(subject = "대진표")
     public void deleteBracket(Long clubId, Long bracketRecordId, String userKey) {
         requireBracketFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         if (!clubBracketPermissionService.canDeleteBracket(access)) {
             throw new SemoException.ForbiddenException("대진표를 삭제할 권한이 없습니다.");
         }
@@ -764,6 +769,10 @@ public class ClubBracketService {
         if (access.isAdmin()) {
             return true;
         }
+        if (clubBracketPermissionService.canReviewBracket(access)
+                || clubBracketPermissionService.canDeleteBracket(access)) {
+            return true;
+        }
         if (APPROVAL_APPROVED.equals(bracket.getApprovalStatus())) {
             return true;
         }
@@ -779,6 +788,12 @@ public class ClubBracketService {
     private void requireBracketFeature(Long clubId) {
         if (!clubBracketPermissionService.isBracketEnabled(clubId)) {
             throw new SemoException.ValidationException("대진표 기능이 활성화되지 않았습니다.");
+        }
+    }
+
+    private void requireBracketAdminToolAccess(boolean canReview, boolean canDelete) {
+        if (!canReview && !canDelete) {
+            throw new SemoException.ForbiddenException("대진표 운영 도구에 접근할 권한이 없습니다.");
         }
     }
 

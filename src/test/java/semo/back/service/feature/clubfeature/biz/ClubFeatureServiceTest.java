@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
 import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
@@ -23,6 +24,7 @@ import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static semo.back.service.support.TestCatalogSeeder.seedFeatureCatalogs;
 
 @SpringBootTest
@@ -112,13 +114,12 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("ATTENDANCE"))
         );
 
-        assertThat(responses).hasSize(13);
+        assertThat(responses).hasSize(12);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
                         "JOIN_REQUEST:false",
                         "ATTENDANCE:true",
-                        "TIMELINE:false",
                         "NOTICE:false",
                         "POLL:false",
                         "SCHEDULE_MANAGE:false",
@@ -131,7 +132,6 @@ class ClubFeatureServiceTest {
                         "ROLE_MANAGEMENT:false"
                 );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "ATTENDANCE")).isTrue();
-        assertThat(clubFeatureService.isFeatureEnabled(clubId, "TIMELINE")).isFalse();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "NOTICE")).isFalse();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "POLL")).isFalse();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")).isFalse();
@@ -180,7 +180,7 @@ class ClubFeatureServiceTest {
     }
 
     @Test
-    void updateClubFeaturesEnablesTimelineFeature() {
+    void updateClubFeatures_removedTimelineKey_throwsValidation() {
         Long clubId = clubService.createClub(
                 "feature-user-002",
                 "Feature Admin",
@@ -194,31 +194,13 @@ class ClubFeatureServiceTest {
                 )
         ).clubId();
 
-        var responses = clubFeatureService.updateClubFeatures(
+        assertThatThrownBy(() -> clubFeatureService.updateClubFeatures(
                 clubId,
                 "feature-user-002",
                 new UpdateClubFeaturesRequest(java.util.List.of("TIMELINE"))
-        );
-
-        assertThat(responses).hasSize(13);
-        assertThat(responses)
-                .extracting(response -> response.featureKey() + ":" + response.enabled())
-                .containsExactlyInAnyOrder(
-                        "JOIN_REQUEST:false",
-                        "ATTENDANCE:false",
-                        "TIMELINE:true",
-                        "NOTICE:false",
-                        "POLL:false",
-                        "SCHEDULE_MANAGE:false",
-                        "TOURNAMENT_RECORD:false",
-                        "BRACKET:false",
-                        "FINANCE:false",
-                        "FEEDBACK:false",
-                        "MEMBER_DIRECTORY:false",
-                        "TODO:false",
-                        "ROLE_MANAGEMENT:false"
-                );
-        assertThat(clubFeatureService.isFeatureEnabled(clubId, "TIMELINE")).isTrue();
+        ))
+                .isInstanceOf(SemoException.ValidationException.class)
+                .hasMessage("지원하지 않는 기능 키가 포함되어 있습니다.");
     }
 
     @Test
@@ -242,13 +224,12 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("NOTICE"))
         );
 
-        assertThat(responses).hasSize(13);
+        assertThat(responses).hasSize(12);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
                         "JOIN_REQUEST:false",
                         "ATTENDANCE:false",
-                        "TIMELINE:false",
                         "NOTICE:true",
                         "POLL:false",
                         "SCHEDULE_MANAGE:false",
@@ -284,13 +265,12 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("POLL"))
         );
 
-        assertThat(responses).hasSize(13);
+        assertThat(responses).hasSize(12);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
                         "JOIN_REQUEST:false",
                         "ATTENDANCE:false",
-                        "TIMELINE:false",
                         "NOTICE:false",
                         "POLL:true",
                         "SCHEDULE_MANAGE:false",
@@ -326,13 +306,12 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("SCHEDULE_MANAGE"))
         );
 
-        assertThat(responses).hasSize(13);
+        assertThat(responses).hasSize(12);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
                         "JOIN_REQUEST:false",
                         "ATTENDANCE:false",
-                        "TIMELINE:false",
                         "NOTICE:false",
                         "POLL:false",
                         "SCHEDULE_MANAGE:true",
@@ -368,13 +347,12 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("MEMBER_DIRECTORY"))
         );
 
-        assertThat(responses).hasSize(13);
+        assertThat(responses).hasSize(12);
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
                         "JOIN_REQUEST:false",
                         "ATTENDANCE:false",
-                        "TIMELINE:false",
                         "NOTICE:false",
                         "POLL:false",
                         "SCHEDULE_MANAGE:false",

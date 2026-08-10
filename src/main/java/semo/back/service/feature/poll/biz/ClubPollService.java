@@ -16,8 +16,8 @@ import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteSelectionRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
-import semo.back.service.feature.poll.vo.ClubPollHomeResponse;
 import semo.back.service.feature.poll.vo.ClubPollSummaryResponse;
+import semo.back.service.feature.schedule.vo.ClubScheduleVoteSummaryResponse;
 import semo.back.service.feature.schedule.vo.ScheduleVoteOptionSummaryResponse;
 
 import java.time.LocalDate;
@@ -50,13 +50,13 @@ public class ClubPollService {
     private final ClubPollPermissionService clubPollPermissionService;
     private final ImageFileUrlResolver imageFileUrlResolver;
 
-    public ClubPollHomeResponse getPollHome(Long clubId, String userKey, String query) {
+    public ClubScheduleVoteSummaryResponse getVoteSummary(Long clubId, String userKey, String query) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requirePollFeature(clubId);
 
         List<ClubScheduleVote> votes = clubScheduleVoteRepository.findAllByClubIdForPollHome(clubId, normalizeQuery(query));
         if (votes.isEmpty()) {
-            return new ClubPollHomeResponse(
+            return new ClubScheduleVoteSummaryResponse(
                     access.club().getClubId(),
                     access.club().getName(),
                     access.isAdmin(),
@@ -123,7 +123,7 @@ public class ClubPollService {
         int ongoingCount = (int) polls.stream().filter(poll -> "ONGOING".equals(poll.voteStatus())).count();
         int closedCount = (int) polls.stream().filter(poll -> "CLOSED".equals(poll.voteStatus())).count();
 
-        return new ClubPollHomeResponse(
+        return new ClubScheduleVoteSummaryResponse(
                 access.club().getClubId(),
                 access.club().getName(),
                 access.isAdmin(),

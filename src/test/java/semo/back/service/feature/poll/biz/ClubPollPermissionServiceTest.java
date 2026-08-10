@@ -129,12 +129,12 @@ class ClubPollPermissionServiceTest {
         Long clubId = createPollClub(ownerUserKey, "Poll Policy Club");
         ClubMember member = addActiveMember(clubId, memberUserKey, "Poll Member");
 
-        var deniedHome = clubPollService.getPollHome(clubId, memberUserKey, null);
+        var deniedHome = clubPollService.getVoteSummary(clubId, memberUserKey, null);
         assertThat(deniedHome.canCreate()).isFalse();
 
         assignPositionPermissions(clubId, member, ClubPositionPermissionEvaluator.PERMISSION_POLL_CREATE);
 
-        var allowedHome = clubPollService.getPollHome(clubId, memberUserKey, null);
+        var allowedHome = clubPollService.getVoteSummary(clubId, memberUserKey, null);
         assertThat(allowedHome.canCreate()).isTrue();
     }
 

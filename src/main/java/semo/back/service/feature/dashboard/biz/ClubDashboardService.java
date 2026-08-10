@@ -343,11 +343,11 @@ public class ClubDashboardService {
         return switch (normalizeWidgetKey(widgetKey)) {
             case "BOARD_NOTICE", "BOARD_STRIP" -> "/clubs/%d/board".formatted(clubId);
             case "SCHEDULE_OVERVIEW", "SCHEDULE_INSIGHT" -> "/clubs/%d/schedule".formatted(clubId);
-            case "POLL_STATUS", "POLL_PULSE" -> "/clubs/%d/more/polls".formatted(clubId);
+            case "POLL_STATUS", "POLL_PULSE" -> "/clubs/%d/schedule".formatted(clubId);
             case "TOURNAMENT_RECORD_LATEST", "TOURNAMENT_RECORD_MINE" -> "/clubs/%d/more/tournaments".formatted(clubId);
             case "BRACKET_LATEST", "BRACKET_WORKBENCH" -> "/clubs/%d/more/brackets".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
-            case "ATTENDANCE_STATUS", "ATTENDANCE_RECENT" -> "/clubs/%d/more/attendance".formatted(clubId);
+            case "ATTENDANCE_STATUS", "ATTENDANCE_RECENT" -> "/clubs/%d/schedule".formatted(clubId);
             case "FINANCE_STATUS", "FINANCE_LEDGER" -> "/clubs/%d/more/finance".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
@@ -357,11 +357,11 @@ public class ClubDashboardService {
         return switch (normalizeWidgetKey(widgetKey)) {
             case "BOARD_NOTICE", "BOARD_STRIP" -> "/clubs/%d/board".formatted(clubId);
             case "SCHEDULE_OVERVIEW", "SCHEDULE_INSIGHT" -> "/clubs/%d/schedule".formatted(clubId);
-            case "POLL_STATUS", "POLL_PULSE" -> "/clubs/%d/admin/more/polls".formatted(clubId);
+            case "POLL_STATUS", "POLL_PULSE" -> "/clubs/%d/schedule".formatted(clubId);
             case "TOURNAMENT_RECORD_LATEST", "TOURNAMENT_RECORD_MINE" -> "/clubs/%d/admin/more/tournaments".formatted(clubId);
             case "BRACKET_LATEST", "BRACKET_WORKBENCH" -> "/clubs/%d/admin/more/brackets".formatted(clubId);
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
-            case "ATTENDANCE_STATUS", "ATTENDANCE_RECENT" -> "/clubs/%d/admin/more/attendance".formatted(clubId);
+            case "ATTENDANCE_STATUS", "ATTENDANCE_RECENT" -> "/clubs/%d/schedule".formatted(clubId);
             case "FINANCE_STATUS", "FINANCE_LEDGER" -> "/clubs/%d/admin/more/finance".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };

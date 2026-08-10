@@ -14,7 +14,7 @@
   - `board read status`
   - `schedule`
   - `poll`
-  - `timeline`
+  - member activity
   - `attendance`
   - `finance`
   - `tournament`
@@ -101,7 +101,6 @@
 - `src/main/java/semo/back/service/feature/contentread`
 - `src/main/java/semo/back/service/feature/schedule`
 - `src/main/java/semo/back/service/feature/poll`
-- `src/main/java/semo/back/service/feature/timeline`
 - `src/main/java/semo/back/service/feature/attendance`
 - `src/main/java/semo/back/service/feature/finance`
 - `src/main/java/semo/back/service/feature/tournament`
@@ -168,15 +167,10 @@
 - `POST /api/semo/v1/clubs/{clubId}/board/notices`
 - `PUT /api/semo/v1/clubs/{clubId}/board/notices/{noticeId}`
 - `DELETE /api/semo/v1/clubs/{clubId}/board/notices/{noticeId}`
-- `GET /api/semo/v1/clubs/{clubId}/more/notices`
-- `GET /api/semo/v1/clubs/{clubId}/more/notices/{noticeId}`
-- `POST /api/semo/v1/clubs/{clubId}/more/notices`
-- `PUT /api/semo/v1/clubs/{clubId}/more/notices/{noticeId}`
-- `DELETE /api/semo/v1/clubs/{clubId}/more/notices/{noticeId}`
 - `POST /api/semo/v1/clubs/{clubId}/board/items/{boardItemId}/read`
 - `GET /api/semo/v1/clubs/{clubId}/board/items/{boardItemId}/read-status`
 
-### Schedule / poll / timeline / attendance
+### Schedule / poll / attendance
 - `GET /api/semo/v1/clubs/{clubId}/schedule`
 - `GET /api/semo/v1/clubs/{clubId}/schedule/events/{eventId}`
 - `POST /api/semo/v1/clubs/{clubId}/schedule/events`
@@ -189,20 +183,18 @@
 - `DELETE /api/semo/v1/clubs/{clubId}/schedule/votes/{voteId}`
 - `PUT /api/semo/v1/clubs/{clubId}/schedule/votes/{voteId}/selection`
 - `PUT /api/semo/v1/clubs/{clubId}/schedule/votes/{voteId}/close`
-- `GET /api/semo/v1/clubs/{clubId}/more/schedules`
-- `GET /api/semo/v1/clubs/{clubId}/more/polls`
-- `GET /api/semo/v1/clubs/{clubId}/more/polls/{voteId}`
-- `POST /api/semo/v1/clubs/{clubId}/more/polls`
-- `PUT /api/semo/v1/clubs/{clubId}/more/polls/{voteId}`
-- `DELETE /api/semo/v1/clubs/{clubId}/more/polls/{voteId}`
-- `PUT /api/semo/v1/clubs/{clubId}/more/polls/{voteId}/selection`
-- `PUT /api/semo/v1/clubs/{clubId}/more/polls/{voteId}/close`
-- `GET /api/semo/v1/clubs/{clubId}/more/timeline`
-- `GET /api/semo/v1/clubs/{clubId}/admin/more/timeline`
-- `PUT /api/semo/v1/clubs/{clubId}/admin/more/timeline`
+- `GET /api/semo/v1/clubs/{clubId}/schedule/votes/summary`
 - `GET /api/semo/v1/clubs/{clubId}/more/attendance`
 - `POST /api/semo/v1/clubs/{clubId}/more/attendance/check-in`
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/attendance`
+
+### Activity
+- `GET /api/semo/v1/clubs/{clubId}/profile/activity`
+  - 로그인한 활성 멤버가 자신이 수행한 활동만 커서 기반으로 조회
+- `GET /api/semo/v1/clubs/{clubId}/admin/activity`
+  - 클럽 관리자 감사 로그이며 기능 활성화 여부와 무관하게 항상 기록·조회
+
+### Todo
 - `GET /api/semo/v1/clubs/{clubId}/more/todos`
 - `POST /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/apply`
 - `DELETE /api/semo/v1/clubs/{clubId}/more/todos/{todoItemId}/applications/me`
@@ -214,7 +206,7 @@
 - `DELETE /api/semo/v1/clubs/{clubId}/admin/more/todos/{todoItemId}`
   - 실제 삭제가 아니라 `CANCELED` 상태로 보관
 
-### Finance / tournament / bracket / role management / activity
+### Finance / tournament / bracket / role management
 - `GET /api/semo/v1/clubs/{clubId}/more/finance`
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/finance`
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/finance/obligations`
@@ -246,7 +238,6 @@
 - `GET /api/semo/v1/clubs/{clubId}/admin/more/roles/{clubPositionId}`
 - `PUT /api/semo/v1/clubs/{clubId}/admin/more/roles/{clubPositionId}`
 - `DELETE /api/semo/v1/clubs/{clubId}/admin/more/roles/{clubPositionId}`
-- `GET /api/semo/v1/clubs/{clubId}/admin/activity`
 
 ## Schema and Seed Files
 
@@ -257,6 +248,8 @@
 - 운영 DB 단건 반영 SQL
   - `src/main/resources/db/ops/semo_finance_request_expense_apply.sql`
   - 승인된 정산 요청과 지출 원장을 연결하는 nullable FK/unique 컬럼을 추가하며, 배포 전 백업 후 1회 적용
+  - `src/main/resources/db/ddl/semo_timeline_feature_remove.sql`
+  - 폐기된 `TIMELINE` 카탈로그·활성화·권한 데이터만 외래 키 순서대로 제거
 
 현재 seed에는 아래 카탈로그 성격의 데이터가 포함됩니다.
 
@@ -264,7 +257,6 @@
   - `JOIN_REQUEST`
   - `NOTICE`
   - `ATTENDANCE`
-  - `TIMELINE`
   - `POLL`
   - `SCHEDULE_MANAGE`
   - `TOURNAMENT_RECORD`
@@ -316,14 +308,13 @@
 - `poll` 일부(permission)
 - `position`
 - `schedule`
-- `timeline`
+- `activity`
 - `todo`
 - `tournament`
 - `bracket`
 
 상대적으로 공백이 큰 영역도 있습니다.
 
-- `activity` 서비스
 - 여러 컨트롤러의 상세 API 계약 테스트
 
 ## Coding Notes For This Codebase

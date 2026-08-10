@@ -6,6 +6,8 @@ public record ClubAdminBracketHomeResponse(
         Long clubId,
         String clubName,
         boolean admin,
+        boolean canReview,
+        boolean canDelete,
         int totalBracketCount,
         int draftBracketCount,
         int pendingBracketCount,

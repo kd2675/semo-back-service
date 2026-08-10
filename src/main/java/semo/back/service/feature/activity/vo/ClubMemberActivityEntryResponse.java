@@ -1,6 +1,6 @@
-package semo.back.service.feature.timeline.vo;
+package semo.back.service.feature.activity.vo;
 
-public record TimelineEntryResponse(
+public record ClubMemberActivityEntryResponse(
         Long activityId,
         String actorDisplayName,
         String actorAvatarLabel,

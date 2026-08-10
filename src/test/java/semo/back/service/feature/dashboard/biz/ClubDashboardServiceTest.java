@@ -320,10 +320,10 @@ class ClubDashboardServiceTest {
                 .containsExactlyInAnyOrder(
                         tuple("BOARD_STRIP", "/clubs/%d/board".formatted(clubId), "/clubs/%d/board".formatted(clubId)),
                         tuple("SCHEDULE_INSIGHT", "/clubs/%d/schedule".formatted(clubId), "/clubs/%d/schedule".formatted(clubId)),
-                        tuple("POLL_PULSE", "/clubs/%d/more/polls".formatted(clubId), "/clubs/%d/admin/more/polls".formatted(clubId)),
+                        tuple("POLL_PULSE", "/clubs/%d/schedule".formatted(clubId), "/clubs/%d/schedule".formatted(clubId)),
                         tuple("TOURNAMENT_RECORD_MINE", "/clubs/%d/more/tournaments".formatted(clubId), "/clubs/%d/admin/more/tournaments".formatted(clubId)),
                         tuple("BRACKET_WORKBENCH", "/clubs/%d/more/brackets".formatted(clubId), "/clubs/%d/admin/more/brackets".formatted(clubId)),
-                        tuple("ATTENDANCE_RECENT", "/clubs/%d/more/attendance".formatted(clubId), "/clubs/%d/admin/more/attendance".formatted(clubId)),
+                        tuple("ATTENDANCE_RECENT", "/clubs/%d/schedule".formatted(clubId), "/clubs/%d/schedule".formatted(clubId)),
                         tuple("FINANCE_LEDGER", "/clubs/%d/more/finance".formatted(clubId), "/clubs/%d/admin/more/finance".formatted(clubId))
                 );
     }

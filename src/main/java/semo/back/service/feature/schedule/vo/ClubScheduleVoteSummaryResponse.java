@@ -1,8 +1,10 @@
-package semo.back.service.feature.poll.vo;
+package semo.back.service.feature.schedule.vo;
+
+import semo.back.service.feature.poll.vo.ClubPollSummaryResponse;
 
 import java.util.List;
 
-public record ClubPollHomeResponse(
+public record ClubScheduleVoteSummaryResponse(
         Long clubId,
         String clubName,
         boolean admin,

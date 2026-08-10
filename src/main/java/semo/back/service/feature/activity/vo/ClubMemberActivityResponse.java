@@ -1,12 +1,12 @@
-package semo.back.service.feature.timeline.vo;
+package semo.back.service.feature.activity.vo;
 
 import java.util.List;
 
-public record ClubTimelineResponse(
+public record ClubMemberActivityResponse(
         Long clubId,
         String clubName,
         boolean admin,
-        List<TimelineEntryResponse> entries,
+        List<ClubMemberActivityEntryResponse> entries,
         String nextCursorCreatedAt,
         Long nextCursorActivityId,
         boolean hasNext
