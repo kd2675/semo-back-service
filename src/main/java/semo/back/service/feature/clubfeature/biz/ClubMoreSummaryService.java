@@ -129,6 +129,10 @@ public class ClubMoreSummaryService {
                 ClubPositionPermissionEvaluator.PERMISSION_HANDOVER_VIEW,
                 ClubPositionPermissionEvaluator.PERMISSION_HANDOVER_MANAGE
         ));
+        permissions.put("DECISION_LOG", Set.of(
+                ClubPositionPermissionEvaluator.PERMISSION_DECISION_VIEW,
+                ClubPositionPermissionEvaluator.PERMISSION_DECISION_MANAGE
+        ));
         return Map.copyOf(permissions);
     }
 }

@@ -219,6 +219,7 @@ public class ClubFeatureService {
             case "MEMBER_DIRECTORY" -> "/clubs/%d/more/members".formatted(clubId);
             case "ROLE_MANAGEMENT" -> "/clubs/%d/admin/more/roles".formatted(clubId);
             case FEATURE_HANDOVER -> "/clubs/%d/admin/more/handover".formatted(clubId);
+            case "DECISION_LOG" -> "/clubs/%d/more/decisions".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
     }
@@ -237,6 +238,7 @@ public class ClubFeatureService {
             case "MEMBER_DIRECTORY" -> "/clubs/%d/admin/more/members".formatted(clubId);
             case "ROLE_MANAGEMENT" -> "/clubs/%d/admin/more/roles".formatted(clubId);
             case FEATURE_HANDOVER -> "/clubs/%d/admin/more/handover".formatted(clubId);
+            case "DECISION_LOG" -> "/clubs/%d/admin/more/decisions".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
     }

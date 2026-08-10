@@ -1202,3 +1202,114 @@ SELECT
     NOW(),
     NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'HANDOVER_MANAGE');
+
+-- ------------------------------------------------------------
+-- Meeting minutes and decision log
+-- ------------------------------------------------------------
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    navigation_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'DECISION_LOG',
+    '회의록·결정',
+    '회의 배경과 결정 이유, 참여자, 관련 운영 항목과 후속 업무를 기록합니다.',
+    'gavel',
+    'USER_AND_ADMIN',
+    1,
+    90,
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_catalog WHERE feature_key = 'DECISION_LOG');
+
+UPDATE feature_catalog
+SET display_name = '회의록·결정',
+    description = '회의 배경과 결정 이유, 참여자, 관련 운영 항목과 후속 업무를 기록합니다.',
+    icon_name = 'gavel',
+    navigation_scope = 'USER_AND_ADMIN',
+    active = 1,
+    sort_order = 90,
+    update_date = NOW()
+WHERE feature_key = 'DECISION_LOG';
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'DECISION_VIEW',
+    'DECISION_LOG',
+    '운영 결정 조회',
+    '운영진 공개 회의록, 결정 초안과 검토 일정을 조회합니다.',
+    'CLUB',
+    1,
+    10,
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'DECISION_VIEW');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'DECISION_MANAGE',
+    'DECISION_LOG',
+    '운영 결정 관리',
+    '회의록과 결정 초안을 작성하고 확정, 대체, 보관합니다.',
+    'CLUB',
+    1,
+    20,
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'DECISION_MANAGE');
+
+INSERT INTO dashboard_widget_catalog (
+    widget_key,
+    display_name,
+    description,
+    icon_name,
+    required_feature_key,
+    default_visibility_scope,
+    default_column_span,
+    default_row_span,
+    default_sort_order,
+    active,
+    create_date,
+    update_date
+)
+SELECT
+    'DECISION_LATEST',
+    '최근 운영 결정',
+    '최근 확정된 회의록과 운영 결정을 확인합니다.',
+    'gavel',
+    'DECISION_LOG',
+    'USER_HOME',
+    1,
+    1,
+    48,
+    1,
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'DECISION_LATEST');

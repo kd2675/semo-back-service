@@ -3,11 +3,11 @@ package semo.back.service.feature.handover.biz;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -31,8 +32,8 @@ import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.entity.ClubTermExecutiveAssignment;
 import semo.back.service.database.pub.entity.ClubTermCarryoverItem;
 import semo.back.service.database.pub.entity.FinanceExpense;
-import semo.back.service.database.pub.entity.FinanceObligation;
 import semo.back.service.database.pub.entity.FinanceRequest;
+import semo.back.service.database.pub.entity.DecisionRecord;
 import semo.back.service.database.pub.entity.TodoItem;
 import semo.back.service.database.pub.entity.TournamentRecord;
 import semo.back.service.database.pub.repository.ClubFeedbackRepository;
@@ -51,6 +52,7 @@ import semo.back.service.database.pub.repository.FinanceExpenseRepository;
 import semo.back.service.database.pub.repository.FinanceObligationRepository;
 import semo.back.service.database.pub.repository.FinancePaymentRepository;
 import semo.back.service.database.pub.repository.FinanceRequestRepository;
+import semo.back.service.database.pub.repository.DecisionRecordRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
@@ -69,6 +71,7 @@ import semo.back.service.feature.handover.vo.HandoverMemberOptionResponse;
 import semo.back.service.feature.handover.vo.HandoverPositionOptionResponse;
 import semo.back.service.feature.handover.vo.HandoverQueueItemResponse;
 import semo.back.service.feature.handover.vo.HandoverQueueSummaryResponse;
+import semo.back.service.feature.handover.vo.HandoverRecentDecisionResponse;
 import semo.back.service.feature.handover.vo.UpdateOperatingTermRequest;
 import semo.back.service.feature.handover.vo.UpsertExecutiveAssignmentRequest;
 import semo.back.service.feature.handover.vo.UpsertHandoverNoteRequest;
@@ -108,6 +111,7 @@ public class ClubHandoverService {
     private final ClubJoinRequestRepository clubJoinRequestRepository;
     private final TournamentRecordRepository tournamentRecordRepository;
     private final ClubNotificationPublisher clubNotificationPublisher;
+    private final DecisionRecordRepository decisionRecordRepository;
 
     public ClubHandoverCenterResponse getCenter(Long clubId, String userKey, Long selectedTermId) {
         ClubAccessResolver.ClubAccess access = requireViewAccess(clubId, userKey);
@@ -130,19 +134,49 @@ public class ClubHandoverService {
                 ? List.of()
                 : clubTermExecutiveAssignmentRepository
                         .findByClubOperatingTermIdInOrderBySortOrderAscClubTermExecutiveAssignmentIdAsc(rosterTermIds);
+        Long noteTermId = selectedTerm == null ? null : selectedTerm.getClubOperatingTermId();
+        List<ClubHandoverNote> handoverNotes = clubHandoverNoteRepository.findFeed(clubId, noteTermId);
         List<ClubAccessResolver.ClubMemberSnapshot> members = clubAccessResolver.getActiveMemberSnapshots(clubId);
-        List<ClubPosition> positions = clubPositionRepository
-                .findByClubIdAndActiveTrueOrderByDisplayNameAscClubPositionIdAsc(clubId);
-        Map<Long, ClubProfile> profilesById = members.stream()
+        List<ClubPosition> allPositions = clubPositionRepository
+                .findByClubIdOrderByDisplayNameAscClubPositionIdAsc(clubId);
+        List<ClubPosition> activePositions = allPositions.stream()
+                .filter(ClubPosition::isActive)
+                .toList();
+        Set<Long> referencedProfileIds = new LinkedHashSet<>();
+        members.stream()
                 .map(ClubAccessResolver.ClubMemberSnapshot::clubProfile)
-                .collect(Collectors.toMap(ClubProfile::getClubProfileId, Function.identity()));
-        Map<Long, ClubPosition> positionsById = positions.stream()
+                .map(ClubProfile::getClubProfileId)
+                .forEach(referencedProfileIds::add);
+        assignments.stream()
+                .map(ClubTermExecutiveAssignment::getClubProfileId)
+                .forEach(referencedProfileIds::add);
+        handoverNotes.forEach(note -> {
+            if (note.getAssignedClubProfileId() != null) {
+                referencedProfileIds.add(note.getAssignedClubProfileId());
+            }
+            if (note.getCreatedByClubProfileId() != null) {
+                referencedProfileIds.add(note.getCreatedByClubProfileId());
+            }
+            if (note.getAcknowledgedByClubProfileId() != null) {
+                referencedProfileIds.add(note.getAcknowledgedByClubProfileId());
+            }
+        });
+        Map<Long, ClubProfile> profilesById = referencedProfileIds.isEmpty()
+                ? Map.of()
+                : clubProfileRepository.findAllById(referencedProfileIds).stream()
+                        .collect(Collectors.toMap(ClubProfile::getClubProfileId, Function.identity()));
+        Map<Long, ClubPosition> positionsById = allPositions.stream()
                 .collect(Collectors.toMap(ClubPosition::getClubPositionId, Function.identity()));
         Map<Long, ClubOperatingTerm> termsById = terms.stream()
                 .collect(Collectors.toMap(ClubOperatingTerm::getClubOperatingTermId, Function.identity()));
 
-        Long noteTermId = selectedTerm == null ? null : selectedTerm.getClubOperatingTermId();
         QueueSnapshot queue = buildQueue(clubId);
+        List<HandoverRecentDecisionResponse> recentDecisions = clubFeatureService.isFeatureEnabled(
+                clubId,
+                "DECISION_LOG"
+        ) ? decisionRecordRepository.findRecentConfirmed(clubId, PageRequest.of(0, 3)).stream()
+                .map(item -> toRecentDecisionResponse(clubId, item))
+                .toList() : List.of();
         return new ClubHandoverCenterResponse(
                 clubId,
                 access.club().getName(),
@@ -156,7 +190,7 @@ public class ClubHandoverService {
                 assignments.stream()
                         .map(item -> toAssignmentResponse(item, profilesById, positionsById))
                         .toList(),
-                clubHandoverNoteRepository.findFeed(clubId, noteTermId).stream()
+                handoverNotes.stream()
                         .map(item -> toNoteResponse(item, termsById, positionsById, profilesById))
                         .toList(),
                 selectedTerm == null
@@ -169,6 +203,7 @@ public class ClubHandoverService {
                                 .toList(),
                 queue.summary(),
                 queue.items(),
+                recentDecisions,
                 selectedTerm == null ? ClubTermMetricsResponse.empty() : buildTermMetrics(clubId, selectedTerm),
                 members.stream()
                         .map(item -> new HandoverMemberOptionResponse(
@@ -178,7 +213,7 @@ public class ClubHandoverService {
                                 item.clubProfile().getAvatarFileName()
                         ))
                         .toList(),
-                positions.stream()
+                activePositions.stream()
                         .map(item -> new HandoverPositionOptionResponse(
                                 item.getClubPositionId(),
                                 item.getDisplayName(),
@@ -1029,6 +1064,17 @@ public class ClubHandoverService {
                 term.getDescription(),
                 term.getActivatedAt(),
                 term.getClosedAt()
+        );
+    }
+
+    private HandoverRecentDecisionResponse toRecentDecisionResponse(Long clubId, DecisionRecord record) {
+        return new HandoverRecentDecisionResponse(
+                record.getDecisionRecordId(),
+                record.getRecordType(),
+                record.getTitle(),
+                record.getEffectiveDate(),
+                record.getConfirmedAt(),
+                "/clubs/%d/admin/more/decisions".formatted(clubId)
         );
     }
 

@@ -17,6 +17,7 @@ public record ClubHandoverCenterResponse(
         List<ClubTermCarryoverItemResponse> carryoverItems,
         HandoverQueueSummaryResponse queueSummary,
         List<HandoverQueueItemResponse> queueItems,
+        List<HandoverRecentDecisionResponse> recentDecisions,
         ClubTermMetricsResponse activeTermMetrics,
         List<HandoverMemberOptionResponse> memberOptions,
         List<HandoverPositionOptionResponse> positionOptions

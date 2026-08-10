@@ -990,6 +990,88 @@ CREATE INDEX idx_club_handover_note_terms
     ON club_handover_note (club_id, from_term_id, to_term_id, deleted);
 
 -- ============================================================
+-- Meeting minutes and decision log
+-- Confirmed records are immutable. A policy change creates a new record
+-- that supersedes the previous decision while preserving both histories.
+-- Polymorphic resource links store title/path snapshots for audit durability.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS decision_record (
+    decision_record_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    club_operating_term_id BIGINT NULL,
+    record_type VARCHAR(30) NOT NULL,
+    status_code VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    visibility_scope VARCHAR(20) NOT NULL DEFAULT 'OPERATORS',
+    title VARCHAR(200) NOT NULL,
+    decision_content TEXT NOT NULL,
+    background_context TEXT NULL,
+    rationale TEXT NULL,
+    meeting_at DATETIME NULL,
+    effective_date DATE NULL,
+    review_date DATE NULL,
+    supersedes_decision_record_id BIGINT NULL,
+    created_by_club_profile_id BIGINT NOT NULL,
+    confirmed_by_club_profile_id BIGINT NULL,
+    confirmed_at DATETIME NULL,
+    archived_by_club_profile_id BIGINT NULL,
+    archived_at DATETIME NULL,
+    deleted TINYINT(1) NOT NULL DEFAULT 0,
+    deleted_by_club_profile_id BIGINT NULL,
+    deleted_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_decision_record_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_decision_record_term FOREIGN KEY (club_operating_term_id) REFERENCES club_operating_term(club_operating_term_id),
+    CONSTRAINT fk_decision_record_supersedes FOREIGN KEY (supersedes_decision_record_id) REFERENCES decision_record(decision_record_id),
+    CONSTRAINT fk_decision_record_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_decision_record_confirmed_by FOREIGN KEY (confirmed_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_decision_record_archived_by FOREIGN KEY (archived_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_decision_record_deleted_by FOREIGN KEY (deleted_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_decision_record_feed
+    ON decision_record (club_id, deleted, status_code, confirmed_at, decision_record_id);
+
+CREATE INDEX idx_decision_record_review
+    ON decision_record (club_id, deleted, status_code, review_date, decision_record_id);
+
+CREATE INDEX idx_decision_record_term
+    ON decision_record (club_id, club_operating_term_id, status_code, decision_record_id);
+
+CREATE TABLE IF NOT EXISTS decision_participant (
+    decision_participant_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    decision_record_id BIGINT NOT NULL,
+    club_profile_id BIGINT NOT NULL,
+    participant_role VARCHAR(20) NOT NULL,
+    display_name_snapshot VARCHAR(100) NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_decision_participant_profile UNIQUE (decision_record_id, club_profile_id),
+    CONSTRAINT fk_decision_participant_record FOREIGN KEY (decision_record_id) REFERENCES decision_record(decision_record_id),
+    CONSTRAINT fk_decision_participant_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_decision_participant_profile
+    ON decision_participant (club_profile_id, decision_record_id);
+
+CREATE TABLE IF NOT EXISTS decision_resource_link (
+    decision_resource_link_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    decision_record_id BIGINT NOT NULL,
+    relation_type VARCHAR(20) NOT NULL,
+    resource_type VARCHAR(40) NOT NULL,
+    resource_id BIGINT NOT NULL,
+    resource_title_snapshot VARCHAR(200) NOT NULL,
+    resource_path_snapshot VARCHAR(500) NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_decision_resource_link UNIQUE (decision_record_id, relation_type, resource_type, resource_id),
+    CONSTRAINT fk_decision_resource_link_record FOREIGN KEY (decision_record_id) REFERENCES decision_record(decision_record_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_decision_resource_target
+    ON decision_resource_link (resource_type, resource_id, decision_record_id);
+
+-- ============================================================
 -- Persistent notification inbox
 -- Recipient uses the app profile so pre-membership events such as a
 -- rejected join request can still be delivered.

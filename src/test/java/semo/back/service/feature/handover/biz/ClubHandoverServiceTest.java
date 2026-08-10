@@ -41,6 +41,7 @@ import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubTermCarryoverItemRepository;
 import semo.back.service.database.pub.repository.ClubTermExecutiveAssignmentRepository;
+import semo.back.service.database.pub.repository.DecisionRecordRepository;
 import semo.back.service.database.pub.repository.FinanceExpenseRepository;
 import semo.back.service.database.pub.repository.FinanceObligationRepository;
 import semo.back.service.database.pub.repository.FinancePaymentRepository;
@@ -78,6 +79,7 @@ class ClubHandoverServiceTest {
     @Mock private ClubJoinRequestRepository clubJoinRequestRepository;
     @Mock private TournamentRecordRepository tournamentRecordRepository;
     @Mock private ClubNotificationPublisher clubNotificationPublisher;
+    @Mock private DecisionRecordRepository decisionRecordRepository;
 
     @InjectMocks
     private ClubHandoverService clubHandoverService;

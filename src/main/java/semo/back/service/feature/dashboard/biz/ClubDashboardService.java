@@ -349,6 +349,7 @@ public class ClubDashboardService {
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
             case "ATTENDANCE_STATUS", "ATTENDANCE_RECENT" -> "/clubs/%d/schedule".formatted(clubId);
             case "FINANCE_STATUS", "FINANCE_LEDGER" -> "/clubs/%d/more/finance".formatted(clubId);
+            case "DECISION_LATEST" -> "/clubs/%d/more/decisions".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
     }
@@ -363,6 +364,7 @@ public class ClubDashboardService {
             case "PROFILE_SUMMARY" -> "/clubs/%d/profile".formatted(clubId);
             case "ATTENDANCE_STATUS", "ATTENDANCE_RECENT" -> "/clubs/%d/schedule".formatted(clubId);
             case "FINANCE_STATUS", "FINANCE_LEDGER" -> "/clubs/%d/admin/more/finance".formatted(clubId);
+            case "DECISION_LATEST" -> "/clubs/%d/admin/more/decisions".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
     }

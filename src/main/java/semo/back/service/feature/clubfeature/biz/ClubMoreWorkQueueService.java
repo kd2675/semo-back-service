@@ -18,6 +18,7 @@ import semo.back.service.database.pub.repository.ClubHandoverNoteRepository;
 import semo.back.service.database.pub.repository.ClubTermCarryoverItemRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
+import semo.back.service.database.pub.repository.DecisionRecordRepository;
 import semo.back.service.database.pub.repository.FinancePaymentRepository;
 import semo.back.service.database.pub.repository.FinanceRequestRepository;
 import semo.back.service.database.pub.repository.TodoItemApplicationRepository;
@@ -47,6 +48,7 @@ public class ClubMoreWorkQueueService {
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubEventParticipantRepository clubEventParticipantRepository;
     private final ClubScheduleVoteRepository clubScheduleVoteRepository;
+    private final DecisionRecordRepository decisionRecordRepository;
 
     public Map<String, FeatureQueueCounts> getQueueCounts(
             Long clubId,
@@ -102,6 +104,7 @@ public class ClubMoreWorkQueueService {
                                     ) + clubTermCarryoverItemRepository.countByClubIdAndStatusCode(clubId, "OPEN")
                                 : 0
                 );
+                case "DECISION_LOG" -> decisionCounts(clubId, today, adminAccessible);
                 default -> FeatureQueueCounts.empty();
             });
         }
@@ -202,6 +205,20 @@ public class ClubMoreWorkQueueService {
                 0,
                 adminPendingCount,
                 0
+        );
+    }
+
+    private FeatureQueueCounts decisionCounts(Long clubId, LocalDate today, boolean adminAccessible) {
+        if (!adminAccessible) {
+            return FeatureQueueCounts.empty();
+        }
+        long reviewDueCount = decisionRecordRepository.countReviewDue(clubId, today);
+        return FeatureQueueCounts.of(
+                0,
+                0,
+                decisionRecordRepository.countByClubIdAndDeletedFalseAndStatusCode(clubId, "DRAFT")
+                        + reviewDueCount,
+                reviewDueCount
         );
     }
 
