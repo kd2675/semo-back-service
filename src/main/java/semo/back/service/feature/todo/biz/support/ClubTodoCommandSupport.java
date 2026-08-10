@@ -19,6 +19,7 @@ public class ClubTodoCommandSupport {
     private static final String STATUS_REOPEN = "REOPEN";
 
     private static final Set<String> ALLOWED_TODO_TYPES = Set.of("VOLUNTEER", "OPERATIONS");
+    private static final Set<String> ALLOWED_PRIORITY_CODES = Set.of("LOW", "NORMAL", "HIGH", "URGENT");
     private static final Set<String> ALLOWED_ASSIGNMENT_MODES = Set.of("DIRECT_ASSIGN", "OPEN_SUPPORT");
     private static final Set<String> TERMINAL_STATUSES = Set.of(STATUS_COMPLETED, STATUS_CANCELED);
     private static final Set<String> ADMIN_FILTERABLE_STATUSES = Set.of(
@@ -81,6 +82,37 @@ public class ClubTodoCommandSupport {
             throw new SemoException.ValidationException("지원하지 않는 배정 방식입니다.");
         }
         return normalized;
+    }
+
+    public String normalizePriorityCode(String priorityCode) {
+        String normalized = trimToNull(priorityCode);
+        if (normalized == null) {
+            return "NORMAL";
+        }
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        if (!ALLOWED_PRIORITY_CODES.contains(normalized)) {
+            throw new SemoException.ValidationException("지원하지 않는 업무 우선순위입니다.");
+        }
+        return normalized;
+    }
+
+    public int normalizeRecruitmentCapacity(Integer recruitmentCapacity) {
+        if (recruitmentCapacity == null) {
+            return 1;
+        }
+        if (recruitmentCapacity < 1 || recruitmentCapacity > 100) {
+            throw new SemoException.ValidationException("모집 인원은 1명 이상 100명 이하여야 합니다.");
+        }
+        return recruitmentCapacity;
+    }
+
+    public void validateWorkWindow(LocalDateTime workStartAt, LocalDateTime workEndAt) {
+        if (workStartAt == null && workEndAt != null) {
+            throw new SemoException.ValidationException("업무 종료 시간을 정하려면 시작 시간도 필요합니다.");
+        }
+        if (workStartAt != null && workEndAt != null && !workEndAt.isAfter(workStartAt)) {
+            throw new SemoException.ValidationException("업무 종료 시간은 시작 시간보다 뒤여야 합니다.");
+        }
     }
 
     public String normalizeStatusCode(String statusCode) {

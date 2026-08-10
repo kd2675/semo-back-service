@@ -48,6 +48,14 @@ public class TodoItem extends CommonDateEntity {
     @Column(name = "status_code", nullable = false, length = 20)
     private String statusCode;
 
+    @Builder.Default
+    @Column(name = "priority_code", nullable = false, length = 20)
+    private String priorityCode = "NORMAL";
+
+    @Builder.Default
+    @Column(name = "recruitment_capacity", nullable = false)
+    private Integer recruitmentCapacity = 1;
+
     @Column(name = "title", nullable = false, length = 150)
     private String title;
 
@@ -56,6 +64,15 @@ public class TodoItem extends CommonDateEntity {
 
     @Column(name = "due_at")
     private LocalDateTime dueAt;
+
+    @Column(name = "work_start_at")
+    private LocalDateTime workStartAt;
+
+    @Column(name = "work_end_at")
+    private LocalDateTime workEndAt;
+
+    @Column(name = "linked_schedule_event_id")
+    private Long linkedScheduleEventId;
 
     @Column(name = "completed_by_club_profile_id")
     private Long completedByClubProfileId;

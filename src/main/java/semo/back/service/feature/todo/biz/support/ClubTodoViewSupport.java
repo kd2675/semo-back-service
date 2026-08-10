@@ -3,12 +3,15 @@ package semo.back.service.feature.todo.biz.support;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import semo.back.service.database.pub.entity.ClubProfile;
+import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.entity.TodoItem;
 import semo.back.service.database.pub.entity.TodoItemApplication;
+import semo.back.service.database.pub.entity.TodoItemAssignee;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.todo.biz.policy.ClubTodoPermissionService;
 import semo.back.service.feature.todo.vo.TodoActionResponse;
+import semo.back.service.feature.todo.vo.TodoAssigneeResponse;
 import semo.back.service.feature.todo.vo.TodoItemApplicationResponse;
 import semo.back.service.feature.todo.vo.TodoSummaryResponse;
 
@@ -54,21 +57,38 @@ public class ClubTodoViewSupport {
             List<List<TodoItem>> itemGroups,
             List<List<TodoItemApplication>> applicationGroups
     ) {
+        return resolveClubProfiles(itemGroups, applicationGroups, List.of());
+    }
+
+    public Map<Long, ClubProfile> resolveClubProfiles(
+            List<List<TodoItem>> itemGroups,
+            List<List<TodoItemApplication>> applicationGroups,
+            List<List<TodoItemAssignee>> assigneeGroups
+    ) {
         List<Long> ids = Stream.concat(
-                        itemGroups.stream()
+                        Stream.concat(
+                                itemGroups.stream()
+                                        .filter(Objects::nonNull)
+                                        .flatMap(Collection::stream)
+                                        .flatMap(item -> Stream.of(
+                                                item.getCreatedByClubProfileId(),
+                                                item.getAssignedClubProfileId(),
+                                                item.getCompletedByClubProfileId()
+                                        )),
+                                applicationGroups.stream()
+                                        .filter(Objects::nonNull)
+                                        .flatMap(Collection::stream)
+                                        .flatMap(application -> Stream.of(
+                                                application.getClubProfileId(),
+                                                application.getReviewedByClubProfileId()
+                                        ))
+                        ),
+                        assigneeGroups.stream()
                                 .filter(Objects::nonNull)
                                 .flatMap(Collection::stream)
-                                .flatMap(item -> Stream.of(
-                                        item.getCreatedByClubProfileId(),
-                                        item.getAssignedClubProfileId(),
-                                        item.getCompletedByClubProfileId()
-                                )),
-                        applicationGroups.stream()
-                                .filter(Objects::nonNull)
-                                .flatMap(Collection::stream)
-                                .flatMap(application -> Stream.of(
-                                        application.getClubProfileId(),
-                                        application.getReviewedByClubProfileId()
+                                .flatMap(assignee -> Stream.of(
+                                        assignee.getClubProfileId(),
+                                        assignee.getAssignedByClubProfileId()
                                 ))
                 )
                 .filter(Objects::nonNull)
@@ -95,6 +115,7 @@ public class ClubTodoViewSupport {
     public Comparator<TodoItem> todoPriorityComparator() {
         return Comparator
                 .comparing((TodoItem item) -> !isOverdue(item))
+                .thenComparing(item -> prioritySortOrder(item.getPriorityCode()))
                 .thenComparing(item -> item.getStatusCode(), Comparator.comparingInt(this::statusSortOrder))
                 .thenComparing(item -> item.getDueAt() == null)
                 .thenComparing(TodoItem::getDueAt, Comparator.nullsLast(LocalDateTime::compareTo))
@@ -109,12 +130,45 @@ public class ClubTodoViewSupport {
             Map<Long, Integer> applicationCountByTodoItemId,
             Map<Long, TodoItemApplication> myApplicationByTodoItemId
     ) {
+        return toSummaryResponse(
+                item,
+                profileById,
+                access,
+                adminView,
+                applicationCountByTodoItemId,
+                myApplicationByTodoItemId,
+                Map.of(),
+                Map.of()
+        );
+    }
+
+    public TodoSummaryResponse toSummaryResponse(
+            TodoItem item,
+            Map<Long, ClubProfile> profileById,
+            ClubAccessResolver.ClubAccess access,
+            boolean adminView,
+            Map<Long, Integer> applicationCountByTodoItemId,
+            Map<Long, TodoItemApplication> myApplicationByTodoItemId,
+            Map<Long, List<Long>> assigneeIdsByTodoItemId,
+            Map<Long, ClubScheduleEvent> scheduleById
+    ) {
         TodoItemApplication myApplication = myApplicationByTodoItemId.get(item.getTodoItemId());
         String myApplicationStatus = myApplication == null ? null : myApplication.getApplicationStatus();
-        boolean assignedToViewer = Objects.equals(item.getAssignedClubProfileId(), access.clubProfile().getClubProfileId());
+        List<Long> assigneeIds = resolveAssigneeIds(item, assigneeIdsByTodoItemId);
+        List<TodoAssigneeResponse> assignees = assigneeIds.stream()
+                .map(clubProfileId -> new TodoAssigneeResponse(
+                        clubProfileId,
+                        resolveDisplayName(profileById, clubProfileId)
+                ))
+                .toList();
+        int recruitmentCapacity = item.getRecruitmentCapacity() == null
+                ? 1
+                : Math.max(1, item.getRecruitmentCapacity());
+        boolean recruitmentFull = assigneeIds.size() >= recruitmentCapacity;
+        boolean assignedToViewer = assigneeIds.contains(access.clubProfile().getClubProfileId());
         boolean canApply = ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode())
-                && item.getAssignedClubProfileId() == null
-                && STATUS_OPEN.equals(item.getStatusCode())
+                && !recruitmentFull
+                && (STATUS_OPEN.equals(item.getStatusCode()) || STATUS_IN_PROGRESS.equals(item.getStatusCode()))
                 && (myApplication == null
                 || APPLICATION_STATUS_REJECTED.equals(myApplicationStatus)
                 || APPLICATION_STATUS_WITHDRAWN.equals(myApplicationStatus));
@@ -141,11 +195,25 @@ public class ClubTodoViewSupport {
                 toAssignmentModeLabel(item.getAssignmentMode()),
                 item.getStatusCode(),
                 toStatusLabel(item.getStatusCode()),
+                normalizePriorityCode(item.getPriorityCode()),
+                toPriorityLabel(item.getPriorityCode()),
                 formatDateTime(item.getDueAt()),
                 formatDateTimeLabel(item.getDueAt()),
+                formatDateTime(item.getWorkStartAt()),
+                formatDateTime(item.getWorkEndAt()),
+                formatWorkTimeLabel(item.getWorkStartAt(), item.getWorkEndAt()),
                 isOverdue(item),
-                item.getAssignedClubProfileId(),
-                resolveDisplayName(profileById, item.getAssignedClubProfileId()),
+                assigneeIds.isEmpty() ? null : assigneeIds.getFirst(),
+                assignees.isEmpty() ? null : assignees.stream()
+                        .map(TodoAssigneeResponse::displayName)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.joining(", ")),
+                assignees,
+                assignees.size(),
+                recruitmentCapacity,
+                recruitmentFull,
+                item.getLinkedScheduleEventId(),
+                resolveScheduleTitle(scheduleById, item.getLinkedScheduleEventId()),
                 resolveDisplayName(profileById, item.getCreatedByClubProfileId()),
                 resolveDisplayName(profileById, item.getCompletedByClubProfileId()),
                 formatDateTime(item.getCompletedAt()),
@@ -216,6 +284,15 @@ public class ClubTodoViewSupport {
         };
     }
 
+    public String toPriorityLabel(String priorityCode) {
+        return switch (normalizePriorityCode(priorityCode)) {
+            case "LOW" -> "낮음";
+            case "HIGH" -> "높음";
+            case "URGENT" -> "긴급";
+            default -> "보통";
+        };
+    }
+
     public String toAssignmentModeLabel(String assignmentMode) {
         return switch (assignmentMode) {
             case ASSIGNMENT_MODE_DIRECT_ASSIGN -> "직접 배정";
@@ -255,6 +332,19 @@ public class ClubTodoViewSupport {
         return value == null ? null : value.format(DATE_TIME_LABEL_FORMATTER);
     }
 
+    private String formatWorkTimeLabel(LocalDateTime startAt, LocalDateTime endAt) {
+        if (startAt == null && endAt == null) {
+            return null;
+        }
+        if (startAt == null) {
+            return "종료 " + formatDateTimeLabel(endAt);
+        }
+        if (endAt == null) {
+            return formatDateTimeLabel(startAt) + " 시작";
+        }
+        return formatDateTimeLabel(startAt) + " ~ " + formatDateTimeLabel(endAt);
+    }
+
     public boolean isOverdue(TodoItem item) {
         return item.getDueAt() != null
                 && item.getDueAt().isBefore(LocalDateTime.now())
@@ -272,5 +362,41 @@ public class ClubTodoViewSupport {
             case STATUS_COMPLETED -> 2;
             default -> 3;
         };
+    }
+
+    private int prioritySortOrder(String priorityCode) {
+        return switch (normalizePriorityCode(priorityCode)) {
+            case "URGENT" -> 0;
+            case "HIGH" -> 1;
+            case "NORMAL" -> 2;
+            default -> 3;
+        };
+    }
+
+    private String normalizePriorityCode(String priorityCode) {
+        return priorityCode == null || priorityCode.isBlank()
+                ? "NORMAL"
+                : priorityCode.toUpperCase(Locale.ROOT);
+    }
+
+    private List<Long> resolveAssigneeIds(
+            TodoItem item,
+            Map<Long, List<Long>> assigneeIdsByTodoItemId
+    ) {
+        List<Long> assignedIds = assigneeIdsByTodoItemId.getOrDefault(item.getTodoItemId(), List.of());
+        if (!assignedIds.isEmpty()) {
+            return assignedIds;
+        }
+        return item.getAssignedClubProfileId() == null
+                ? List.of()
+                : List.of(item.getAssignedClubProfileId());
+    }
+
+    private String resolveScheduleTitle(Map<Long, ClubScheduleEvent> scheduleById, Long eventId) {
+        if (eventId == null) {
+            return null;
+        }
+        ClubScheduleEvent event = scheduleById.get(eventId);
+        return event == null ? null : event.getTitle();
     }
 }

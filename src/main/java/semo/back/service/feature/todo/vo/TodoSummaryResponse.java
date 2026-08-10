@@ -1,5 +1,7 @@
 package semo.back.service.feature.todo.vo;
 
+import java.util.List;
+
 public record TodoSummaryResponse(
         Long todoItemId,
         String title,
@@ -10,11 +12,22 @@ public record TodoSummaryResponse(
         String assignmentModeLabel,
         String statusCode,
         String statusLabel,
+        String priorityCode,
+        String priorityLabel,
         String dueAt,
         String dueAtLabel,
+        String workStartAt,
+        String workEndAt,
+        String workTimeLabel,
         boolean overdue,
         Long assignedClubProfileId,
         String assignedDisplayName,
+        List<TodoAssigneeResponse> assignees,
+        int assigneeCount,
+        int recruitmentCapacity,
+        boolean recruitmentFull,
+        Long linkedScheduleEventId,
+        String linkedScheduleTitle,
         String createdByDisplayName,
         String completedByDisplayName,
         String completedAt,

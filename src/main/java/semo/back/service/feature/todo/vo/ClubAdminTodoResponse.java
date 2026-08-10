@@ -17,6 +17,7 @@ public record ClubAdminTodoResponse(
         int pendingApplicationCount,
         int overdueCount,
         List<TodoMemberOptionResponse> availableMembers,
+        List<TodoScheduleOptionResponse> scheduleOptions,
         List<TodoSummaryResponse> items,
         Long nextCursorTodoItemId,
         boolean hasNext

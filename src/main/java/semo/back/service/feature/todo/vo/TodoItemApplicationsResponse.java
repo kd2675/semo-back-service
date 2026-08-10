@@ -11,6 +11,8 @@ public record TodoItemApplicationsResponse(
         String statusLabel,
         Long assignedClubProfileId,
         String assignedDisplayName,
+        List<TodoAssigneeResponse> assignees,
+        int recruitmentCapacity,
         int applicationCount,
         int pendingApplicationCount,
         boolean canReview,

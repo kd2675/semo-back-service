@@ -17,6 +17,23 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
 
     List<TodoItem> findByClubIdAndAssignedClubProfileIdOrderByTodoItemIdDesc(Long clubId, Long assignedClubProfileId);
 
+    @Query("""
+            select t
+            from TodoItem t
+            where t.clubId = :clubId
+              and (
+                    t.assignedClubProfileId = :clubProfileId
+                    or exists (
+                        select assignee.todoItemAssigneeId
+                        from TodoItemAssignee assignee
+                        where assignee.todoItemId = t.todoItemId
+                          and assignee.clubProfileId = :clubProfileId
+                    )
+                  )
+            order by t.todoItemId desc
+            """)
+    List<TodoItem> findAssignedTodos(Long clubId, Long clubProfileId);
+
     List<TodoItem> findTop5ByClubIdAndCompletedByClubProfileIdOrderByTodoItemIdDesc(Long clubId, Long completedByClubProfileId);
 
     Optional<TodoItem> findByTodoItemIdAndClubId(Long todoItemId, Long clubId);
@@ -35,8 +52,12 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
             from TodoItem t
             where t.clubId = :clubId
               and t.assignmentMode = 'OPEN_SUPPORT'
-              and t.assignedClubProfileId is null
-              and t.statusCode = 'OPEN'
+              and t.statusCode in ('OPEN', 'IN_PROGRESS')
+              and (
+                    select count(assignee.todoItemAssigneeId)
+                    from TodoItemAssignee assignee
+                    where assignee.todoItemId = t.todoItemId
+                  ) < t.recruitmentCapacity
             order by
               case when t.dueAt is null then 1 else 0 end,
               t.dueAt asc,
@@ -49,8 +70,12 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
             from TodoItem t
             where t.clubId = :clubId
               and t.assignmentMode = 'OPEN_SUPPORT'
-              and t.assignedClubProfileId is null
-              and t.statusCode = 'OPEN'
+              and t.statusCode in ('OPEN', 'IN_PROGRESS')
+              and (
+                    select count(assignee.todoItemAssigneeId)
+                    from TodoItemAssignee assignee
+                    where assignee.todoItemId = t.todoItemId
+                  ) < t.recruitmentCapacity
             """)
     long countClaimableTodos(Long clubId);
 
@@ -58,7 +83,15 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
             select count(t)
             from TodoItem t
             where t.clubId = :clubId
-              and t.assignedClubProfileId = :clubProfileId
+              and (
+                    t.assignedClubProfileId = :clubProfileId
+                    or exists (
+                        select assignee.todoItemAssigneeId
+                        from TodoItemAssignee assignee
+                        where assignee.todoItemId = t.todoItemId
+                          and assignee.clubProfileId = :clubProfileId
+                    )
+                  )
               and t.statusCode not in ('COMPLETED', 'CANCELED')
             """)
     long countActiveAssigned(Long clubId, Long clubProfileId);
@@ -67,7 +100,15 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
             select count(t)
             from TodoItem t
             where t.clubId = :clubId
-              and t.assignedClubProfileId = :clubProfileId
+              and (
+                    t.assignedClubProfileId = :clubProfileId
+                    or exists (
+                        select assignee.todoItemAssigneeId
+                        from TodoItemAssignee assignee
+                        where assignee.todoItemId = t.todoItemId
+                          and assignee.clubProfileId = :clubProfileId
+                    )
+                  )
               and t.statusCode not in ('COMPLETED', 'CANCELED')
               and t.dueAt is not null
               and t.dueAt < :now
@@ -111,8 +152,26 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
               and (
                     :assignmentFilter is null
                     or :assignmentFilter = 'ALL'
-                    or (:assignmentFilter = 'ASSIGNED' and t.assignedClubProfileId is not null)
-                    or (:assignmentFilter = 'UNASSIGNED' and t.assignedClubProfileId is null)
+                    or (
+                        :assignmentFilter = 'ASSIGNED'
+                        and (
+                            t.assignedClubProfileId is not null
+                            or exists (
+                                select assignee.todoItemAssigneeId
+                                from TodoItemAssignee assignee
+                                where assignee.todoItemId = t.todoItemId
+                            )
+                        )
+                    )
+                    or (
+                        :assignmentFilter = 'UNASSIGNED'
+                        and t.assignedClubProfileId is null
+                        and not exists (
+                            select assignee.todoItemAssigneeId
+                            from TodoItemAssignee assignee
+                            where assignee.todoItemId = t.todoItemId
+                        )
+                    )
                     or (:assignmentFilter = 'OPEN_SUPPORT' and t.assignmentMode = 'OPEN_SUPPORT')
                     or (:assignmentFilter = 'DIRECT_ASSIGN' and t.assignmentMode = 'DIRECT_ASSIGN')
                   )

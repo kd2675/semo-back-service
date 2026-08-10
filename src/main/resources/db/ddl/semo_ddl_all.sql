@@ -319,9 +319,14 @@ CREATE TABLE IF NOT EXISTS todo_item (
     todo_type VARCHAR(30) NOT NULL,
     assignment_mode VARCHAR(30) NOT NULL DEFAULT 'DIRECT_ASSIGN',
     status_code VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    priority_code VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+    recruitment_capacity INT NOT NULL DEFAULT 1,
     title VARCHAR(150) NOT NULL,
     description VARCHAR(2000) NULL,
     due_at DATETIME NULL,
+    work_start_at DATETIME NULL,
+    work_end_at DATETIME NULL,
+    linked_schedule_event_id BIGINT NULL,
     completed_by_club_profile_id BIGINT NULL,
     completed_at DATETIME NULL,
     create_date DATETIME NOT NULL,
@@ -338,6 +343,60 @@ CREATE INDEX idx_todo_item_status
 
 CREATE INDEX idx_todo_item_assignment
     ON todo_item (club_id, assignment_mode, status_code, todo_item_id);
+
+CREATE INDEX idx_todo_item_priority
+    ON todo_item (club_id, status_code, priority_code, due_at, todo_item_id);
+
+CREATE TABLE IF NOT EXISTS todo_item_assignee (
+    todo_item_assignee_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    todo_item_id BIGINT NOT NULL,
+    club_profile_id BIGINT NOT NULL,
+    assigned_by_club_profile_id BIGINT NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_todo_item_assignee UNIQUE (todo_item_id, club_profile_id),
+    CONSTRAINT fk_todo_item_assignee_todo FOREIGN KEY (todo_item_id) REFERENCES todo_item(todo_item_id),
+    CONSTRAINT fk_todo_item_assignee_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_todo_item_assignee_actor FOREIGN KEY (assigned_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_todo_item_assignee_profile
+    ON todo_item_assignee (club_profile_id, todo_item_id);
+
+CREATE TABLE IF NOT EXISTS todo_checklist_item (
+    todo_checklist_item_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    todo_item_id BIGINT NOT NULL,
+    content VARCHAR(300) NOT NULL,
+    sort_order INT NOT NULL,
+    completed TINYINT(1) NOT NULL DEFAULT 0,
+    completed_by_club_profile_id BIGINT NULL,
+    completed_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_todo_checklist_item_todo FOREIGN KEY (todo_item_id) REFERENCES todo_item(todo_item_id),
+    CONSTRAINT fk_todo_checklist_item_completed_by FOREIGN KEY (completed_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_todo_checklist_item_order
+    ON todo_checklist_item (todo_item_id, sort_order, todo_checklist_item_id);
+
+CREATE TABLE IF NOT EXISTS todo_comment (
+    todo_comment_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    todo_item_id BIGINT NOT NULL,
+    author_club_profile_id BIGINT NOT NULL,
+    content VARCHAR(2000) NOT NULL,
+    deleted TINYINT(1) NOT NULL DEFAULT 0,
+    deleted_by_club_profile_id BIGINT NULL,
+    deleted_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_todo_comment_todo FOREIGN KEY (todo_item_id) REFERENCES todo_item(todo_item_id),
+    CONSTRAINT fk_todo_comment_author FOREIGN KEY (author_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_todo_comment_deleted_by FOREIGN KEY (deleted_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_todo_comment_feed
+    ON todo_comment (todo_item_id, deleted, create_date, todo_comment_id);
 
 CREATE TABLE IF NOT EXISTS todo_item_application (
     todo_item_application_id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -627,6 +686,10 @@ CREATE INDEX idx_club_schedule_event_club_start
 
 CREATE INDEX idx_club_schedule_event_status
     ON club_schedule_event (club_id, event_status, start_at);
+
+ALTER TABLE todo_item
+    ADD CONSTRAINT fk_todo_item_schedule_event
+        FOREIGN KEY (linked_schedule_event_id) REFERENCES club_schedule_event(event_id);
 
 CREATE TABLE IF NOT EXISTS club_event_participant (
     club_event_participant_id BIGINT AUTO_INCREMENT PRIMARY KEY,

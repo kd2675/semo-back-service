@@ -21,6 +21,9 @@ import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.database.pub.repository.TodoItemApplicationRepository;
+import semo.back.service.database.pub.repository.TodoChecklistItemRepository;
+import semo.back.service.database.pub.repository.TodoCommentRepository;
+import semo.back.service.database.pub.repository.TodoItemAssigneeRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
@@ -28,9 +31,12 @@ import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 import semo.back.service.feature.profile.biz.ProfileUserService;
 import semo.back.service.feature.todo.vo.CreateClubTodoRequest;
+import semo.back.service.feature.todo.vo.CreateTodoChecklistItemRequest;
+import semo.back.service.feature.todo.vo.CreateTodoCommentRequest;
 import semo.back.service.feature.todo.vo.CreateTodoApplicationRequest;
 import semo.back.service.feature.todo.vo.ReviewTodoItemApplicationRequest;
 import semo.back.service.feature.todo.vo.UpdateClubTodoRequest;
+import semo.back.service.feature.todo.vo.UpdateTodoChecklistItemRequest;
 import semo.back.service.feature.todo.vo.UpdateTodoStatusRequest;
 
 import java.time.LocalDateTime;
@@ -49,6 +55,9 @@ class ClubTodoServiceTest {
     private ClubTodoService clubTodoService;
 
     @Autowired
+    private ClubTodoCollaborationService clubTodoCollaborationService;
+
+    @Autowired
     private ClubService clubService;
 
     @Autowired
@@ -62,6 +71,15 @@ class ClubTodoServiceTest {
 
     @Autowired
     private TodoItemApplicationRepository todoItemApplicationRepository;
+
+    @Autowired
+    private TodoItemAssigneeRepository todoItemAssigneeRepository;
+
+    @Autowired
+    private TodoChecklistItemRepository todoChecklistItemRepository;
+
+    @Autowired
+    private TodoCommentRepository todoCommentRepository;
 
     @Autowired
     private ClubFeatureRepository clubFeatureRepository;
@@ -92,7 +110,10 @@ class ClubTodoServiceTest {
 
     @BeforeEach
     void setUp() {
+        todoCommentRepository.deleteAll();
+        todoChecklistItemRepository.deleteAll();
         todoItemApplicationRepository.deleteAll();
+        todoItemAssigneeRepository.deleteAll();
         todoItemRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();
@@ -1104,6 +1125,124 @@ class ClubTodoServiceTest {
 
         assertThatThrownBy(() -> clubTodoService.deleteTodo(clubId, todoItemId, "todo-member-017"))
                 .hasMessageContaining("삭제할 권한");
+    }
+
+    @Test
+    void createTodo_multipleDirectAssignees_returnsAllAssignees() {
+        Long clubId = createEnabledClub("todo-owner-multi", "Todo Owner Multi", "Todo Club Multi");
+        Long firstAssigneeId = addActiveMember(clubId, "todo-member-multi-a", "Todo Member Multi A");
+        Long secondAssigneeId = addActiveMember(clubId, "todo-member-multi-b", "Todo Member Multi B");
+
+        var created = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-multi",
+                new CreateClubTodoRequest(
+                        "복수 담당 업무",
+                        "두 명이 함께 처리합니다.",
+                        "OPERATIONS",
+                        "DIRECT_ASSIGN",
+                        null,
+                        "2026-08-20T18:00:00",
+                        List.of(firstAssigneeId, secondAssigneeId),
+                        "URGENT",
+                        null,
+                        "2026-08-20T16:00:00",
+                        "2026-08-20T18:00:00",
+                        null
+                )
+        );
+
+        assertThat(created.assignees()).extracting("clubProfileId")
+                .containsExactly(firstAssigneeId, secondAssigneeId);
+    }
+
+    @Test
+    void reviewTodoApplication_capacityTwo_keepsSecondSeatOpen() {
+        Long clubId = createEnabledClub("todo-owner-capacity", "Todo Owner Capacity", "Todo Club Capacity");
+        addActiveMember(clubId, "todo-member-capacity-a", "Todo Member Capacity A");
+        addActiveMember(clubId, "todo-member-capacity-b", "Todo Member Capacity B");
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-capacity",
+                new CreateClubTodoRequest(
+                        "2인 모집 업무",
+                        null,
+                        "VOLUNTEER",
+                        "OPEN_SUPPORT",
+                        null,
+                        null,
+                        null,
+                        "HIGH",
+                        2,
+                        null,
+                        null,
+                        null
+                )
+        ).todoItemId();
+        clubTodoService.applyTodo(clubId, todoItemId, "todo-member-capacity-a", null);
+        clubTodoService.applyTodo(clubId, todoItemId, "todo-member-capacity-b", null);
+        Long firstApplicationId = todoItemApplicationRepository
+                .findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId)
+                .getFirst()
+                .getTodoItemApplicationId();
+
+        clubTodoService.reviewTodoApplication(
+                clubId,
+                todoItemId,
+                firstApplicationId,
+                "todo-owner-capacity",
+                new ReviewTodoItemApplicationRequest("SELECTED", null)
+        );
+        var memberView = clubTodoService.getTodos(clubId, "todo-member-capacity-b");
+
+        assertThat(memberView.claimableTodos()).extracting("todoItemId").contains(todoItemId);
+    }
+
+    @Test
+    void todoCollaboration_assigneeCanCompleteChecklistAndComment() {
+        Long clubId = createEnabledClub("todo-owner-collab", "Todo Owner Collab", "Todo Club Collab");
+        Long assigneeId = addActiveMember(clubId, "todo-member-collab", "Todo Member Collab");
+        Long todoItemId = clubTodoService.createTodo(
+                clubId,
+                "todo-owner-collab",
+                new CreateClubTodoRequest(
+                        "협업 업무",
+                        null,
+                        "OPERATIONS",
+                        "DIRECT_ASSIGN",
+                        assigneeId,
+                        null
+                )
+        ).todoItemId();
+        var checklist = clubTodoCollaborationService.addChecklistItem(
+                clubId,
+                todoItemId,
+                "todo-member-collab",
+                new CreateTodoChecklistItemRequest("준비물 확인")
+        );
+        clubTodoCollaborationService.updateChecklistItem(
+                clubId,
+                todoItemId,
+                checklist.todoChecklistItemId(),
+                "todo-member-collab",
+                new UpdateTodoChecklistItemRequest("준비물 확인", true)
+        );
+        clubTodoCollaborationService.addComment(
+                clubId,
+                todoItemId,
+                "todo-member-collab",
+                new CreateTodoCommentRequest("준비를 마쳤습니다.")
+        );
+
+        var collaboration = clubTodoCollaborationService.getCollaboration(
+                clubId,
+                todoItemId,
+                "todo-member-collab"
+        );
+
+        assertThat(collaboration.completedChecklistCount() == 1
+                && collaboration.totalChecklistCount() == 1
+                && collaboration.comments().size() == 1).isTrue();
     }
 
     private Long createEnabledClub(String ownerUserKey, String ownerDisplayName, String clubName) {

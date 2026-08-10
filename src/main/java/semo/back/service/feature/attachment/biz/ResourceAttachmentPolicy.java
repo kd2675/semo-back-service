@@ -14,6 +14,7 @@ import semo.back.service.database.pub.repository.ClubHandoverNoteRepository;
 import semo.back.service.database.pub.repository.DecisionRecordRepository;
 import semo.back.service.database.pub.repository.FinanceRequestRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
+import semo.back.service.database.pub.repository.TodoItemAssigneeRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.decision.biz.ClubDecisionService;
@@ -31,6 +32,7 @@ public class ResourceAttachmentPolicy {
     public static final String RESOURCE_DECISION_RECORD = "DECISION_RECORD";
 
     private final TodoItemRepository todoItemRepository;
+    private final TodoItemAssigneeRepository todoItemAssigneeRepository;
     private final FinanceRequestRepository financeRequestRepository;
     private final ClubFeedbackRepository clubFeedbackRepository;
     private final ClubHandoverNoteRepository clubHandoverNoteRepository;
@@ -50,7 +52,7 @@ public class ResourceAttachmentPolicy {
             case RESOURCE_TODO_ITEM -> {
                 TodoItem todo = requireTodo(access.club().getClubId(), resourceId);
                 boolean ownsTodo = access.clubProfile().getClubProfileId().equals(todo.getCreatedByClubProfileId())
-                        || access.clubProfile().getClubProfileId().equals(todo.getAssignedClubProfileId());
+                        || isTodoAssignee(todo, access.clubProfile().getClubProfileId());
                 if (!ownsTodo
                         && !clubTodoPermissionService.canCreateTodo(access)
                         && !clubTodoPermissionService.canAssignTodo(access)) {
@@ -105,7 +107,16 @@ public class ResourceAttachmentPolicy {
             Long resourceId
     ) {
         switch (resourceType) {
-            case RESOURCE_TODO_ITEM -> requireTodo(access.club().getClubId(), resourceId);
+            case RESOURCE_TODO_ITEM -> {
+                TodoItem todo = requireTodo(access.club().getClubId(), resourceId);
+                boolean visible = access.clubProfile().getClubProfileId().equals(todo.getCreatedByClubProfileId())
+                        || isTodoAssignee(todo, access.clubProfile().getClubProfileId())
+                        || "OPEN_SUPPORT".equals(todo.getAssignmentMode())
+                        || clubTodoPermissionService.canViewAdminTodos(access);
+                if (!visible) {
+                    throw new SemoException.ForbiddenException("업무 첨부파일을 조회할 권한이 없습니다.");
+                }
+            }
             case RESOURCE_FINANCE_REQUEST -> {
                 FinanceRequest financeRequest = requireFinanceRequest(access.club().getClubId(), resourceId);
                 boolean requester = access.clubProfile().getClubProfileId()
@@ -198,6 +209,14 @@ public class ResourceAttachmentPolicy {
     private TodoItem requireTodo(Long clubId, Long resourceId) {
         return todoItemRepository.findByTodoItemIdAndClubId(resourceId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TodoItem", "todoItemId", resourceId));
+    }
+
+    private boolean isTodoAssignee(TodoItem todo, Long clubProfileId) {
+        return clubProfileId.equals(todo.getAssignedClubProfileId())
+                || todoItemAssigneeRepository.existsByTodoItemIdAndClubProfileId(
+                        todo.getTodoItemId(),
+                        clubProfileId
+                );
     }
 
     private FinanceRequest requireFinanceRequest(Long clubId, Long resourceId) {
