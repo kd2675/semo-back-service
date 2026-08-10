@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubMorePreference;
 import semo.back.service.database.pub.repository.ClubMorePreferenceRepository;
+import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.vo.ClubFeatureResponse;
 import semo.back.service.feature.clubfeature.vo.ClubMorePreferenceResponse;
@@ -22,6 +23,7 @@ import semo.back.service.feature.clubfeature.vo.UpdateClubMorePreferenceRequest;
 public class ClubMorePreferenceService {
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
+    private final ClubProfileRepository clubProfileRepository;
     private final ClubMorePreferenceRepository clubMorePreferenceRepository;
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -59,6 +61,12 @@ public class ClubMorePreferenceService {
     }
 
     private ClubMorePreference getOrCreate(Long clubId, Long clubProfileId, String featureKey) {
+        clubProfileRepository.findForUpdateByClubProfileId(clubProfileId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException(
+                        "ClubProfile",
+                        "clubProfileId",
+                        clubProfileId
+                ));
         return clubMorePreferenceRepository.findForUpdate(clubId, clubProfileId, featureKey)
                 .orElseGet(() -> ClubMorePreference.builder()
                         .clubId(clubId)

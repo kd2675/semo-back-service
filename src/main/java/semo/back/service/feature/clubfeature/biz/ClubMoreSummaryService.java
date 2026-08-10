@@ -1,22 +1,22 @@
 package semo.back.service.feature.clubfeature.biz;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import semo.back.service.database.pub.entity.ClubMorePreference;
+import semo.back.service.database.pub.repository.ClubMorePreferenceRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.vo.ClubFeatureResponse;
 import semo.back.service.feature.clubfeature.vo.ClubMoreFeatureStatusResponse;
 import semo.back.service.feature.clubfeature.vo.ClubMoreSummaryResponse;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
-import semo.back.service.database.pub.entity.ClubMorePreference;
-import semo.back.service.database.pub.repository.ClubMorePreferenceRepository;
-
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor

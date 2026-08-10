@@ -1,13 +1,14 @@
 package semo.back.service.database.pub.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import semo.back.service.database.pub.entity.ClubScheduleVote;
-
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import semo.back.service.database.pub.entity.ClubScheduleVote;
 
 public interface ClubScheduleVoteRepository extends JpaRepository<ClubScheduleVote, Long> {
     Optional<ClubScheduleVote> findByVoteIdAndClubId(Long voteId, Long clubId);
@@ -64,8 +65,20 @@ public interface ClubScheduleVoteRepository extends JpaRepository<ClubScheduleVo
             from ClubScheduleVote vote
             where vote.clubId = :clubId
               and vote.closedAt is null
-              and vote.voteStartDate <= :today
-              and vote.voteEndDate >= :today
+              and (
+                    vote.voteStartDate < :today
+                    or (
+                         vote.voteStartDate = :today
+                         and (vote.voteStartTime is null or vote.voteStartTime <= :nowTime)
+                       )
+                  )
+              and (
+                    vote.voteEndDate > :today
+                    or (
+                         vote.voteEndDate = :today
+                         and (vote.voteEndTime is null or vote.voteEndTime >= :nowTime)
+                       )
+                  )
               and not exists (
                     select selection.voteSelectionId
                     from ClubScheduleVoteSelection selection
@@ -73,5 +86,5 @@ public interface ClubScheduleVoteRepository extends JpaRepository<ClubScheduleVo
                       and selection.clubProfileId = :clubProfileId
                   )
             """)
-    long countPendingSelections(Long clubId, Long clubProfileId, LocalDate today);
+    long countPendingSelections(Long clubId, Long clubProfileId, LocalDate today, LocalTime nowTime);
 }

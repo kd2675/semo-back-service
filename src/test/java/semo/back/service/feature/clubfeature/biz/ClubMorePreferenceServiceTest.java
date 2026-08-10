@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import semo.back.service.database.pub.entity.ClubMorePreference;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.ClubMorePreferenceRepository;
+import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.vo.ClubFeatureResponse;
 import semo.back.service.feature.clubfeature.vo.UpdateClubMorePreferenceRequest;
@@ -25,6 +26,8 @@ class ClubMorePreferenceServiceTest {
     private ClubAccessResolver clubAccessResolver;
     @Mock
     private ClubFeatureService clubFeatureService;
+    @Mock
+    private ClubProfileRepository clubProfileRepository;
     @Mock
     private ClubMorePreferenceRepository clubMorePreferenceRepository;
 
@@ -46,6 +49,7 @@ class ClubMorePreferenceServiceTest {
         when(clubProfile.getClubProfileId()).thenReturn(11L);
         when(clubAccessResolver.requireActiveMember(1L, "user-key")).thenReturn(access);
         when(clubFeatureService.getClubFeatures(1L, "user-key")).thenReturn(List.of(feature("TODO")));
+        when(clubProfileRepository.findForUpdateByClubProfileId(11L)).thenReturn(Optional.of(clubProfile));
         when(clubMorePreferenceRepository.findForUpdate(1L, 11L, "TODO")).thenReturn(Optional.of(preference));
         when(clubMorePreferenceRepository.save(preference)).thenReturn(preference);
 
@@ -67,6 +71,7 @@ class ClubMorePreferenceServiceTest {
         when(clubProfile.getClubProfileId()).thenReturn(11L);
         when(clubAccessResolver.requireActiveMember(1L, "user-key")).thenReturn(access);
         when(clubFeatureService.getClubFeatures(1L, "user-key")).thenReturn(List.of(feature("FINANCE")));
+        when(clubProfileRepository.findForUpdateByClubProfileId(11L)).thenReturn(Optional.of(clubProfile));
         when(clubMorePreferenceRepository.findForUpdate(1L, 11L, "FINANCE")).thenReturn(Optional.empty());
         when(clubMorePreferenceRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> invocation.getArgument(0));
 

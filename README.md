@@ -189,6 +189,16 @@
 
 일정 참석 응답과 실제 출석은 `club_event_participant`에서 함께 관리합니다. `participation_status`는 `GOING`, `NOT_GOING`, `CANCELED`, 실제 `attendance_status`는 `PRESENT`, `LATE`, `ABSENT`, `EXCUSED`를 사용합니다. 실제 출석에는 확인자, 확인 시각, 운영 메모가 함께 저장되며 `ATTENDANCE_MANAGE` 권한을 직책에 위임할 수 있습니다.
 
+### More summary / preference
+- `GET /api/semo/v1/clubs/{clubId}/more/summary`
+  - 활성 기능의 실제 정렬 순서, 사용자/운영 capability, 기능별 미처리·지연 건수, 즐겨찾기와 최근 사용 시각을 반환
+- `PUT /api/semo/v1/clubs/{clubId}/more/preferences/{featureKey}`
+  - 활성 기능의 개인 즐겨찾기 저장
+- `POST /api/semo/v1/clubs/{clubId}/more/preferences/{featureKey}/usage`
+  - 기능 진입 시 개인 최근 사용 시각 저장
+
+선호 설정은 `club_more_preference`의 `(club_id, club_profile_id, feature_key)` 유일 키로 관리합니다. 최초 생성 경쟁도 같은 클럽 프로필 행을 잠근 뒤 처리해 중복 삽입을 방지합니다. 운영 DB에는 `db/ops/semo_more_preference_apply.sql`을 별도로 적용해야 하며 전체 DDL을 운영 DB에 직접 실행하지 않습니다.
+
 ### Activity
 - `GET /api/semo/v1/clubs/{clubId}/profile/activity`
   - 로그인한 활성 멤버가 자신이 수행한 활동만 커서 기반으로 조회

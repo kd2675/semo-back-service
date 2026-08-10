@@ -78,7 +78,12 @@ public class ClubMoreWorkQueueService {
                         )
                 );
                 case "POLL" -> userOnlyCounts(
-                        clubScheduleVoteRepository.countPendingSelections(clubId, clubProfileId, today)
+                        clubScheduleVoteRepository.countPendingSelections(
+                                clubId,
+                                clubProfileId,
+                                today,
+                                now.toLocalTime()
+                        )
                 );
                 case "ATTENDANCE" -> adminOnlyCounts(
                         adminAccessible
