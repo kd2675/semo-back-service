@@ -7,6 +7,10 @@ public record ClubAdminRoleManagementResponse(
         String clubName,
         boolean admin,
         boolean roleManagementEnabled,
+        boolean canCreate,
+        boolean canUpdate,
+        boolean canDelete,
+        boolean canAssign,
         List<ClubPositionSummaryResponse> positions,
         List<ClubPermissionGroupResponse> permissionGroups
 ) {

@@ -20,6 +20,7 @@ import semo.back.service.feature.club.vo.ClubAdminMembersResponse;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberRoleRequest;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberStatusRequest;
 import semo.back.service.feature.position.biz.ClubPositionService;
+import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 import semo.back.service.feature.position.vo.ClubPositionSummaryResponse;
 import semo.back.service.feature.position.vo.UpdateClubMemberPositionsRequest;
 
@@ -54,16 +55,21 @@ public class ClubAdminMemberService {
     private final ProfileUserRepository profileUserRepository;
     private final ImageFileUrlResolver imageFileUrlResolver;
     private final ClubPositionService clubPositionService;
+    private final ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
 
     public ClubAdminMembersResponse getAdminMembers(Long clubId, String userKey) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = requireRolePermission(
+                clubId,
+                userKey,
+                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_VIEW
+        );
         boolean roleManagementEnabled = clubPositionService.isRoleManagementEnabled(clubId);
         List<ClubPositionSummaryResponse> availablePositions = clubPositionService.getAvailablePositionSummaries(clubId);
         List<ClubAdminMemberResponse> members = loadMemberResponses(clubId, access);
         return new ClubAdminMembersResponse(
                 access.club().getClubId(),
                 access.club().getName(),
-                true,
+                access.isAdmin(),
                 roleManagementEnabled,
                 availablePositions,
                 members
@@ -158,7 +164,11 @@ public class ClubAdminMemberService {
             String userKey,
             UpdateClubMemberPositionsRequest request
     ) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = requireRolePermission(
+                clubId,
+                userKey,
+                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_ASSIGN
+        );
         ClubMember target = requireManagedMember(clubId, clubMemberId, access);
         clubPositionService.replaceMemberPositions(access, target, request == null ? null : request.clubPositionIds());
         ClubAdminMemberResponse response = toResponse(
@@ -178,6 +188,14 @@ public class ClubAdminMemberService {
                 response.displayName() + "의 직책을 변경하지 못했습니다."
         );
         return response;
+    }
+
+    private ClubAccessResolver.ClubAccess requireRolePermission(Long clubId, String userKey, String permissionKey) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        if (!clubPositionPermissionEvaluator.hasPermission(access, permissionKey)) {
+            throw new SemoException.ForbiddenException("직책 관리 권한이 필요합니다.");
+        }
+        return access;
     }
 
     private List<ClubAdminMemberResponse> loadMemberResponses(Long clubId, ClubAccessResolver.ClubAccess access) {

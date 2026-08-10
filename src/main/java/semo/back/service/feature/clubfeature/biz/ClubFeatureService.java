@@ -195,6 +195,7 @@ public class ClubFeatureService {
                             catalog.getDescription(),
                             catalog.getIconName(),
                             resolveNavigationScope(catalog),
+                            resolveResponseSortOrder(catalog, clubFeature),
                             resolveEnabled(catalog, clubFeature),
                             toUserPath(clubId, catalog.getFeatureKey()),
                             toAdminPath(clubId, catalog.getFeatureKey())

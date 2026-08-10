@@ -38,6 +38,7 @@ import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -77,13 +78,21 @@ public class ClubPositionService {
 
     public ClubAdminRoleManagementResponse getRoleManagement(Long clubId, String userKey) {
         requireRoleManagementFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = requireRolePermission(
+                clubId,
+                userKey,
+                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_VIEW
+        );
         PositionSnapshot snapshot = loadSnapshot(clubId);
         return new ClubAdminRoleManagementResponse(
                 access.club().getClubId(),
                 access.club().getName(),
+                access.isAdmin(),
                 true,
-                true,
+                hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_CREATE),
+                hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_UPDATE),
+                hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_DELETE),
+                hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_ASSIGN),
                 snapshot.positionSummaries(),
                 snapshot.permissionGroups()
         );
@@ -91,27 +100,23 @@ public class ClubPositionService {
 
     public ClubPositionDetailResponse getPositionDetail(Long clubId, Long clubPositionId, String userKey) {
         requireRoleManagementFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
-        PositionSnapshot snapshot = loadSnapshot(clubId);
-        ClubPositionSummaryResponse position = snapshot.positionSummaryById().get(clubPositionId);
-        if (position == null) {
-            throw new SemoException.ResourceNotFoundException("ClubPosition", "clubPositionId", clubPositionId);
-        }
-        return new ClubPositionDetailResponse(
-                access.club().getClubId(),
-                access.club().getName(),
-                true,
-                true,
-                position,
-                snapshot.permissionGroups()
+        ClubAccessResolver.ClubAccess access = requireRolePermission(
+                clubId,
+                userKey,
+                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_VIEW
         );
+        return buildPositionDetail(access, clubPositionId);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     @RecordClubActivity(subject = "직책관리")
     public ClubPositionDetailResponse createPosition(Long clubId, String userKey, CreateClubPositionRequest request) {
         requireRoleManagementFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = requireRolePermission(
+                clubId,
+                userKey,
+                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_CREATE
+        );
         PermissionCatalogSnapshot permissionCatalogSnapshot = loadPermissionCatalogSnapshot(clubId);
         String normalizedCode = normalizePositionCode(request.positionCode());
         if (clubPositionRepository.existsByClubIdAndPositionCode(clubId, normalizedCode)) {
@@ -137,7 +142,7 @@ public class ClubPositionService {
                 position.getClubPositionId(),
                 normalizePermissionKeys(request.permissionKeys(), permissionCatalogSnapshot.visiblePermissionKeys())
         );
-        return getPositionDetail(clubId, position.getClubPositionId(), userKey);
+        return buildPositionDetail(access, position.getClubPositionId());
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -149,7 +154,11 @@ public class ClubPositionService {
             UpdateClubPositionRequest request
     ) {
         requireRoleManagementFeature(clubId);
-        clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = requireRolePermission(
+                clubId,
+                userKey,
+                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_UPDATE
+        );
         PermissionCatalogSnapshot permissionCatalogSnapshot = loadPermissionCatalogSnapshot(clubId);
         ClubPosition current = requirePosition(clubId, clubPositionId);
         String normalizedCode = normalizePositionCode(request.positionCode());
@@ -180,20 +189,24 @@ public class ClubPositionService {
         Set<String> nextPermissionKeys = normalizePermissionKeys(request.permissionKeys(), permissionCatalogSnapshot.visiblePermissionKeys());
         nextPermissionKeys.addAll(hiddenPermissionKeys);
         replacePositionPermissions(clubPositionId, nextPermissionKeys);
-        return getPositionDetail(clubId, clubPositionId, userKey);
+        return buildPositionDetail(access, clubPositionId);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     @RecordClubActivity(subject = "직책관리")
     public void deletePosition(Long clubId, Long clubPositionId, String userKey) {
         requireRoleManagementFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = requireRolePermission(
+                clubId,
+                userKey,
+                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_DELETE
+        );
         ClubPosition current = requirePosition(clubId, clubPositionId);
         ClubActivityContextHolder.setDetails(
                 "직책 '" + current.getDisplayName() + "'을 삭제했습니다.",
                 "직책 '" + current.getDisplayName() + "' 삭제에 실패했습니다."
         );
-        closeOpenHistoriesForPosition(clubId, clubPositionId, access.clubProfile().getClubProfileId(), LocalDateTime.now());
+        closeOpenHistoriesForPosition(clubId, clubPositionId, access.clubProfile().getClubProfileId(), currentTimestamp());
         clubMemberPositionRepository.deleteByClubPositionId(current.getClubPositionId());
         clubPositionPermissionRepository.deleteByClubPositionId(current.getClubPositionId());
         clubPositionRepository.delete(current);
@@ -201,7 +214,11 @@ public class ClubPositionService {
 
     public ClubPositionHistoryResponse getPositionHistory(Long clubId, String userKey) {
         requireRoleManagementFeature(clubId);
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = requireRolePermission(
+                clubId,
+                userKey,
+                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_VIEW
+        );
         List<ClubMemberPositionHistory> histories = clubMemberPositionHistoryRepository
                 .findByClubIdAndDeletedFalseOrderByStartedAtDescClubMemberPositionHistoryIdDesc(clubId);
         List<Long> clubMemberIds = histories.stream()
@@ -220,7 +237,7 @@ public class ClubPositionService {
         return new ClubPositionHistoryResponse(
                 access.club().getClubId(),
                 access.club().getName(),
-                true,
+                access.isAdmin(),
                 histories.stream()
                         .map(history -> toHistoryResponse(history, displayNameByMemberId.get(history.getClubMemberId())))
                         .toList()
@@ -273,6 +290,9 @@ public class ClubPositionService {
         if (!clubPositionPermissionEvaluator.isRoleManagementEnabled(actorAccess.club().getClubId())) {
             throw new SemoException.ValidationException("직책관리 기능이 활성화되지 않았습니다.");
         }
+        if (!hasRolePermission(actorAccess, ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_ASSIGN)) {
+            throw new SemoException.ForbiddenException("직책 배정 권한이 필요합니다.");
+        }
         List<Long> normalizedPositionIds = normalizePositionIds(clubPositionIds);
         List<ClubPosition> positions = normalizedPositionIds.isEmpty()
                 ? List.of()
@@ -288,7 +308,7 @@ public class ClubPositionService {
         Set<Long> existingPositionIds = existingAssignments.stream()
                 .map(ClubMemberPosition::getClubPositionId)
                 .collect(Collectors.toSet());
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = currentTimestamp();
         Long actorClubProfileId = actorAccess.clubProfile().getClubProfileId();
         Long targetClubProfileId = resolveClubProfileId(target.getClubMemberId());
         List<ClubMemberPosition> assignmentsToRemove = existingAssignments.stream()
@@ -340,6 +360,48 @@ public class ClubPositionService {
     private void closeOpenHistoriesForPosition(Long clubId, Long clubPositionId, Long actorClubProfileId, LocalDateTime endedAt) {
         clubMemberPositionHistoryRepository.findOpenHistoriesByPosition(clubId, clubPositionId)
                 .forEach(history -> history.close(actorClubProfileId, endedAt));
+    }
+
+    private LocalDateTime currentTimestamp() {
+        return LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+    }
+
+    private ClubPositionDetailResponse buildPositionDetail(
+            ClubAccessResolver.ClubAccess access,
+            Long clubPositionId
+    ) {
+        PositionSnapshot snapshot = loadSnapshot(access.club().getClubId());
+        ClubPositionSummaryResponse position = snapshot.positionSummaryById().get(clubPositionId);
+        if (position == null) {
+            throw new SemoException.ResourceNotFoundException("ClubPosition", "clubPositionId", clubPositionId);
+        }
+        return new ClubPositionDetailResponse(
+                access.club().getClubId(),
+                access.club().getName(),
+                access.isAdmin(),
+                true,
+                hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_UPDATE),
+                hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_DELETE),
+                hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_ASSIGN),
+                position,
+                snapshot.permissionGroups()
+        );
+    }
+
+    private ClubAccessResolver.ClubAccess requireRolePermission(
+            Long clubId,
+            String userKey,
+            String permissionKey
+    ) {
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        if (!hasRolePermission(access, permissionKey)) {
+            throw new SemoException.ForbiddenException("직책 관리 권한이 필요합니다.");
+        }
+        return access;
+    }
+
+    private boolean hasRolePermission(ClubAccessResolver.ClubAccess access, String permissionKey) {
+        return clubPositionPermissionEvaluator.hasPermission(access, permissionKey);
     }
 
     private Long resolveClubProfileId(Long clubMemberId) {

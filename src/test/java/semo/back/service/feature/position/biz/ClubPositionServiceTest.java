@@ -386,6 +386,59 @@ class ClubPositionServiceTest {
     }
 
     @Test
+    void getRoleManagement_memberWithViewPermissionReceivesReadOnlyCapabilities() {
+        Long clubId = createClub("role-owner-view", "직책 위임 테스트 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-view",
+                new UpdateClubFeaturesRequest(List.of("ROLE_MANAGEMENT"))
+        );
+        var viewerPosition = clubPositionService.createPosition(
+                clubId,
+                "role-owner-view",
+                new CreateClubPositionRequest(
+                        "직책 조회 담당",
+                        "ROLE_VIEWER",
+                        null,
+                        "visibility",
+                        "#0053dd",
+                        List.of("ROLE_MANAGEMENT_VIEW")
+                )
+        );
+        var profileUser = profileUserRepository.save(semo.back.service.database.pub.entity.ProfileUser.builder()
+                .userKey("delegated-role-viewer")
+                .displayName("위임 조회자")
+                .build());
+        var member = clubMemberRepository.save(semo.back.service.database.pub.entity.ClubMember.builder()
+                .clubId(clubId)
+                .profileId(profileUser.getProfileId())
+                .roleCode("MEMBER")
+                .membershipStatus("ACTIVE")
+                .joinedAt(java.time.LocalDateTime.now())
+                .build());
+        clubProfileRepository.save(semo.back.service.database.pub.entity.ClubProfile.builder()
+                .clubMemberId(member.getClubMemberId())
+                .displayName("위임 조회자")
+                .build());
+        var ownerAccess = clubAccessResolver.requireAdmin(clubId, "role-owner-view");
+        clubPositionService.replaceMemberPositions(
+                ownerAccess,
+                member,
+                List.of(viewerPosition.position().clubPositionId())
+        );
+
+        var response = clubPositionService.getRoleManagement(clubId, "delegated-role-viewer");
+
+        assertThat(List.of(
+                response.admin(),
+                response.canCreate(),
+                response.canUpdate(),
+                response.canDelete(),
+                response.canAssign()
+        )).containsExactly(false, false, false, false, false);
+    }
+
+    @Test
     void getRecentAdminActivities_positionFilterUsesTenureAtActivityTime() {
         Long clubId = createClub("role-owner-006", "직책 로그 필터 클럽");
         clubFeatureService.updateClubFeatures(

@@ -154,6 +154,32 @@ class ClubFeatureServiceTest {
     }
 
     @Test
+    void updateClubFeatures_preservesRequestedOrderInResponse() {
+        Long clubId = clubService.createClub(
+                "feature-user-order",
+                "Feature Admin",
+                new CreateClubRequest(
+                        "Ordered Feature Club",
+                        "기능 순서 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+
+        var responses = clubFeatureService.updateClubFeatures(
+                clubId,
+                "feature-user-order",
+                new UpdateClubFeaturesRequest(java.util.List.of("FINANCE", "TODO", "MEMBER_DIRECTORY"))
+        );
+
+        assertThat(responses.stream().filter(response -> response.enabled() && !"JOIN_REQUEST".equals(response.featureKey())))
+                .extracting(response -> response.featureKey() + ":" + response.sortOrder())
+                .containsExactly("FINANCE:10", "TODO:20", "MEMBER_DIRECTORY:30");
+    }
+
+    @Test
     void updateClubFeaturesEnablesTimelineFeature() {
         Long clubId = clubService.createClub(
                 "feature-user-002",

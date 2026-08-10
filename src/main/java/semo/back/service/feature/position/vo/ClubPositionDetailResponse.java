@@ -7,6 +7,9 @@ public record ClubPositionDetailResponse(
         String clubName,
         boolean admin,
         boolean roleManagementEnabled,
+        boolean canUpdate,
+        boolean canDelete,
+        boolean canAssign,
         ClubPositionSummaryResponse position,
         List<ClubPermissionGroupResponse> permissionGroups
 ) {
