@@ -1120,3 +1120,85 @@ WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'FIN
 --       WHERE fa.club_id = c.club_id
 --         AND fa.feature_key = 'ATTENDANCE'
 --   );
+
+-- ------------------------------------------------------------
+-- Operating term and handover center
+-- ------------------------------------------------------------
+INSERT INTO feature_catalog (
+    feature_key,
+    display_name,
+    description,
+    icon_name,
+    navigation_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'HANDOVER',
+    '인수인계 센터',
+    '운영 임기, 집행부 구성, 미완료 업무와 다음 담당자 메모를 한곳에서 관리합니다.',
+    'move_up',
+    'ADMIN_ONLY',
+    1,
+    95,
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_catalog WHERE feature_key = 'HANDOVER');
+
+UPDATE feature_catalog
+SET display_name = '인수인계 센터',
+    description = '운영 임기, 집행부 구성, 미완료 업무와 다음 담당자 메모를 한곳에서 관리합니다.',
+    icon_name = 'move_up',
+    navigation_scope = 'ADMIN_ONLY',
+    active = 1,
+    sort_order = 95,
+    update_date = NOW()
+WHERE feature_key = 'HANDOVER';
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'HANDOVER_VIEW',
+    'HANDOVER',
+    '인수인계 조회',
+    '운영 임기, 집행부, 업무 큐와 인수인계 메모를 조회합니다.',
+    'CLUB',
+    1,
+    10,
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'HANDOVER_VIEW');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
+SELECT
+    'HANDOVER_MANAGE',
+    'HANDOVER',
+    '인수인계 관리',
+    '운영 임기와 집행부 구성을 관리하고 인수인계 메모를 작성합니다.',
+    'CLUB',
+    1,
+    20,
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'HANDOVER_MANAGE');

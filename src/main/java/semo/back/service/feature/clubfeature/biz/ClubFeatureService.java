@@ -36,6 +36,7 @@ public class ClubFeatureService {
     private static final String NAVIGATION_SCOPE_USER_AND_ADMIN = "USER_AND_ADMIN";
     private static final String NAVIGATION_SCOPE_ADMIN_ONLY = "ADMIN_ONLY";
     private static final String FEATURE_JOIN_REQUEST = "JOIN_REQUEST";
+    private static final String FEATURE_HANDOVER = "HANDOVER";
 
     private final FeatureCatalogRepository featureCatalogRepository;
     private final ClubFeatureRepository clubFeatureRepository;
@@ -217,6 +218,7 @@ public class ClubFeatureService {
             case "TODO" -> "/clubs/%d/more/todos".formatted(clubId);
             case "MEMBER_DIRECTORY" -> "/clubs/%d/more/members".formatted(clubId);
             case "ROLE_MANAGEMENT" -> "/clubs/%d/admin/more/roles".formatted(clubId);
+            case FEATURE_HANDOVER -> "/clubs/%d/admin/more/handover".formatted(clubId);
             default -> "/clubs/%d".formatted(clubId);
         };
     }
@@ -234,6 +236,7 @@ public class ClubFeatureService {
             case "TODO" -> "/clubs/%d/admin/more/todos".formatted(clubId);
             case "MEMBER_DIRECTORY" -> "/clubs/%d/admin/more/members".formatted(clubId);
             case "ROLE_MANAGEMENT" -> "/clubs/%d/admin/more/roles".formatted(clubId);
+            case FEATURE_HANDOVER -> "/clubs/%d/admin/more/handover".formatted(clubId);
             default -> "/clubs/%d/admin".formatted(clubId);
         };
     }
@@ -267,7 +270,8 @@ public class ClubFeatureService {
     }
 
     private boolean isImplicitlyEnabled(String featureKey) {
-        return FEATURE_JOIN_REQUEST.equals(normalizeFeatureKey(featureKey));
+        String normalizedFeatureKey = normalizeFeatureKey(featureKey);
+        return FEATURE_JOIN_REQUEST.equals(normalizedFeatureKey) || FEATURE_HANDOVER.equals(normalizedFeatureKey);
     }
 
     private String buildFeatureUpdateDetail(List<FeatureCatalog> catalogs, Set<String> enabledFeatureKeys) {

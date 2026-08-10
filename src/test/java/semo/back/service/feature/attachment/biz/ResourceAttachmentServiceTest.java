@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.Optional;
 
@@ -45,7 +46,7 @@ class ResourceAttachmentServiceTest {
     void createAttachment_authorizedResource_persistsFinalizedServerMetadata() {
         ClubAccessResolver.ClubAccess access = access(11L);
         when(clubAccessResolver.requireActiveMember(1L, "user-key")).thenReturn(access);
-        when(resourceAttachmentPolicy.requireCanAttach(access, "FEEDBACK", 31L))
+        when(resourceAttachmentPolicy.requireCanAttachForUpdate(access, "FEEDBACK", 31L))
                 .thenReturn("OWNER_AND_ADMIN");
         when(resourceAttachmentRepository.countByClubIdAndResourceTypeAndResourceIdAndDeletedFalse(
                 1L,
@@ -85,7 +86,7 @@ class ResourceAttachmentServiceTest {
     void createAttachment_resourceAtLimit_rejectsBeforeFileFinalization() {
         ClubAccessResolver.ClubAccess access = mock(ClubAccessResolver.ClubAccess.class);
         when(clubAccessResolver.requireActiveMember(1L, "user-key")).thenReturn(access);
-        when(resourceAttachmentPolicy.requireCanAttach(access, "TODO_ITEM", 21L)).thenReturn("CLUB");
+        when(resourceAttachmentPolicy.requireCanAttachForUpdate(access, "TODO_ITEM", 21L)).thenReturn("CLUB");
         when(resourceAttachmentRepository.countByClubIdAndResourceTypeAndResourceIdAndDeletedFalse(
                 1L,
                 "TODO_ITEM",
@@ -103,6 +104,45 @@ class ResourceAttachmentServiceTest {
                 )
         )).isInstanceOf(SemoException.ValidationException.class);
         verify(attachmentFinalizeClient, never()).finalizeAttachment(any(), any());
+    }
+
+    @Test
+    void createAttachment_sameFinalFileRetryAtLimit_returnsExistingBeforeCountAndFinalize() {
+        ClubAccessResolver.ClubAccess access = access(11L);
+        ResourceAttachment existing = ResourceAttachment.builder()
+                .resourceAttachmentId(91L)
+                .clubId(1L)
+                .resourceType("FEEDBACK")
+                .resourceId(31L)
+                .uploaderClubProfileId(11L)
+                .fileName("semo/attachments/feedback/31/2026/08/10/file.pdf")
+                .originalFileName("운영 계획.pdf")
+                .contentType("application/pdf")
+                .sizeBytes(128L)
+                .visibilityScope("OWNER_AND_ADMIN")
+                .deleted(false)
+                .build();
+        when(clubAccessResolver.requireActiveMember(1L, "user-key")).thenReturn(access);
+        when(resourceAttachmentRepository.findByFileNameAndDeletedFalse(existing.getFileName()))
+                .thenReturn(Optional.of(existing));
+        when(attachmentFileUrlResolver.resolveDownloadUrl(existing.getFileName(), existing.getOriginalFileName()))
+                .thenReturn("http://localhost:8081/files/final.pdf?downloadName=x");
+
+        var response = resourceAttachmentService.createAttachment(
+                1L,
+                "user-key",
+                new CreateResourceAttachmentRequest(
+                        "feedback",
+                        31L,
+                        "temp/files/2026/08/10/file.pdf",
+                        "운영 계획.pdf"
+                )
+        );
+
+        assertThat(response.attachmentId()).isEqualTo(91L);
+        verifyNoInteractions(resourceAttachmentPolicy, attachmentFinalizeClient);
+        verify(resourceAttachmentRepository, never())
+                .countByClubIdAndResourceTypeAndResourceIdAndDeletedFalse(any(), any(), any());
     }
 
     private ClubAccessResolver.ClubAccess access(Long clubProfileId) {

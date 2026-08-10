@@ -14,6 +14,8 @@ import semo.back.service.database.pub.repository.BracketRecordRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubFeedbackRepository;
 import semo.back.service.database.pub.repository.ClubJoinRequestRepository;
+import semo.back.service.database.pub.repository.ClubHandoverNoteRepository;
+import semo.back.service.database.pub.repository.ClubTermCarryoverItemRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubScheduleVoteRepository;
 import semo.back.service.database.pub.repository.FinancePaymentRepository;
@@ -37,6 +39,8 @@ public class ClubMoreWorkQueueService {
     private final FinanceRequestRepository financeRequestRepository;
     private final ClubFeedbackRepository clubFeedbackRepository;
     private final ClubJoinRequestRepository clubJoinRequestRepository;
+    private final ClubHandoverNoteRepository clubHandoverNoteRepository;
+    private final ClubTermCarryoverItemRepository clubTermCarryoverItemRepository;
     private final TournamentRecordRepository tournamentRecordRepository;
     private final TournamentApplicationRepository tournamentApplicationRepository;
     private final BracketRecordRepository bracketRecordRepository;
@@ -88,6 +92,14 @@ public class ClubMoreWorkQueueService {
                 case "ATTENDANCE" -> adminOnlyCounts(
                         adminAccessible
                                 ? clubEventParticipantRepository.countStartedEventAttendancePending(clubId, now)
+                                : 0
+                );
+                case "HANDOVER" -> adminOnlyCounts(
+                        adminAccessible
+                                ? clubHandoverNoteRepository.countByClubIdAndDeletedFalseAndStatusCodeIn(
+                                            clubId,
+                                            List.of("DRAFT", "READY")
+                                    ) + clubTermCarryoverItemRepository.countByClubIdAndStatusCode(clubId, "OPEN")
                                 : 0
                 );
                 default -> FeatureQueueCounts.empty();

@@ -53,6 +53,8 @@ public class ClubPositionPermissionEvaluator {
     public static final String PERMISSION_ROLE_MANAGEMENT_UPDATE = "ROLE_MANAGEMENT_UPDATE";
     public static final String PERMISSION_ROLE_MANAGEMENT_DELETE = "ROLE_MANAGEMENT_DELETE";
     public static final String PERMISSION_ROLE_MANAGEMENT_ASSIGN = "ROLE_MANAGEMENT_ASSIGN";
+    public static final String PERMISSION_HANDOVER_VIEW = "HANDOVER_VIEW";
+    public static final String PERMISSION_HANDOVER_MANAGE = "HANDOVER_MANAGE";
 
     private final ClubFeatureService clubFeatureService;
     private final ClubPositionRepository clubPositionRepository;

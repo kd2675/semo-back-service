@@ -1,14 +1,21 @@
 package semo.back.service.database.pub.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import semo.back.service.database.pub.entity.Club;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface ClubRepository extends JpaRepository<Club, Long> {
     List<Club> findByClubIdInAndActiveTrue(Collection<Long> clubIds);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select club from Club club where club.clubId = :clubId")
+    Optional<Club> findForUpdate(Long clubId);
 
     @Query("""
             select c

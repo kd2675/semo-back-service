@@ -61,18 +61,25 @@ public class ResourceAttachmentService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         String resourceType = normalizeResourceType(request.resourceType());
         Long resourceId = requireResourceId(request.resourceId());
-        String visibilityScope = resourceAttachmentPolicy.requireCanAttach(access, resourceType, resourceId);
-        long attachmentCount = resourceAttachmentRepository
-                .countByClubIdAndResourceTypeAndResourceIdAndDeletedFalse(clubId, resourceType, resourceId);
-        if (attachmentCount >= MAX_ATTACHMENTS_PER_RESOURCE) {
-            throw new SemoException.ValidationException("한 항목에는 첨부파일을 최대 10개까지 등록할 수 있습니다.");
-        }
-
         String originalFileName = normalizeOriginalFileName(request.originalFileName());
         String targetDir = "semo/attachments/"
                 + resourceType.toLowerCase(Locale.ROOT).replace('_', '-')
                 + "/"
                 + resourceId;
+        String predictedFinalFileName = predictFinalFileName(request.tempFileName(), targetDir);
+        ResourceAttachment retriedAttachment = resourceAttachmentRepository
+                .findByFileNameAndDeletedFalse(predictedFinalFileName)
+                .orElse(null);
+        if (retriedAttachment != null) {
+            return requireSameAttachmentTarget(retriedAttachment, clubId, resourceType, resourceId, access);
+        }
+
+        String visibilityScope = resourceAttachmentPolicy.requireCanAttachForUpdate(access, resourceType, resourceId);
+        long attachmentCount = resourceAttachmentRepository
+                .countByClubIdAndResourceTypeAndResourceIdAndDeletedFalse(clubId, resourceType, resourceId);
+        if (attachmentCount >= MAX_ATTACHMENTS_PER_RESOURCE) {
+            throw new SemoException.ValidationException("한 항목에는 첨부파일을 최대 10개까지 등록할 수 있습니다.");
+        }
         FinalizedAttachment finalized = attachmentFinalizeClient.finalizeAttachment(
                 request.tempFileName(),
                 targetDir
@@ -81,13 +88,7 @@ public class ResourceAttachmentService {
                 .findByFileNameAndDeletedFalse(finalized.fileName())
                 .orElse(null);
         if (existing != null) {
-            if (existing.getClubId().equals(clubId)
-                    && existing.getResourceType().equals(resourceType)
-                    && existing.getResourceId().equals(resourceId)
-                    && existing.getUploaderClubProfileId().equals(access.clubProfile().getClubProfileId())) {
-                return toResponse(existing);
-            }
-            throw new SemoException.ConflictException("이미 다른 항목에 등록된 첨부파일입니다.");
+            return requireSameAttachmentTarget(existing, clubId, resourceType, resourceId, access);
         }
 
         ResourceAttachment saved = resourceAttachmentRepository.save(ResourceAttachment.builder()
@@ -155,6 +156,36 @@ public class ResourceAttachmentService {
             throw new SemoException.ValidationException("원본 파일명이 올바르지 않습니다.");
         }
         return baseName;
+    }
+
+    private String predictFinalFileName(String tempFileName, String targetDir) {
+        if (tempFileName == null || tempFileName.isBlank()) {
+            throw new SemoException.ValidationException("임시 파일 경로는 필수입니다.");
+        }
+        String normalized = tempFileName.trim().replace('\\', '/');
+        String prefix = "temp/files/";
+        if (!normalized.startsWith(prefix)
+                || normalized.contains("../")
+                || normalized.endsWith("/")) {
+            throw new SemoException.ValidationException("첨부파일 임시 경로가 올바르지 않습니다.");
+        }
+        return targetDir + "/" + normalized.substring(prefix.length());
+    }
+
+    private ResourceAttachmentResponse requireSameAttachmentTarget(
+            ResourceAttachment attachment,
+            Long clubId,
+            String resourceType,
+            Long resourceId,
+            ClubAccessResolver.ClubAccess access
+    ) {
+        if (attachment.getClubId().equals(clubId)
+                && attachment.getResourceType().equals(resourceType)
+                && attachment.getResourceId().equals(resourceId)
+                && attachment.getUploaderClubProfileId().equals(access.clubProfile().getClubProfileId())) {
+            return toResponse(attachment);
+        }
+        throw new SemoException.ConflictException("이미 다른 항목에 등록된 첨부파일입니다.");
     }
 
     private ResourceAttachmentResponse toResponse(ResourceAttachment attachment) {

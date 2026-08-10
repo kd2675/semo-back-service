@@ -15,13 +15,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.Club;
 import semo.back.service.database.pub.entity.ClubFeedback;
+import semo.back.service.database.pub.entity.ClubHandoverNote;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.FinanceRequest;
 import semo.back.service.database.pub.repository.ClubFeedbackRepository;
+import semo.back.service.database.pub.repository.ClubHandoverNoteRepository;
 import semo.back.service.database.pub.repository.FinanceRequestRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.finance.biz.policy.ClubFinancePermissionService;
+import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 import semo.back.service.feature.todo.biz.policy.ClubTodoPermissionService;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,9 +36,13 @@ class ResourceAttachmentPolicyTest {
     @Mock
     private ClubFeedbackRepository clubFeedbackRepository;
     @Mock
+    private ClubHandoverNoteRepository clubHandoverNoteRepository;
+    @Mock
     private ClubTodoPermissionService clubTodoPermissionService;
     @Mock
     private ClubFinancePermissionService clubFinancePermissionService;
+    @Mock
+    private ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
 
     @InjectMocks
     private ResourceAttachmentPolicy resourceAttachmentPolicy;
@@ -69,6 +76,28 @@ class ResourceAttachmentPolicyTest {
 
         assertThatThrownBy(() -> resourceAttachmentPolicy.requireCanView(access, "FINANCE_REQUEST", 41L))
                 .isInstanceOf(SemoException.ForbiddenException.class);
+    }
+
+    @Test
+    void requireCanAttach_handoverManager_returnsOperatorVisibility() {
+        Club club = mock(Club.class);
+        ClubAccessResolver.ClubAccess access = mock(ClubAccessResolver.ClubAccess.class);
+        when(access.club()).thenReturn(club);
+        when(club.getClubId()).thenReturn(1L);
+        when(clubHandoverNoteRepository.findByClubHandoverNoteIdAndClubIdAndDeletedFalse(51L, 1L))
+                .thenReturn(Optional.of(ClubHandoverNote.builder()
+                        .clubHandoverNoteId(51L)
+                        .clubId(1L)
+                        .deleted(false)
+                        .build()));
+        when(clubPositionPermissionEvaluator.hasPermission(
+                access,
+                ClubPositionPermissionEvaluator.PERMISSION_HANDOVER_MANAGE
+        )).thenReturn(true);
+
+        String visibility = resourceAttachmentPolicy.requireCanAttach(access, "HANDOVER_NOTE", 51L);
+
+        assertThat(visibility).isEqualTo("HANDOVER_OPERATORS");
     }
 
     private ClubAccessResolver.ClubAccess access(Long clubId, Long clubProfileId) {
