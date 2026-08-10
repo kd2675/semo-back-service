@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 public record CreateFinanceObligationRequest(
@@ -17,6 +18,22 @@ public record CreateFinanceObligationRequest(
         @Size(max = 500, message = "메모는 500자 이하여야 합니다.")
         String note,
         String targetScopeCode,
-        List<Long> clubProfileIds
+        List<Long> clubProfileIds,
+        Long financePeriodId,
+        Long financeAccountId,
+        Long linkedScheduleEventId,
+        String recurrenceFrequency,
+        Integer recurrenceInterval,
+        LocalDate recurrenceEndDate
 ) {
+    public CreateFinanceObligationRequest(
+            String title,
+            BigDecimal amount,
+            String dueAt,
+            String note,
+            String targetScopeCode,
+            List<Long> clubProfileIds
+    ) {
+        this(title, amount, dueAt, note, targetScopeCode, clubProfileIds, null, null, null, "NONE", 1, null);
+    }
 }

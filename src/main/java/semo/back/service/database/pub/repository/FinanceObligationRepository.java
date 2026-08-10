@@ -2,14 +2,22 @@ package semo.back.service.database.pub.repository;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import semo.back.service.database.pub.entity.FinanceObligation;
 
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
 public interface FinanceObligationRepository extends JpaRepository<FinanceObligation, Long> {
     long countByClubId(Long clubId);
+
+    List<FinanceObligation> findByClubIdOrderByFinanceObligationIdAsc(Long clubId);
+
+    long countByFinancePeriodIdAndStatusCode(Long financePeriodId, String statusCode);
 
     @Query("""
             select o
@@ -50,4 +58,18 @@ public interface FinanceObligationRepository extends JpaRepository<FinanceObliga
     );
 
     Optional<FinanceObligation> findByFinanceObligationIdAndClubId(Long financeObligationId, Long clubId);
+
+    Optional<FinanceObligation> findByRecurrenceSourceFinanceObligationId(Long recurrenceSourceFinanceObligationId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select obligation
+            from FinanceObligation obligation
+            where obligation.financeObligationId = :financeObligationId
+              and obligation.clubId = :clubId
+            """)
+    Optional<FinanceObligation> findForUpdate(
+            @Param("financeObligationId") Long financeObligationId,
+            @Param("clubId") Long clubId
+    );
 }

@@ -803,10 +803,79 @@ CREATE TABLE IF NOT EXISTS club_member_stat (
 CREATE INDEX idx_club_member_stat_rank
     ON club_member_stat (club_id, rank_position, ranking_points);
 
+CREATE TABLE IF NOT EXISTS finance_account (
+    finance_account_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    created_by_club_profile_id BIGINT NOT NULL,
+    display_name VARCHAR(100) NOT NULL,
+    account_type_code VARCHAR(20) NOT NULL,
+    provider_name VARCHAR(100) NULL,
+    masked_identifier VARCHAR(120) NULL,
+    holder_name VARCHAR(100) NULL,
+    usage_scope_code VARCHAR(20) NOT NULL DEFAULT 'BOTH',
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    default_collection TINYINT(1) NOT NULL DEFAULT 0,
+    default_expense TINYINT(1) NOT NULL DEFAULT 0,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_finance_account_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_finance_account_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_finance_account_club_active
+    ON finance_account (club_id, active, display_name, finance_account_id);
+
+CREATE TABLE IF NOT EXISTS finance_period (
+    finance_period_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    club_operating_term_id BIGINT NULL,
+    created_by_club_profile_id BIGINT NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    status_code VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    opening_balance DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    closing_balance DECIMAL(14,2) NULL,
+    closed_by_club_profile_id BIGINT NULL,
+    closed_at DATETIME NULL,
+    note VARCHAR(1000) NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_finance_period_club_dates UNIQUE (club_id, start_date, end_date),
+    CONSTRAINT fk_finance_period_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_finance_period_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_finance_period_closed_by FOREIGN KEY (closed_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_finance_period_club_status
+    ON finance_period (club_id, status_code, start_date, end_date);
+
+CREATE TABLE IF NOT EXISTS finance_budget (
+    finance_budget_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    finance_period_id BIGINT NOT NULL,
+    category_code VARCHAR(40) NOT NULL,
+    allocated_amount DECIMAL(14,2) NOT NULL,
+    note VARCHAR(500) NULL,
+    created_by_club_profile_id BIGINT NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_finance_budget_period_category UNIQUE (finance_period_id, category_code),
+    CONSTRAINT fk_finance_budget_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_finance_budget_period FOREIGN KEY (finance_period_id) REFERENCES finance_period(finance_period_id),
+    CONSTRAINT fk_finance_budget_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_finance_budget_club_period
+    ON finance_budget (club_id, finance_period_id, category_code);
+
 CREATE TABLE IF NOT EXISTS finance_obligation (
     finance_obligation_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     club_id BIGINT NOT NULL,
     created_by_club_profile_id BIGINT NULL,
+    finance_period_id BIGINT NULL,
+    finance_account_id BIGINT NULL,
+    linked_schedule_event_id BIGINT NULL,
     obligation_type_code VARCHAR(30) NOT NULL DEFAULT 'FEE',
     title VARCHAR(150) NOT NULL,
     target_scope_code VARCHAR(30) NOT NULL DEFAULT 'ALL_ACTIVE_MEMBERS',
@@ -815,10 +884,19 @@ CREATE TABLE IF NOT EXISTS finance_obligation (
     due_at DATETIME NULL,
     status_code VARCHAR(20) NOT NULL DEFAULT 'OPEN',
     note VARCHAR(500) NULL,
+    recurrence_frequency VARCHAR(20) NOT NULL DEFAULT 'NONE',
+    recurrence_interval INT NOT NULL DEFAULT 1,
+    recurrence_end_date DATE NULL,
+    recurrence_source_finance_obligation_id BIGINT NULL,
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT fk_finance_obligation_club FOREIGN KEY (club_id) REFERENCES club(club_id),
-    CONSTRAINT fk_finance_obligation_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+    CONSTRAINT fk_finance_obligation_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_finance_obligation_period FOREIGN KEY (finance_period_id) REFERENCES finance_period(finance_period_id),
+    CONSTRAINT fk_finance_obligation_account FOREIGN KEY (finance_account_id) REFERENCES finance_account(finance_account_id),
+    CONSTRAINT fk_finance_obligation_schedule_event FOREIGN KEY (linked_schedule_event_id) REFERENCES club_schedule_event(event_id),
+    CONSTRAINT fk_finance_obligation_recurrence_source FOREIGN KEY (recurrence_source_finance_obligation_id) REFERENCES finance_obligation(finance_obligation_id),
+    CONSTRAINT uk_finance_obligation_recurrence_source UNIQUE (recurrence_source_finance_obligation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_finance_obligation_club_sort
@@ -827,22 +905,31 @@ CREATE INDEX idx_finance_obligation_club_sort
 CREATE INDEX idx_finance_obligation_status
     ON finance_obligation (club_id, status_code, finance_obligation_id);
 
+CREATE INDEX idx_finance_obligation_period
+    ON finance_obligation (finance_period_id, status_code, finance_obligation_id);
+
+CREATE INDEX idx_finance_obligation_recurrence
+    ON finance_obligation (club_id, recurrence_frequency, recurrence_end_date, finance_obligation_id);
+
 CREATE TABLE IF NOT EXISTS finance_payment (
     finance_payment_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     finance_obligation_id BIGINT NOT NULL,
     club_id BIGINT NOT NULL,
     club_profile_id BIGINT NOT NULL,
+    finance_account_id BIGINT NULL,
     amount DECIMAL(12,2) NOT NULL,
     currency_code VARCHAR(10) NOT NULL DEFAULT 'KRW',
     payment_status_code VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     paid_at DATETIME NULL,
+    payment_method_code VARCHAR(20) NULL,
     note VARCHAR(500) NULL,
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT uk_finance_payment_obligation_profile UNIQUE (finance_obligation_id, club_profile_id),
     CONSTRAINT fk_finance_payment_obligation FOREIGN KEY (finance_obligation_id) REFERENCES finance_obligation(finance_obligation_id),
     CONSTRAINT fk_finance_payment_club FOREIGN KEY (club_id) REFERENCES club(club_id),
-    CONSTRAINT fk_finance_payment_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id)
+    CONSTRAINT fk_finance_payment_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_finance_payment_account FOREIGN KEY (finance_account_id) REFERENCES finance_account(finance_account_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_finance_payment_status
@@ -856,6 +943,7 @@ CREATE TABLE IF NOT EXISTS finance_request (
     title VARCHAR(200) NOT NULL,
     amount DECIMAL(12,2) NOT NULL,
     currency_code VARCHAR(10) NOT NULL DEFAULT 'KRW',
+    linked_schedule_event_id BIGINT NULL,
     related_event_name VARCHAR(120) NULL,
     note VARCHAR(1000) NULL,
     status_code VARCHAR(20) NOT NULL DEFAULT 'SUBMITTED',
@@ -866,7 +954,8 @@ CREATE TABLE IF NOT EXISTS finance_request (
     update_date DATETIME NOT NULL,
     CONSTRAINT fk_finance_request_club FOREIGN KEY (club_id) REFERENCES club(club_id),
     CONSTRAINT fk_finance_request_requester FOREIGN KEY (requester_club_profile_id) REFERENCES club_profile(club_profile_id),
-    CONSTRAINT fk_finance_request_reviewed_by FOREIGN KEY (reviewed_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+    CONSTRAINT fk_finance_request_reviewed_by FOREIGN KEY (reviewed_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_finance_request_schedule_event FOREIGN KEY (linked_schedule_event_id) REFERENCES club_schedule_event(event_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_finance_request_club_status
@@ -880,6 +969,9 @@ CREATE TABLE IF NOT EXISTS finance_expense (
     club_id BIGINT NOT NULL,
     entered_by_club_profile_id BIGINT NOT NULL,
     source_finance_request_id BIGINT NULL,
+    finance_period_id BIGINT NULL,
+    finance_account_id BIGINT NULL,
+    linked_schedule_event_id BIGINT NULL,
     expense_type_code VARCHAR(30) NOT NULL,
     category_code VARCHAR(40) NOT NULL,
     title VARCHAR(200) NOT NULL,
@@ -888,16 +980,64 @@ CREATE TABLE IF NOT EXISTS finance_expense (
     spent_at DATETIME NOT NULL,
     related_event_name VARCHAR(120) NULL,
     note VARCHAR(1000) NULL,
+    status_code VARCHAR(20) NOT NULL DEFAULT 'POSTED',
+    voided_by_club_profile_id BIGINT NULL,
+    voided_at DATETIME NULL,
+    void_reason VARCHAR(1000) NULL,
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT fk_finance_expense_club FOREIGN KEY (club_id) REFERENCES club(club_id),
     CONSTRAINT fk_finance_expense_entered_by FOREIGN KEY (entered_by_club_profile_id) REFERENCES club_profile(club_profile_id),
     CONSTRAINT fk_finance_expense_source_request FOREIGN KEY (source_finance_request_id) REFERENCES finance_request(finance_request_id),
+    CONSTRAINT fk_finance_expense_period FOREIGN KEY (finance_period_id) REFERENCES finance_period(finance_period_id),
+    CONSTRAINT fk_finance_expense_account FOREIGN KEY (finance_account_id) REFERENCES finance_account(finance_account_id),
+    CONSTRAINT fk_finance_expense_schedule_event FOREIGN KEY (linked_schedule_event_id) REFERENCES club_schedule_event(event_id),
+    CONSTRAINT fk_finance_expense_voided_by FOREIGN KEY (voided_by_club_profile_id) REFERENCES club_profile(club_profile_id),
     CONSTRAINT uk_finance_expense_source_request UNIQUE (source_finance_request_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_finance_expense_club_spent
     ON finance_expense (club_id, spent_at, finance_expense_id);
+
+CREATE INDEX idx_finance_expense_period_category
+    ON finance_expense (finance_period_id, status_code, category_code, spent_at);
+
+CREATE TABLE IF NOT EXISTS finance_expense_revision (
+    finance_expense_revision_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    finance_expense_id BIGINT NOT NULL,
+    club_id BIGINT NOT NULL,
+    revised_by_club_profile_id BIGINT NOT NULL,
+    revision_type_code VARCHAR(20) NOT NULL,
+    previous_title VARCHAR(200) NOT NULL,
+    next_title VARCHAR(200) NULL,
+    previous_category_code VARCHAR(40) NOT NULL,
+    next_category_code VARCHAR(40) NULL,
+    previous_amount DECIMAL(14,2) NOT NULL,
+    next_amount DECIMAL(14,2) NULL,
+    previous_spent_at DATETIME NOT NULL,
+    next_spent_at DATETIME NULL,
+    previous_schedule_event_id BIGINT NULL,
+    next_schedule_event_id BIGINT NULL,
+    previous_finance_account_id BIGINT NULL,
+    next_finance_account_id BIGINT NULL,
+    previous_note VARCHAR(1000) NULL,
+    next_note VARCHAR(1000) NULL,
+    previous_status_code VARCHAR(20) NOT NULL,
+    next_status_code VARCHAR(20) NOT NULL,
+    reason VARCHAR(1000) NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT fk_finance_expense_revision_expense FOREIGN KEY (finance_expense_id) REFERENCES finance_expense(finance_expense_id),
+    CONSTRAINT fk_finance_expense_revision_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_finance_expense_revision_revised_by FOREIGN KEY (revised_by_club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_finance_expense_revision_previous_event FOREIGN KEY (previous_schedule_event_id) REFERENCES club_schedule_event(event_id),
+    CONSTRAINT fk_finance_expense_revision_next_event FOREIGN KEY (next_schedule_event_id) REFERENCES club_schedule_event(event_id),
+    CONSTRAINT fk_finance_expense_revision_previous_account FOREIGN KEY (previous_finance_account_id) REFERENCES finance_account(finance_account_id),
+    CONSTRAINT fk_finance_expense_revision_next_account FOREIGN KEY (next_finance_account_id) REFERENCES finance_account(finance_account_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_finance_expense_revision_expense
+    ON finance_expense_revision (finance_expense_id, finance_expense_revision_id);
 
 -- ============================================================
 -- Dashboard widget catalog / layout
@@ -971,6 +1111,10 @@ CREATE TABLE IF NOT EXISTS club_operating_term (
 
 CREATE INDEX idx_club_operating_term_status
     ON club_operating_term (club_id, status_code, start_date, club_operating_term_id);
+
+ALTER TABLE finance_period
+    ADD CONSTRAINT fk_finance_period_operating_term
+        FOREIGN KEY (club_operating_term_id) REFERENCES club_operating_term(club_operating_term_id);
 
 CREATE TABLE IF NOT EXISTS club_term_executive_assignment (
     club_term_executive_assignment_id BIGINT AUTO_INCREMENT PRIMARY KEY,

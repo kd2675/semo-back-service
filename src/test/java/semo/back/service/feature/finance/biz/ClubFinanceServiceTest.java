@@ -15,8 +15,12 @@ import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.database.pub.repository.FinanceExpenseRepository;
+import semo.back.service.database.pub.repository.FinanceExpenseRevisionRepository;
+import semo.back.service.database.pub.repository.FinanceAccountRepository;
+import semo.back.service.database.pub.repository.FinanceBudgetRepository;
 import semo.back.service.database.pub.repository.FinanceObligationRepository;
 import semo.back.service.database.pub.repository.FinancePaymentRepository;
+import semo.back.service.database.pub.repository.FinancePeriodRepository;
 import semo.back.service.database.pub.repository.FinanceRequestRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.biz.ClubService;
@@ -26,12 +30,17 @@ import semo.back.service.feature.finance.vo.CreateFinanceExpenseRequest;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 import semo.back.service.feature.finance.vo.CreateFinanceObligationRequest;
 import semo.back.service.feature.finance.vo.CreateFinanceRequestRequest;
+import semo.back.service.feature.finance.vo.CorrectFinanceExpenseRequest;
+import semo.back.service.feature.finance.vo.CreateFinancePeriodRequest;
 import semo.back.service.feature.finance.vo.ReviewFinanceRequestRequest;
 import semo.back.service.feature.finance.vo.UpdateFinancePaymentStatusRequest;
+import semo.back.service.feature.finance.vo.UpsertFinanceBudgetRequest;
+import semo.back.service.feature.finance.vo.VoidFinanceExpenseRequest;
 import semo.back.service.feature.profile.biz.ProfileUserService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -45,6 +54,12 @@ class ClubFinanceServiceTest {
 
     @Autowired
     private ClubFinanceService clubFinanceService;
+
+    @Autowired
+    private ClubFinanceOperationsService clubFinanceOperationsService;
+
+    @Autowired
+    private ClubFinanceExportService clubFinanceExportService;
 
     @Autowired
     private ClubService clubService;
@@ -66,6 +81,18 @@ class ClubFinanceServiceTest {
 
     @Autowired
     private FinanceExpenseRepository financeExpenseRepository;
+
+    @Autowired
+    private FinanceExpenseRevisionRepository financeExpenseRevisionRepository;
+
+    @Autowired
+    private FinanceBudgetRepository financeBudgetRepository;
+
+    @Autowired
+    private FinancePeriodRepository financePeriodRepository;
+
+    @Autowired
+    private FinanceAccountRepository financeAccountRepository;
 
     @Autowired
     private ClubFeatureRepository clubFeatureRepository;
@@ -96,10 +123,18 @@ class ClubFinanceServiceTest {
 
     @BeforeEach
     void setUp() {
+        financeExpenseRevisionRepository.deleteAll();
         financeExpenseRepository.deleteAll();
         financeRequestRepository.deleteAll();
         financePaymentRepository.deleteAll();
-        financeObligationRepository.deleteAll();
+        financeObligationRepository.findAll().stream()
+                .sorted(java.util.Comparator.comparingLong(
+                        obligation -> -obligation.getFinanceObligationId()
+                ))
+                .forEach(financeObligationRepository::delete);
+        financeBudgetRepository.deleteAll();
+        financePeriodRepository.deleteAll();
+        financeAccountRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();
         clubPositionRepository.deleteAll();
@@ -483,6 +518,205 @@ class ClubFinanceServiceTest {
         ))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("이미 검토가 완료된 재정 요청입니다.");
+    }
+
+    @Test
+    void completedRecurringObligationCreatesExactlyOneNextCycle() {
+        Long clubId = createEnabledClub("finance-owner-010", "Finance Owner 10", "Finance Club 10");
+        addActiveMember(clubId, "finance-member-010", "Finance Member 10");
+
+        var created = clubFinanceService.createObligation(
+                clubId,
+                "finance-owner-010",
+                new CreateFinanceObligationRequest(
+                        "월 회비",
+                        new BigDecimal("20000"),
+                        "2026-08-31T23:59:00",
+                        "매월 말일까지 납부",
+                        "ALL_ACTIVE_MEMBERS",
+                        null,
+                        null,
+                        null,
+                        null,
+                        "MONTHLY",
+                        1,
+                        LocalDate.of(2026, 12, 31)
+                )
+        );
+
+        getAdminObligationDetail(clubId, created.obligationId(), "finance-owner-010")
+                .payments()
+                .forEach(payment -> clubFinanceService.updatePaymentStatus(
+                        clubId,
+                        payment.paymentId(),
+                        "finance-owner-010",
+                        new UpdateFinancePaymentStatusRequest("PAID", "납부 확인")
+                ));
+
+        var next = financeObligationRepository
+                .findByRecurrenceSourceFinanceObligationId(created.obligationId())
+                .orElseThrow();
+        assertThat(next.getDueAt()).isEqualTo(LocalDateTime.of(2026, 9, 30, 23, 59));
+        assertThat(financePaymentRepository.findByFinanceObligationIdOrderByFinancePaymentIdDesc(
+                next.getFinanceObligationId()
+        )).hasSize(2);
+
+        Long alreadyPaidId = getAdminObligationDetail(clubId, created.obligationId(), "finance-owner-010")
+                .payments()
+                .getFirst()
+                .paymentId();
+        clubFinanceService.updatePaymentStatus(
+                clubId,
+                alreadyPaidId,
+                "finance-owner-010",
+                new UpdateFinancePaymentStatusRequest("PAID", "중복 호출")
+        );
+        assertThat(financeObligationRepository.findByClubIdOrderByFinanceObligationIdAsc(clubId)).hasSize(2);
+    }
+
+    @Test
+    void periodBudgetUsesPostedExpensesAndClosedPeriodRejectsCorrection() {
+        Long clubId = createEnabledClub("finance-owner-011", "Finance Owner 11", "Finance Club 11");
+        var period = clubFinanceOperationsService.createPeriod(
+                clubId,
+                "finance-owner-011",
+                new CreateFinancePeriodRequest(
+                        "2026년 7월",
+                        LocalDate.of(2026, 7, 1),
+                        LocalDate.of(2026, 7, 31),
+                        null,
+                        new BigDecimal("100000"),
+                        "월간 마감"
+                )
+        );
+        var expense = clubFinanceService.createFinanceExpense(
+                clubId,
+                "finance-owner-011",
+                new CreateFinanceExpenseRequest(
+                        "7월 대관비",
+                        "VENUE",
+                        new BigDecimal("30000"),
+                        "2026-07-15T19:00:00",
+                        null,
+                        "카드 결제",
+                        period.financePeriodId(),
+                        null,
+                        null
+                )
+        );
+
+        var budgeted = clubFinanceOperationsService.upsertBudget(
+                clubId,
+                period.financePeriodId(),
+                "finance-owner-011",
+                new UpsertFinanceBudgetRequest("VENUE", new BigDecimal("50000"), "대관 예산")
+        );
+        assertThat(budgeted.budgets()).singleElement().satisfies(budget -> {
+            assertThat(budget.spentAmount()).isEqualByComparingTo("30000.00");
+            assertThat(budget.remainingAmount()).isEqualByComparingTo("20000.00");
+            assertThat(budget.executionRate()).isEqualTo(60);
+        });
+
+        var closed = clubFinanceOperationsService.closePeriod(
+                clubId,
+                period.financePeriodId(),
+                "finance-owner-011"
+        );
+        assertThat(closed.statusCode()).isEqualTo("CLOSED");
+        assertThat(closed.closingBalance()).isEqualByComparingTo("70000.00");
+        assertThatThrownBy(() -> clubFinanceService.correctFinanceExpense(
+                clubId,
+                expense.expenseId(),
+                "finance-owner-011",
+                new CorrectFinanceExpenseRequest(
+                        "7월 대관비 정정",
+                        "VENUE",
+                        new BigDecimal("25000"),
+                        "2026-07-15T19:00:00",
+                        period.financePeriodId(),
+                        null,
+                        null,
+                        null,
+                        "금액 정정",
+                        "영수증 금액 재확인"
+                )
+        )).hasMessageContaining("마감된 재정 기간");
+    }
+
+    @Test
+    void expenseCorrectionAndVoidKeepRevisionHistoryAndExcludeVoidedAmount() {
+        Long clubId = createEnabledClub("finance-owner-012", "Finance Owner 12", "Finance Club 12");
+        var expense = clubFinanceService.createFinanceExpense(
+                clubId,
+                "finance-owner-012",
+                new CreateFinanceExpenseRequest(
+                        "간식비",
+                        "MEAL",
+                        new BigDecimal("12000"),
+                        "2026-08-05T18:30:00",
+                        null,
+                        "초기 입력"
+                )
+        );
+        var corrected = clubFinanceService.correctFinanceExpense(
+                clubId,
+                expense.expenseId(),
+                "finance-owner-012",
+                new CorrectFinanceExpenseRequest(
+                        "행사 간식비",
+                        "MEAL",
+                        new BigDecimal("15000"),
+                        "2026-08-05T18:30:00",
+                        null,
+                        null,
+                        null,
+                        null,
+                        "영수증 기준",
+                        "누락 품목 반영"
+                )
+        );
+        assertThat(corrected.amount()).isEqualByComparingTo("15000.00");
+
+        var voided = clubFinanceService.voidFinanceExpense(
+                clubId,
+                expense.expenseId(),
+                "finance-owner-012",
+                new VoidFinanceExpenseRequest("중복 입력 확인")
+        );
+        assertThat(voided.statusCode()).isEqualTo("VOIDED");
+        assertThat(financeExpenseRepository.sumAmountByClubId(clubId)).isEqualByComparingTo("0.00");
+        assertThat(clubFinanceService.getExpenseRevisions(
+                clubId,
+                expense.expenseId(),
+                "finance-owner-012"
+        )).extracting(revision -> revision.revisionTypeCode())
+                .containsExactly("VOID", "CORRECTION");
+    }
+
+    @Test
+    void csvExportPrefixesFormulaLikeCells() {
+        Long clubId = createEnabledClub("finance-owner-013", "Finance Owner 13", "Finance Club 13");
+        clubFinanceService.createFinanceExpense(
+                clubId,
+                "finance-owner-013",
+                new CreateFinanceExpenseRequest(
+                        "=HYPERLINK(\"https://example.com\")",
+                        "OTHER",
+                        new BigDecimal("1000"),
+                        "2026-08-05T18:30:00",
+                        null,
+                        "CSV 검사"
+                )
+        );
+
+        String csv = new String(clubFinanceExportService.exportCsv(
+                clubId,
+                null,
+                "finance-owner-013"
+        ).content(), java.nio.charset.StandardCharsets.UTF_8);
+
+        assertThat(csv).contains("\"'=HYPERLINK(\"\"https://example.com\"\")\"");
+        assertThat(csv).doesNotContain("\"=HYPERLINK");
     }
 
     private Long createEnabledClub(String ownerUserKey, String ownerDisplayName, String clubName) {

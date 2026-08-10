@@ -15,6 +15,11 @@ public record ClubFinanceUserObligationResponse(
         String issuedAt,
         String issuedAtLabel,
         String note,
+        Long financeAccountId,
+        String financeAccountName,
+        Long linkedScheduleEventId,
+        String linkedScheduleEventTitle,
+        String recurrenceLabel,
         ClubFinancePaymentResponse payment
 ) {
 }

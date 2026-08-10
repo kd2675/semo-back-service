@@ -5,6 +5,12 @@ import java.math.BigDecimal;
 public record ClubFinanceExpenseResponse(
         Long expenseId,
         Long sourceRequestId,
+        Long financePeriodId,
+        String financePeriodTitle,
+        Long financeAccountId,
+        String financeAccountName,
+        Long linkedScheduleEventId,
+        String linkedScheduleEventTitle,
         String expenseTypeCode,
         String expenseTypeLabel,
         String categoryCode,
@@ -17,6 +23,8 @@ public record ClubFinanceExpenseResponse(
         String relatedEventName,
         String note,
         String spentAt,
-        String spentAtLabel
+        String spentAtLabel,
+        String statusCode,
+        String voidReason
 ) {
 }

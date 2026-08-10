@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Set;
@@ -51,6 +52,10 @@ public class ClubFinanceSupport {
             STATUS_PAID,
             STATUS_WAIVED
     );
+    private static final Set<String> ALLOWED_ACCOUNT_TYPES = Set.of("BANK", "CASH", "CARD", "OTHER");
+    private static final Set<String> ALLOWED_ACCOUNT_USAGE_SCOPES = Set.of("COLLECTION", "EXPENSE", "BOTH");
+    private static final Set<String> ALLOWED_PAYMENT_METHODS = Set.of("TRANSFER", "CASH", "CARD", "OTHER");
+    private static final Set<String> ALLOWED_RECURRENCE_FREQUENCIES = Set.of("NONE", "MONTHLY", "YEARLY");
     private static final int DEFAULT_ADMIN_OBLIGATION_PAGE_SIZE = 10;
     private static final int MAX_ADMIN_OBLIGATION_PAGE_SIZE = 50;
     private static final DateTimeFormatter DATE_TIME_VALUE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -114,6 +119,88 @@ public class ClubFinanceSupport {
             throw new SemoException.ValidationException("청구 금액은 0보다 커야 합니다.");
         }
         return amount.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal normalizeNonNegativeAmount(BigDecimal amount, String message) {
+        if (amount == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new SemoException.ValidationException(message);
+        }
+        return amount.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public String normalizePeriodTitle(String title) {
+        return normalizeRequiredText(title, "재정 기간 이름은 필수입니다.");
+    }
+
+    public String normalizeAccountName(String displayName) {
+        return normalizeRequiredText(displayName, "계좌·결제수단 이름은 필수입니다.");
+    }
+
+    public String normalizeAccountType(String accountTypeCode) {
+        String normalized = normalizeUpperCase(accountTypeCode, "계좌·결제수단 타입은 필수입니다.");
+        if (!ALLOWED_ACCOUNT_TYPES.contains(normalized)) {
+            throw new SemoException.ValidationException("지원하지 않는 계좌·결제수단 타입입니다.");
+        }
+        return normalized;
+    }
+
+    public String normalizeAccountUsageScope(String usageScopeCode) {
+        String normalized = normalizeUpperCase(usageScopeCode, "사용 범위는 필수입니다.");
+        if (!ALLOWED_ACCOUNT_USAGE_SCOPES.contains(normalized)) {
+            throw new SemoException.ValidationException("지원하지 않는 계좌·결제수단 사용 범위입니다.");
+        }
+        return normalized;
+    }
+
+    public String normalizePaymentMethod(String paymentMethodCode) {
+        String normalized = trimToNull(paymentMethodCode);
+        if (normalized == null) {
+            return null;
+        }
+        String upperCased = normalized.toUpperCase(Locale.ROOT);
+        if (!ALLOWED_PAYMENT_METHODS.contains(upperCased)) {
+            throw new SemoException.ValidationException("지원하지 않는 결제수단입니다.");
+        }
+        return upperCased;
+    }
+
+    public String normalizeRecurrenceFrequency(String recurrenceFrequency) {
+        String normalized = trimToNull(recurrenceFrequency);
+        if (normalized == null) {
+            return "NONE";
+        }
+        String upperCased = normalized.toUpperCase(Locale.ROOT);
+        if (!ALLOWED_RECURRENCE_FREQUENCIES.contains(upperCased)) {
+            throw new SemoException.ValidationException("지원하지 않는 반복 회비 주기입니다.");
+        }
+        return upperCased;
+    }
+
+    public int normalizeRecurrenceInterval(Integer recurrenceInterval) {
+        int normalized = recurrenceInterval == null ? 1 : recurrenceInterval;
+        if (normalized < 1 || normalized > 12) {
+            throw new SemoException.ValidationException("반복 간격은 1부터 12 사이여야 합니다.");
+        }
+        return normalized;
+    }
+
+    public String normalizeReason(String reason) {
+        return normalizeRequiredText(reason, "정정 또는 취소 사유는 필수입니다.");
+    }
+
+    public LocalDate parseDate(String rawValue, String errorMessage) {
+        String normalized = trimToNull(rawValue);
+        if (normalized == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(normalized);
+        } catch (RuntimeException exception) {
+            throw new SemoException.ValidationException(errorMessage);
+        }
     }
 
     public String normalizeUpdateStatus(String paymentStatusCode) {
@@ -259,6 +346,43 @@ public class ClubFinanceSupport {
             case STATUS_PAID -> "납부 완료";
             case STATUS_WAIVED -> "면제";
             default -> "미납";
+        };
+    }
+
+    public String resolveAccountTypeLabel(String accountTypeCode) {
+        return switch (accountTypeCode) {
+            case "BANK" -> "은행 계좌";
+            case "CASH" -> "현금";
+            case "CARD" -> "카드";
+            default -> "기타";
+        };
+    }
+
+    public String resolveAccountUsageScopeLabel(String usageScopeCode) {
+        return switch (usageScopeCode) {
+            case "COLLECTION" -> "수납 전용";
+            case "EXPENSE" -> "지출 전용";
+            default -> "수납·지출 공용";
+        };
+    }
+
+    public String resolvePaymentMethodLabel(String paymentMethodCode) {
+        if (paymentMethodCode == null) {
+            return null;
+        }
+        return switch (paymentMethodCode) {
+            case "TRANSFER" -> "계좌이체";
+            case "CASH" -> "현금";
+            case "CARD" -> "카드";
+            default -> "기타";
+        };
+    }
+
+    public String resolveRecurrenceLabel(String frequency, int interval) {
+        return switch (frequency) {
+            case "MONTHLY" -> interval == 1 ? "매월" : interval + "개월마다";
+            case "YEARLY" -> interval == 1 ? "매년" : interval + "년마다";
+            default -> "반복 없음";
         };
     }
 

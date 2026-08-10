@@ -19,6 +19,12 @@ public class ClubFinancePermissionService {
     public static final String PERMISSION_FINANCE_ISSUE = "FINANCE_ISSUE";
     public static final String PERMISSION_FINANCE_MARK_PAID = "FINANCE_MARK_PAID";
     public static final String PERMISSION_FINANCE_MARK_WAIVED = "FINANCE_MARK_WAIVED";
+    public static final String PERMISSION_FINANCE_BILLING_ISSUE = "FINANCE_BILLING_ISSUE";
+    public static final String PERMISSION_FINANCE_REQUEST_REVIEW = "FINANCE_REQUEST_REVIEW";
+    public static final String PERMISSION_FINANCE_EXPENSE_CREATE = "FINANCE_EXPENSE_CREATE";
+    public static final String PERMISSION_FINANCE_PAYMENT_UPDATE = "FINANCE_PAYMENT_UPDATE";
+    public static final String PERMISSION_FINANCE_EXPORT = "FINANCE_EXPORT";
+    public static final String PERMISSION_FINANCE_PERIOD_CLOSE = "FINANCE_PERIOD_CLOSE";
 
     private final ClubFeatureService clubFeatureService;
     private final ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
@@ -35,24 +41,54 @@ public class ClubFinancePermissionService {
     }
 
     public boolean canIssueFinance(ClubAccessResolver.ClubAccess access) {
+        return canManageBilling(access) || canReviewRequests(access) || canCreateExpenses(access);
+    }
+
+    public boolean canManageBilling(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_FINANCE_ISSUE);
+        return hasRolePermission(access, PERMISSION_FINANCE_BILLING_ISSUE, PERMISSION_FINANCE_ISSUE);
+    }
+
+    public boolean canReviewRequests(ClubAccessResolver.ClubAccess access) {
+        if (access.isAdmin()) {
+            return true;
+        }
+        return hasRolePermission(access, PERMISSION_FINANCE_REQUEST_REVIEW, PERMISSION_FINANCE_ISSUE);
+    }
+
+    public boolean canCreateExpenses(ClubAccessResolver.ClubAccess access) {
+        if (access.isAdmin()) {
+            return true;
+        }
+        return hasRolePermission(access, PERMISSION_FINANCE_EXPENSE_CREATE, PERMISSION_FINANCE_ISSUE);
     }
 
     public boolean canMarkPaid(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_FINANCE_MARK_PAID);
+        return hasRolePermission(access, PERMISSION_FINANCE_PAYMENT_UPDATE, PERMISSION_FINANCE_MARK_PAID);
     }
 
     public boolean canMarkWaived(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_FINANCE_MARK_WAIVED);
+        return hasRolePermission(access, PERMISSION_FINANCE_PAYMENT_UPDATE, PERMISSION_FINANCE_MARK_WAIVED);
+    }
+
+    public boolean canUpdatePayments(ClubAccessResolver.ClubAccess access) {
+        return canMarkPaid(access) || canMarkWaived(access);
+    }
+
+    public boolean canExport(ClubAccessResolver.ClubAccess access) {
+        return access.isAdmin() || hasRolePermission(access, PERMISSION_FINANCE_EXPORT);
+    }
+
+    public boolean canClosePeriods(ClubAccessResolver.ClubAccess access) {
+        return access.isAdmin() || hasRolePermission(access, PERMISSION_FINANCE_PERIOD_CLOSE);
     }
 
     private boolean hasRolePermission(ClubAccessResolver.ClubAccess access, String... permissionKeys) {

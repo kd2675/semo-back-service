@@ -37,6 +37,15 @@ public class FinanceExpense extends CommonDateEntity {
     @Column(name = "source_finance_request_id", unique = true)
     private Long sourceFinanceRequestId;
 
+    @Column(name = "finance_period_id")
+    private Long financePeriodId;
+
+    @Column(name = "finance_account_id")
+    private Long financeAccountId;
+
+    @Column(name = "linked_schedule_event_id")
+    private Long linkedScheduleEventId;
+
     @Column(name = "expense_type_code", nullable = false, length = 30)
     private String expenseTypeCode;
 
@@ -60,4 +69,46 @@ public class FinanceExpense extends CommonDateEntity {
 
     @Column(name = "note", length = 1000)
     private String note;
+
+    @Builder.Default
+    @Column(name = "status_code", nullable = false, length = 20)
+    private String statusCode = "POSTED";
+
+    @Column(name = "voided_by_club_profile_id")
+    private Long voidedByClubProfileId;
+
+    @Column(name = "voided_at")
+    private LocalDateTime voidedAt;
+
+    @Column(name = "void_reason", length = 1000)
+    private String voidReason;
+
+    public void correct(
+            Long financePeriodId,
+            Long financeAccountId,
+            Long linkedScheduleEventId,
+            String categoryCode,
+            String title,
+            BigDecimal amount,
+            LocalDateTime spentAt,
+            String relatedEventName,
+            String note
+    ) {
+        this.financePeriodId = financePeriodId;
+        this.financeAccountId = financeAccountId;
+        this.linkedScheduleEventId = linkedScheduleEventId;
+        this.categoryCode = categoryCode;
+        this.title = title;
+        this.amount = amount;
+        this.spentAt = spentAt;
+        this.relatedEventName = relatedEventName;
+        this.note = note;
+    }
+
+    public void voidExpense(Long actorClubProfileId, LocalDateTime voidedAt, String reason) {
+        this.statusCode = "VOIDED";
+        this.voidedByClubProfileId = actorClubProfileId;
+        this.voidedAt = voidedAt;
+        this.voidReason = reason;
+    }
 }

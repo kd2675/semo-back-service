@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 import semo.back.service.common.jpa.CommonDateEntity;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -33,6 +34,15 @@ public class FinanceObligation extends CommonDateEntity {
 
     @Column(name = "created_by_club_profile_id")
     private Long createdByClubProfileId;
+
+    @Column(name = "finance_period_id")
+    private Long financePeriodId;
+
+    @Column(name = "finance_account_id")
+    private Long financeAccountId;
+
+    @Column(name = "linked_schedule_event_id")
+    private Long linkedScheduleEventId;
 
     @Column(name = "obligation_type_code", nullable = false, length = 30)
     private String obligationTypeCode;
@@ -57,4 +67,22 @@ public class FinanceObligation extends CommonDateEntity {
 
     @Column(name = "note", length = 500)
     private String note;
+
+    @Builder.Default
+    @Column(name = "recurrence_frequency", nullable = false, length = 20)
+    private String recurrenceFrequency = "NONE";
+
+    @Builder.Default
+    @Column(name = "recurrence_interval", nullable = false)
+    private int recurrenceInterval = 1;
+
+    @Column(name = "recurrence_end_date")
+    private LocalDate recurrenceEndDate;
+
+    @Column(name = "recurrence_source_finance_obligation_id", unique = true)
+    private Long recurrenceSourceFinanceObligationId;
+
+    public void updateStatus(String statusCode) {
+        this.statusCode = statusCode;
+    }
 }

@@ -37,6 +37,9 @@ public class FinancePayment extends CommonDateEntity {
     @Column(name = "club_profile_id", nullable = false)
     private Long clubProfileId;
 
+    @Column(name = "finance_account_id")
+    private Long financeAccountId;
+
     @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
@@ -49,6 +52,23 @@ public class FinancePayment extends CommonDateEntity {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
+    @Column(name = "payment_method_code", length = 20)
+    private String paymentMethodCode;
+
     @Column(name = "note", length = 500)
     private String note;
+
+    public void updateStatus(
+            String paymentStatusCode,
+            LocalDateTime paidAt,
+            Long financeAccountId,
+            String paymentMethodCode,
+            String note
+    ) {
+        this.paymentStatusCode = paymentStatusCode;
+        this.paidAt = paidAt;
+        this.financeAccountId = financeAccountId;
+        this.paymentMethodCode = paymentMethodCode;
+        this.note = note;
+    }
 }

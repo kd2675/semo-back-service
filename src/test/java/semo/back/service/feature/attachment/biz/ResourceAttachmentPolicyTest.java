@@ -18,9 +18,11 @@ import semo.back.service.database.pub.entity.ClubFeedback;
 import semo.back.service.database.pub.entity.ClubHandoverNote;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.FinanceRequest;
+import semo.back.service.database.pub.entity.FinanceExpense;
 import semo.back.service.database.pub.repository.ClubFeedbackRepository;
 import semo.back.service.database.pub.repository.ClubHandoverNoteRepository;
 import semo.back.service.database.pub.repository.FinanceRequestRepository;
+import semo.back.service.database.pub.repository.FinanceExpenseRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.finance.biz.policy.ClubFinancePermissionService;
@@ -33,6 +35,8 @@ class ResourceAttachmentPolicyTest {
     private TodoItemRepository todoItemRepository;
     @Mock
     private FinanceRequestRepository financeRequestRepository;
+    @Mock
+    private FinanceExpenseRepository financeExpenseRepository;
     @Mock
     private ClubFeedbackRepository clubFeedbackRepository;
     @Mock
@@ -98,6 +102,44 @@ class ResourceAttachmentPolicyTest {
         String visibility = resourceAttachmentPolicy.requireCanAttach(access, "HANDOVER_NOTE", 51L);
 
         assertThat(visibility).isEqualTo("HANDOVER_OPERATORS");
+    }
+
+    @Test
+    void requireCanAttach_financeExpenseManager_returnsOperatorVisibility() {
+        Club club = mock(Club.class);
+        ClubAccessResolver.ClubAccess access = mock(ClubAccessResolver.ClubAccess.class);
+        when(access.club()).thenReturn(club);
+        when(club.getClubId()).thenReturn(1L);
+        when(financeExpenseRepository.findByFinanceExpenseIdAndClubId(61L, 1L))
+                .thenReturn(Optional.of(FinanceExpense.builder()
+                        .financeExpenseId(61L)
+                        .clubId(1L)
+                        .statusCode("POSTED")
+                        .build()));
+        when(clubFinancePermissionService.canCreateExpenses(access)).thenReturn(true);
+
+        String visibility = resourceAttachmentPolicy.requireCanAttach(access, "FINANCE_EXPENSE", 61L);
+
+        assertThat(visibility).isEqualTo("FINANCE_OPERATORS");
+    }
+
+    @Test
+    void requireCanView_financeExpenseWithoutCapability_throwsForbidden() {
+        Club club = mock(Club.class);
+        ClubAccessResolver.ClubAccess access = mock(ClubAccessResolver.ClubAccess.class);
+        when(access.club()).thenReturn(club);
+        when(club.getClubId()).thenReturn(1L);
+        when(financeExpenseRepository.findByFinanceExpenseIdAndClubId(62L, 1L))
+                .thenReturn(Optional.of(FinanceExpense.builder()
+                        .financeExpenseId(62L)
+                        .clubId(1L)
+                        .statusCode("POSTED")
+                        .build()));
+        when(clubFinancePermissionService.canViewAdminFinance(access)).thenReturn(false);
+
+        assertThatThrownBy(() -> resourceAttachmentPolicy.requireCanView(access, "FINANCE_EXPENSE", 62L))
+                .isInstanceOf(SemoException.ForbiddenException.class)
+                .hasMessageContaining("지출 증빙");
     }
 
     private ClubAccessResolver.ClubAccess access(Long clubId, Long clubProfileId) {

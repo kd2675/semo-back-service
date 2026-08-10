@@ -11,6 +11,8 @@ public record ClubFinanceRequestResponse(
         String amountLabel,
         String currencyCode,
         String title,
+        Long linkedScheduleEventId,
+        String linkedScheduleEventTitle,
         String relatedEventName,
         String note,
         String statusCode,

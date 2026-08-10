@@ -43,6 +43,12 @@ public class ClubPositionPermissionEvaluator {
     public static final String PERMISSION_FINANCE_ISSUE = "FINANCE_ISSUE";
     public static final String PERMISSION_FINANCE_MARK_PAID = "FINANCE_MARK_PAID";
     public static final String PERMISSION_FINANCE_MARK_WAIVED = "FINANCE_MARK_WAIVED";
+    public static final String PERMISSION_FINANCE_BILLING_ISSUE = "FINANCE_BILLING_ISSUE";
+    public static final String PERMISSION_FINANCE_REQUEST_REVIEW = "FINANCE_REQUEST_REVIEW";
+    public static final String PERMISSION_FINANCE_EXPENSE_CREATE = "FINANCE_EXPENSE_CREATE";
+    public static final String PERMISSION_FINANCE_PAYMENT_UPDATE = "FINANCE_PAYMENT_UPDATE";
+    public static final String PERMISSION_FINANCE_EXPORT = "FINANCE_EXPORT";
+    public static final String PERMISSION_FINANCE_PERIOD_CLOSE = "FINANCE_PERIOD_CLOSE";
     public static final String PERMISSION_TODO_VIEW = "TODO_VIEW";
     public static final String PERMISSION_TODO_CREATE = "TODO_CREATE";
     public static final String PERMISSION_TODO_ASSIGN = "TODO_ASSIGN";

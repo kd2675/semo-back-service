@@ -7,12 +7,14 @@ import semo.back.service.database.pub.entity.ClubFeedback;
 import semo.back.service.database.pub.entity.ClubHandoverNote;
 import semo.back.service.database.pub.entity.DecisionRecord;
 import semo.back.service.database.pub.entity.FinanceRequest;
+import semo.back.service.database.pub.entity.FinanceExpense;
 import semo.back.service.database.pub.entity.ResourceAttachment;
 import semo.back.service.database.pub.entity.TodoItem;
 import semo.back.service.database.pub.repository.ClubFeedbackRepository;
 import semo.back.service.database.pub.repository.ClubHandoverNoteRepository;
 import semo.back.service.database.pub.repository.DecisionRecordRepository;
 import semo.back.service.database.pub.repository.FinanceRequestRepository;
+import semo.back.service.database.pub.repository.FinanceExpenseRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.database.pub.repository.TodoItemAssigneeRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
@@ -27,6 +29,7 @@ import semo.back.service.feature.todo.biz.policy.ClubTodoPermissionService;
 public class ResourceAttachmentPolicy {
     public static final String RESOURCE_TODO_ITEM = "TODO_ITEM";
     public static final String RESOURCE_FINANCE_REQUEST = "FINANCE_REQUEST";
+    public static final String RESOURCE_FINANCE_EXPENSE = "FINANCE_EXPENSE";
     public static final String RESOURCE_FEEDBACK = "FEEDBACK";
     public static final String RESOURCE_HANDOVER_NOTE = "HANDOVER_NOTE";
     public static final String RESOURCE_DECISION_RECORD = "DECISION_RECORD";
@@ -34,6 +37,7 @@ public class ResourceAttachmentPolicy {
     private final TodoItemRepository todoItemRepository;
     private final TodoItemAssigneeRepository todoItemAssigneeRepository;
     private final FinanceRequestRepository financeRequestRepository;
+    private final FinanceExpenseRepository financeExpenseRepository;
     private final ClubFeedbackRepository clubFeedbackRepository;
     private final ClubHandoverNoteRepository clubHandoverNoteRepository;
     private final DecisionRecordRepository decisionRecordRepository;
@@ -64,10 +68,17 @@ public class ResourceAttachmentPolicy {
                 FinanceRequest financeRequest = requireFinanceRequest(access.club().getClubId(), resourceId);
                 boolean requester = access.clubProfile().getClubProfileId()
                         .equals(financeRequest.getRequesterClubProfileId());
-                if (!requester && !clubFinancePermissionService.canIssueFinance(access)) {
+                if (!requester && !clubFinancePermissionService.canReviewRequests(access)) {
                     throw new SemoException.ForbiddenException("재정 요청 첨부파일을 등록할 권한이 없습니다.");
                 }
                 yield "OWNER_AND_OPERATORS";
+            }
+            case RESOURCE_FINANCE_EXPENSE -> {
+                requireFinanceExpense(access.club().getClubId(), resourceId);
+                if (!clubFinancePermissionService.canCreateExpenses(access)) {
+                    throw new SemoException.ForbiddenException("지출 증빙을 등록할 권한이 없습니다.");
+                }
+                yield "FINANCE_OPERATORS";
             }
             case RESOURCE_FEEDBACK -> {
                 ClubFeedback feedback = requireFeedback(access.club().getClubId(), resourceId);
@@ -125,6 +136,12 @@ public class ResourceAttachmentPolicy {
                     throw new SemoException.ForbiddenException("재정 요청 첨부파일을 조회할 권한이 없습니다.");
                 }
             }
+            case RESOURCE_FINANCE_EXPENSE -> {
+                requireFinanceExpense(access.club().getClubId(), resourceId);
+                if (!clubFinancePermissionService.canViewAdminFinance(access)) {
+                    throw new SemoException.ForbiddenException("지출 증빙을 조회할 권한이 없습니다.");
+                }
+            }
             case RESOURCE_FEEDBACK -> {
                 ClubFeedback feedback = requireFeedback(access.club().getClubId(), resourceId);
                 boolean submitter = access.clubProfile().getClubProfileId()
@@ -172,8 +189,14 @@ public class ResourceAttachmentPolicy {
             }
             case RESOURCE_FINANCE_REQUEST -> {
                 requireFinanceRequest(access.club().getClubId(), attachment.getResourceId());
-                if (!clubFinancePermissionService.canIssueFinance(access)) {
+                if (!clubFinancePermissionService.canReviewRequests(access)) {
                     throw new SemoException.ForbiddenException("재정 요청 첨부파일을 삭제할 권한이 없습니다.");
+                }
+            }
+            case RESOURCE_FINANCE_EXPENSE -> {
+                requireFinanceExpense(access.club().getClubId(), attachment.getResourceId());
+                if (!clubFinancePermissionService.canCreateExpenses(access)) {
+                    throw new SemoException.ForbiddenException("지출 증빙을 삭제할 권한이 없습니다.");
                 }
             }
             case RESOURCE_FEEDBACK -> {
@@ -228,6 +251,15 @@ public class ResourceAttachmentPolicy {
                 ));
     }
 
+    private FinanceExpense requireFinanceExpense(Long clubId, Long resourceId) {
+        return financeExpenseRepository.findByFinanceExpenseIdAndClubId(resourceId, clubId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException(
+                        "FinanceExpense",
+                        "financeExpenseId",
+                        resourceId
+                ));
+    }
+
     private ClubFeedback requireFeedback(Long clubId, Long resourceId) {
         return clubFeedbackRepository.findByFeedbackIdAndClubIdAndDeletedFalse(resourceId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubFeedback", "feedbackId", resourceId));
@@ -250,6 +282,12 @@ public class ResourceAttachmentPolicy {
                     .orElseThrow(() -> new SemoException.ResourceNotFoundException(
                             "FinanceRequest",
                             "financeRequestId",
+                            resourceId
+                    ));
+            case RESOURCE_FINANCE_EXPENSE -> financeExpenseRepository.findForUpdate(resourceId, clubId)
+                    .orElseThrow(() -> new SemoException.ResourceNotFoundException(
+                            "FinanceExpense",
+                            "financeExpenseId",
                             resourceId
                     ));
             case RESOURCE_FEEDBACK -> clubFeedbackRepository.findForUpdate(resourceId, clubId)

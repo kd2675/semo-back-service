@@ -12,6 +12,19 @@ public record CreateFinanceExpenseRequest(
         @DecimalMin(value = "0.01", message = "지출 금액은 0보다 커야 합니다.") BigDecimal amount,
         String spentAt,
         @Size(max = 120) String relatedEventName,
-        @Size(max = 1000) String note
+        @Size(max = 1000) String note,
+        Long financePeriodId,
+        Long financeAccountId,
+        Long linkedScheduleEventId
 ) {
+    public CreateFinanceExpenseRequest(
+            String title,
+            String categoryCode,
+            BigDecimal amount,
+            String spentAt,
+            String relatedEventName,
+            String note
+    ) {
+        this(title, categoryCode, amount, spentAt, relatedEventName, note, null, null, null);
+    }
 }

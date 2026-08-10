@@ -694,6 +694,36 @@ INSERT INTO feature_permission_catalog (
 SELECT 'FINANCE_MARK_WAIVED', 'FINANCE', '재정 면제 처리', '재정 항목을 면제 상태로 변경합니다.', 'CLUB', 1, 40, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_MARK_WAIVED');
 
+INSERT INTO feature_permission_catalog
+    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+SELECT 'FINANCE_BILLING_ISSUE', 'FINANCE', '청구 발행', '회비와 분담금 청구를 생성하고 대상 멤버에게 발행합니다.', 'CLUB', 1, 21, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_BILLING_ISSUE');
+
+INSERT INTO feature_permission_catalog
+    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+SELECT 'FINANCE_REQUEST_REVIEW', 'FINANCE', '정산 요청 검토', '멤버가 제출한 선지출·환불·정산 요청을 승인하거나 반려합니다.', 'CLUB', 1, 22, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_REQUEST_REVIEW');
+
+INSERT INTO feature_permission_catalog
+    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+SELECT 'FINANCE_EXPENSE_CREATE', 'FINANCE', '지출 입력 및 정정', '지출을 입력하고 증빙과 정정·취소 이력을 관리합니다.', 'CLUB', 1, 23, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_EXPENSE_CREATE');
+
+INSERT INTO feature_permission_catalog
+    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+SELECT 'FINANCE_PAYMENT_UPDATE', 'FINANCE', '수납 상태 변경', '납부 상태와 결제 수단을 변경합니다.', 'CLUB', 1, 31, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_PAYMENT_UPDATE');
+
+INSERT INTO feature_permission_catalog
+    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+SELECT 'FINANCE_EXPORT', 'FINANCE', '재정 내보내기', '기간별 청구·수납·지출 내역을 CSV로 내보냅니다.', 'CLUB', 1, 50, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_EXPORT');
+
+INSERT INTO feature_permission_catalog
+    (permission_key, feature_key, display_name, description, scope_code, active, sort_order, create_date, update_date)
+SELECT 'FINANCE_PERIOD_CLOSE', 'FINANCE', '예산 및 기간 마감', '예산을 관리하고 월·시즌 재정 기간을 마감합니다.', 'CLUB', 1, 60, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'FINANCE_PERIOD_CLOSE');
+
 INSERT INTO feature_permission_catalog (
     permission_key,
     feature_key,

@@ -46,6 +46,9 @@ public class FinanceRequest extends CommonDateEntity {
     @Column(name = "currency_code", nullable = false, length = 10)
     private String currencyCode;
 
+    @Column(name = "linked_schedule_event_id")
+    private Long linkedScheduleEventId;
+
     @Column(name = "related_event_name", length = 120)
     private String relatedEventName;
 
