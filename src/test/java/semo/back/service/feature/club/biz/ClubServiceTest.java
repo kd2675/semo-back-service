@@ -10,8 +10,6 @@ import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
-import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
-import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
@@ -47,12 +45,6 @@ class ClubServiceTest {
     private ClubFeatureRepository clubFeatureRepository;
 
     @Autowired
-    private ClubAttendanceCheckInRepository clubAttendanceCheckInRepository;
-
-    @Autowired
-    private ClubAttendanceSessionRepository clubAttendanceSessionRepository;
-
-    @Autowired
     private ClubEventParticipantRepository clubEventParticipantRepository;
 
     @Autowired
@@ -77,8 +69,6 @@ class ClubServiceTest {
         clubScheduleVoteRepository.deleteAll();
         clubEventParticipantRepository.deleteAll();
         clubScheduleEventRepository.deleteAll();
-        clubAttendanceCheckInRepository.deleteAll();
-        clubAttendanceSessionRepository.deleteAll();
         clubFeatureRepository.deleteAll();
         clubProfileRepository.deleteAll();
         clubMemberRepository.deleteAll();

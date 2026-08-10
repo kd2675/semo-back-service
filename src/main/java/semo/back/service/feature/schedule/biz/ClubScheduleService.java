@@ -46,10 +46,12 @@ import semo.back.service.feature.schedule.vo.UpsertScheduleVoteRequest;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -66,7 +68,9 @@ public class ClubScheduleService {
     private static final String EVENT_STATUS = "SCHEDULED";
     private static final String PARTICIPATION_GOING = "GOING";
     private static final String PARTICIPATION_NOT_GOING = "NOT_GOING";
-    private static final String PARTICIPATION_CANCEL = "CANCEL";
+    private static final String PARTICIPATION_CANCELED = "CANCELED";
+    private static final DateTimeFormatter CHECKED_IN_AT_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm", Locale.KOREAN);
 
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final ClubEventParticipantRepository clubEventParticipantRepository;
@@ -140,7 +144,8 @@ public class ClubScheduleService {
                         (int) votes.stream().filter(ScheduleVoteSummaryResponse::postedToBoard).count(),
                         (int) upcomingEvents.stream()
                                 .filter(ScheduleEventSummaryResponse::participationEnabled)
-                                .filter(event -> event.myParticipationStatus() == null)
+                                .filter(event -> event.myParticipationStatus() == null
+                                        || PARTICIPATION_CANCELED.equals(event.myParticipationStatus()))
                                 .count(),
                         (int) votes.stream()
                                 .filter(ScheduleVoteSummaryResponse::votingOpen)
@@ -333,21 +338,21 @@ public class ClubScheduleService {
         );
 
         ClubEventParticipant current = clubEventParticipantRepository
-                .findByEventIdAndClubProfileId(eventId, access.clubProfile().getClubProfileId())
+                .findForUpdateByEventIdAndClubProfileId(eventId, access.clubProfile().getClubProfileId())
                 .orElse(null);
-        if (PARTICIPATION_CANCEL.equals(participationStatus)) {
-            if (current != null) {
-                clubEventParticipantRepository.delete(current);
-            }
-            return buildEventDetailResponse(access, event);
-        }
+        boolean preserveAttendance = PARTICIPATION_GOING.equals(participationStatus);
 
         clubEventParticipantRepository.save(ClubEventParticipant.builder()
                 .clubEventParticipantId(current == null ? null : current.getClubEventParticipantId())
                 .eventId(eventId)
                 .clubProfileId(access.clubProfile().getClubProfileId())
                 .participationStatus(participationStatus)
-                .checkedInAt(current == null ? null : current.getCheckedInAt())
+                .checkedInAt(preserveAttendance && current != null ? current.getCheckedInAt() : null)
+                .attendanceStatus(preserveAttendance && current != null ? current.getAttendanceStatus() : null)
+                .verifiedByClubProfileId(preserveAttendance && current != null
+                        ? current.getVerifiedByClubProfileId()
+                        : null)
+                .attendanceNote(preserveAttendance && current != null ? current.getAttendanceNote() : null)
                 .build());
 
         return buildEventDetailResponse(access, event);
@@ -602,6 +607,11 @@ public class ClubScheduleService {
                 access.clubProfile().getClubProfileId()
         );
         List<ScheduleEventParticipantSummaryResponse> goingParticipants = toGoingParticipantSummaries(participants);
+        boolean attendanceEnabled = clubFeatureService.isFeatureEnabled(access.club().getClubId(), "ATTENDANCE");
+        EventAttendanceSnapshot attendance = toAttendanceSnapshot(
+                participants,
+                access.clubProfile().getClubProfileId()
+        );
 
         return new ScheduleEventDetailResponse(
                 access.club().getClubId(),
@@ -634,6 +644,15 @@ public class ClubScheduleService {
                 participation.goingCount(),
                 participation.notGoingCount(),
                 goingParticipants,
+                attendanceEnabled,
+                attendanceEnabled && clubSchedulePermissionService.canManageAttendance(access),
+                attendance.myAttendanceStatus(),
+                attendance.myCheckedInAtLabel(),
+                attendance.presentCount(),
+                attendance.lateCount(),
+                attendance.absentCount(),
+                attendance.excusedCount(),
+                attendance.unmarkedCount(),
                 actionPermission.canEdit(),
                 actionPermission.canDelete()
         );
@@ -774,6 +793,51 @@ public class ClubScheduleService {
                     );
                 })
                 .toList();
+    }
+
+    private EventAttendanceSnapshot toAttendanceSnapshot(
+            List<ClubEventParticipant> participants,
+            Long viewerClubProfileId
+    ) {
+        String myAttendanceStatus = null;
+        String myCheckedInAtLabel = null;
+        int presentCount = 0;
+        int lateCount = 0;
+        int absentCount = 0;
+        int excusedCount = 0;
+        int unmarkedCount = 0;
+
+        for (ClubEventParticipant participant : participants) {
+            if (PARTICIPATION_GOING.equals(participant.getParticipationStatus())
+                    && participant.getAttendanceStatus() == null) {
+                unmarkedCount++;
+            }
+            if (participant.getAttendanceStatus() != null) {
+                switch (participant.getAttendanceStatus()) {
+                    case "PRESENT" -> presentCount++;
+                    case "LATE" -> lateCount++;
+                    case "ABSENT" -> absentCount++;
+                    case "EXCUSED" -> excusedCount++;
+                    default -> {
+                    }
+                }
+            }
+            if (participant.getClubProfileId().equals(viewerClubProfileId)) {
+                myAttendanceStatus = participant.getAttendanceStatus();
+                myCheckedInAtLabel = participant.getCheckedInAt() == null
+                        ? null
+                        : participant.getCheckedInAt().format(CHECKED_IN_AT_FORMATTER);
+            }
+        }
+        return new EventAttendanceSnapshot(
+                myAttendanceStatus,
+                myCheckedInAtLabel,
+                presentCount,
+                lateCount,
+                absentCount,
+                excusedCount,
+                unmarkedCount
+        );
     }
 
     private VoteSelectionSnapshot toVoteSelectionSnapshot(
@@ -987,6 +1051,17 @@ public class ClubScheduleService {
             String myParticipationStatus,
             int goingCount,
             int notGoingCount
+    ) {
+    }
+
+    private record EventAttendanceSnapshot(
+            String myAttendanceStatus,
+            String myCheckedInAtLabel,
+            int presentCount,
+            int lateCount,
+            int absentCount,
+            int excusedCount,
+            int unmarkedCount
     ) {
     }
 

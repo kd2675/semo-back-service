@@ -8,8 +8,6 @@ import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.FeaturePermissionCatalog;
 import semo.back.service.database.pub.repository.ClubActivityLogRepository;
-import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
-import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
 import semo.back.service.database.pub.repository.ClubBoardItemRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
@@ -69,12 +67,6 @@ class ClubPositionServiceTest {
 
     @Autowired
     private ClubActivityLogRepository clubActivityLogRepository;
-
-    @Autowired
-    private ClubAttendanceCheckInRepository clubAttendanceCheckInRepository;
-
-    @Autowired
-    private ClubAttendanceSessionRepository clubAttendanceSessionRepository;
 
     @Autowired
     private ClubBoardItemRepository clubBoardItemRepository;
@@ -140,8 +132,6 @@ class ClubPositionServiceTest {
         clubScheduleEventRepository.deleteAll();
         clubBoardItemRepository.deleteAll();
         clubNoticeRepository.deleteAll();
-        clubAttendanceCheckInRepository.deleteAll();
-        clubAttendanceSessionRepository.deleteAll();
         clubMemberPositionHistoryRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();

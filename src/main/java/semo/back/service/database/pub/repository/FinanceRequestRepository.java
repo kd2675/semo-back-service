@@ -17,6 +17,12 @@ public interface FinanceRequestRepository extends JpaRepository<FinanceRequest, 
 
     long countByClubIdAndStatusCode(Long clubId, String statusCode);
 
+    long countByClubIdAndRequesterClubProfileIdAndStatusCode(
+            Long clubId,
+            Long requesterClubProfileId,
+            String statusCode
+    );
+
     Optional<FinanceRequest> findByFinanceRequestIdAndClubId(Long financeRequestId, Long clubId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

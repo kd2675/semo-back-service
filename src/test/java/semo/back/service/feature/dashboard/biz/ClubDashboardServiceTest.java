@@ -6,8 +6,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
-import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
 import semo.back.service.database.pub.repository.ClubDashboardWidgetRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
@@ -48,12 +46,6 @@ class ClubDashboardServiceTest {
 
     @Autowired
     private ClubFeatureService clubFeatureService;
-
-    @Autowired
-    private ClubAttendanceCheckInRepository clubAttendanceCheckInRepository;
-
-    @Autowired
-    private ClubAttendanceSessionRepository clubAttendanceSessionRepository;
 
     @Autowired
     private ClubDashboardWidgetRepository clubDashboardWidgetRepository;
@@ -101,8 +93,6 @@ class ClubDashboardServiceTest {
         clubScheduleVoteRepository.deleteAll();
         clubEventParticipantRepository.deleteAll();
         clubScheduleEventRepository.deleteAll();
-        clubAttendanceCheckInRepository.deleteAll();
-        clubAttendanceSessionRepository.deleteAll();
         clubDashboardWidgetRepository.deleteAll();
         clubFeatureRepository.deleteAll();
         dashboardWidgetCatalogRepository.deleteAll();

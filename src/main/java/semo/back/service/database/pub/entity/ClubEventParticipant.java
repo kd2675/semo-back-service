@@ -1,5 +1,7 @@
 package semo.back.service.database.pub.entity;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -12,8 +14,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import semo.back.service.common.jpa.CommonDateEntity;
-
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "club_event_participant")
@@ -38,4 +38,13 @@ public class ClubEventParticipant extends CommonDateEntity {
 
     @Column(name = "checked_in_at")
     private LocalDateTime checkedInAt;
+
+    @Column(name = "attendance_status", length = 20)
+    private String attendanceStatus;
+
+    @Column(name = "verified_by_club_profile_id")
+    private Long verifiedByClubProfileId;
+
+    @Column(name = "attendance_note", length = 500)
+    private String attendanceNote;
 }

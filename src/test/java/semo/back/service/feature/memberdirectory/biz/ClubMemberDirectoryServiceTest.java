@@ -11,8 +11,6 @@ import semo.back.service.database.pub.entity.ClubMemberPosition;
 import semo.back.service.database.pub.entity.ClubPosition;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.ClubActivityLogRepository;
-import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
-import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
@@ -56,12 +54,6 @@ class ClubMemberDirectoryServiceTest {
     private ClubActivityLogRepository clubActivityLogRepository;
 
     @Autowired
-    private ClubAttendanceCheckInRepository clubAttendanceCheckInRepository;
-
-    @Autowired
-    private ClubAttendanceSessionRepository clubAttendanceSessionRepository;
-
-    @Autowired
     private ClubFeatureRepository clubFeatureRepository;
 
     @Autowired
@@ -91,8 +83,6 @@ class ClubMemberDirectoryServiceTest {
     @BeforeEach
     void setUp() {
         clubActivityLogRepository.deleteAll();
-        clubAttendanceCheckInRepository.deleteAll();
-        clubAttendanceSessionRepository.deleteAll();
         memberDirectorySettingRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionRepository.deleteAll();

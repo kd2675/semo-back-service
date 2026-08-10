@@ -5,9 +5,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.vo.ClubFeatureResponse;
+import semo.back.service.feature.clubfeature.vo.ClubMoreFeatureStatusResponse;
 import semo.back.service.feature.clubfeature.vo.ClubMoreSummaryResponse;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
+import semo.back.service.database.pub.entity.ClubMorePreference;
+import semo.back.service.database.pub.repository.ClubMorePreferenceRepository;
 
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +27,8 @@ public class ClubMoreSummaryService {
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
     private final ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
+    private final ClubMorePreferenceRepository clubMorePreferenceRepository;
+    private final ClubMoreWorkQueueService clubMoreWorkQueueService;
 
     public ClubMoreSummaryResponse getSummary(Long clubId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
@@ -37,6 +44,29 @@ public class ClubMoreSummaryService {
                 .map(ClubFeatureResponse::featureKey)
                 .filter(featureKey -> access.isAdmin() || hasAdminToolViewPermission(featureKey, permissionKeys))
                 .toList();
+        Set<String> adminToolFeatureKeySet = Set.copyOf(adminToolFeatureKeys);
+        Map<String, ClubMorePreference> preferencesByFeatureKey = clubMorePreferenceRepository
+                .findByClubIdAndClubProfileId(clubId, access.clubProfile().getClubProfileId()).stream()
+                .collect(Collectors.toMap(ClubMorePreference::getFeatureKey, Function.identity()));
+        Map<String, ClubMoreWorkQueueService.FeatureQueueCounts> queueCounts =
+                clubMoreWorkQueueService.getQueueCounts(
+                        clubId,
+                        access.clubProfile().getClubProfileId(),
+                        features,
+                        adminToolFeatureKeySet
+                );
+        List<ClubMoreFeatureStatusResponse> featureStatuses = features.stream()
+                .filter(ClubFeatureResponse::enabled)
+                .map(feature -> toFeatureStatus(
+                        feature,
+                        adminToolFeatureKeySet,
+                        preferencesByFeatureKey.get(feature.featureKey()),
+                        queueCounts.getOrDefault(
+                                feature.featureKey(),
+                                ClubMoreWorkQueueService.FeatureQueueCounts.empty()
+                        )
+                ))
+                .toList();
 
         return new ClubMoreSummaryResponse(
                 access.club().getClubId(),
@@ -44,7 +74,33 @@ public class ClubMoreSummaryService {
                 access.isAdmin(),
                 permissionKeys.stream().sorted().toList(),
                 adminToolFeatureKeys,
+                featureStatuses.stream().mapToInt(ClubMoreFeatureStatusResponse::userPendingCount).sum(),
+                featureStatuses.stream().mapToInt(ClubMoreFeatureStatusResponse::userOverdueCount).sum(),
+                featureStatuses.stream().mapToInt(ClubMoreFeatureStatusResponse::adminPendingCount).sum(),
+                featureStatuses.stream().mapToInt(ClubMoreFeatureStatusResponse::adminOverdueCount).sum(),
+                featureStatuses,
                 features
+        );
+    }
+
+    private ClubMoreFeatureStatusResponse toFeatureStatus(
+            ClubFeatureResponse feature,
+            Set<String> adminToolFeatureKeys,
+            ClubMorePreference preference,
+            ClubMoreWorkQueueService.FeatureQueueCounts queueCounts
+    ) {
+        boolean userAccessible = !"ADMIN_ONLY".equals(feature.navigationScope());
+        boolean adminAccessible = adminToolFeatureKeys.contains(feature.featureKey());
+        return new ClubMoreFeatureStatusResponse(
+                feature.featureKey(),
+                userAccessible,
+                adminAccessible,
+                userAccessible ? queueCounts.userPendingCount() : 0,
+                userAccessible ? queueCounts.userOverdueCount() : 0,
+                adminAccessible ? queueCounts.adminPendingCount() : 0,
+                adminAccessible ? queueCounts.adminOverdueCount() : 0,
+                preference != null && preference.isFavorite(),
+                preference == null ? null : preference.getLastUsedAt()
         );
     }
 
@@ -65,6 +121,9 @@ public class ClubMoreSummaryService {
         permissions.put("BRACKET", Set.of(
                 ClubPositionPermissionEvaluator.PERMISSION_BRACKET_REVIEW,
                 ClubPositionPermissionEvaluator.PERMISSION_BRACKET_DELETE_ANY
+        ));
+        permissions.put("ATTENDANCE", Set.of(
+                ClubPositionPermissionEvaluator.PERMISSION_ATTENDANCE_MANAGE
         ));
         return Map.copyOf(permissions);
     }

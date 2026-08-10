@@ -18,8 +18,6 @@ import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.poll.biz.ClubPollPermissionService;
 import semo.back.service.feature.schedule.biz.policy.ClubSchedulePermissionService;
 import semo.back.service.feature.schedule.biz.support.ClubScheduleFormatter;
-import semo.back.service.feature.schedule.vo.ScheduleEventDetailResponse;
-import semo.back.service.feature.schedule.vo.ScheduleEventParticipantSummaryResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventSummaryResponse;
 import semo.back.service.feature.schedule.vo.ScheduleVoteDetailResponse;
 import semo.back.service.feature.schedule.vo.ScheduleVoteOptionSummaryResponse;
@@ -73,55 +71,6 @@ public class ClubScheduleSummaryAssembler {
                         authorProfileById.get(event.getAuthorClubProfileId())
                 ))
                 .toList();
-    }
-
-    public ScheduleEventDetailResponse toEventDetailResponse(
-            ClubAccessResolver.ClubAccess access,
-            ClubScheduleEvent event
-    ) {
-        ClubSchedulePermissionService.ScheduleEventActionPermission actionPermission =
-                clubSchedulePermissionService.getActionPermission(access, event.getAuthorClubProfileId());
-        List<ClubEventParticipant> participants = clubEventParticipantRepository.findByEventIdIn(List.of(event.getEventId()));
-        EventParticipationSnapshot participation = toParticipationSnapshot(
-                participants,
-                access.clubProfile().getClubProfileId()
-        );
-        List<ScheduleEventParticipantSummaryResponse> goingParticipants = toGoingParticipantSummaries(participants);
-
-        return new ScheduleEventDetailResponse(
-                access.club().getClubId(),
-                access.club().getName(),
-                access.isAdmin(),
-                event.getEventId(),
-                event.getTitle(),
-                clubScheduleFormatter.formatDateValue(event.getStartAt().toLocalDate()),
-                event.getEndAt() == null ? null : clubScheduleFormatter.formatDateValue(event.getEndAt().toLocalDate()),
-                clubScheduleFormatter.formatDateRangeLabel(
-                        event.getStartAt().toLocalDate(),
-                        event.getEndAt() == null ? null : event.getEndAt().toLocalDate()
-                ),
-                clubScheduleFormatter.formatTimeValue(event.getStartAt(), event.getEndAt()),
-                clubScheduleFormatter.formatEndTimeValue(event.getStartAt(), event.getEndAt()),
-                clubScheduleFormatter.formatTimeLabel(event.getStartAt(), event.getEndAt()),
-                event.getAttendeeLimit(),
-                event.getLocationLabel(),
-                event.getParticipationConditionText(),
-                event.isParticipationEnabled(),
-                event.isFeeRequired(),
-                event.getFeeAmount(),
-                event.isFeeAmountUndecided(),
-                event.isFeeNWaySplit(),
-                event.isSharedToBoard(),
-                event.isSharedToCalendar(),
-                event.isPinned(),
-                null,
-                participation.myParticipationStatus(),
-                participation.goingCount(),
-                participation.notGoingCount(),
-                goingParticipants,
-                actionPermission.canEdit(),
-                actionPermission.canDelete()
-        );
     }
 
     public List<ScheduleVoteSummaryResponse> toVoteSummaryResponses(
@@ -288,35 +237,6 @@ public class ClubScheduleSummaryAssembler {
         }
 
         return new EventParticipationSnapshot(myParticipationStatus, goingCount, notGoingCount);
-    }
-
-    private List<ScheduleEventParticipantSummaryResponse> toGoingParticipantSummaries(List<ClubEventParticipant> participants) {
-        List<ClubEventParticipant> goingParticipants = participants.stream()
-                .filter(participant -> PARTICIPATION_GOING.equals(participant.getParticipationStatus()))
-                .sorted(Comparator.comparing(ClubEventParticipant::getClubEventParticipantId))
-                .toList();
-        if (goingParticipants.isEmpty()) {
-            return List.of();
-        }
-
-        Map<Long, ClubProfile> profileById = loadAuthorProfiles(
-                goingParticipants.stream()
-                        .map(ClubEventParticipant::getClubProfileId)
-                        .distinct()
-                        .toList()
-        );
-
-        return goingParticipants.stream()
-                .map(participant -> {
-                    ClubProfile profile = profileById.get(participant.getClubProfileId());
-                    return new ScheduleEventParticipantSummaryResponse(
-                            participant.getClubProfileId(),
-                            resolveAuthorDisplayName(profile),
-                            resolveAuthorAvatarImageUrl(profile),
-                            resolveAuthorAvatarThumbnailUrl(profile)
-                    );
-                })
-                .toList();
     }
 
     private VoteSelectionSnapshot toVoteSelectionSnapshot(

@@ -6,6 +6,7 @@ import semo.back.service.database.pub.entity.ClubFeedback;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 public interface ClubFeedbackRepository extends JpaRepository<ClubFeedback, Long> {
     Optional<ClubFeedback> findByFeedbackIdAndClubIdAndDeletedFalse(Long feedbackId, Long clubId);
@@ -18,4 +19,12 @@ public interface ClubFeedbackRepository extends JpaRepository<ClubFeedback, Long
             order by f.createDate desc, f.feedbackId desc
             """)
     List<ClubFeedback> findFeed(Long clubId);
+
+    long countByClubIdAndSubmitterClubProfileIdAndDeletedFalseAndStatusCodeIn(
+            Long clubId,
+            Long submitterClubProfileId,
+            Collection<String> statusCodes
+    );
+
+    long countByClubIdAndDeletedFalseAndStatusCodeIn(Long clubId, Collection<String> statusCodes);
 }

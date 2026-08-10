@@ -101,6 +101,24 @@ CREATE TABLE IF NOT EXISTS feature_activation (
 CREATE INDEX idx_feature_activation_enabled
     ON feature_activation (club_id, enabled, feature_key);
 
+CREATE TABLE IF NOT EXISTS club_more_preference (
+    club_more_preference_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_id BIGINT NOT NULL,
+    club_profile_id BIGINT NOT NULL,
+    feature_key VARCHAR(50) NOT NULL,
+    favorite TINYINT(1) NOT NULL DEFAULT 0,
+    last_used_at DATETIME NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_more_preference UNIQUE (club_id, club_profile_id, feature_key),
+    CONSTRAINT fk_club_more_preference_club FOREIGN KEY (club_id) REFERENCES club(club_id),
+    CONSTRAINT fk_club_more_preference_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_club_more_preference_feature FOREIGN KEY (feature_key) REFERENCES feature_catalog(feature_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_club_more_preference_recent
+    ON club_more_preference (club_id, club_profile_id, last_used_at, favorite);
+
 CREATE TABLE IF NOT EXISTS feature_permission_catalog (
     permission_key VARCHAR(80) PRIMARY KEY,
     feature_key VARCHAR(50) NOT NULL,
@@ -615,16 +633,23 @@ CREATE TABLE IF NOT EXISTS club_event_participant (
     event_id BIGINT NOT NULL,
     club_profile_id BIGINT NOT NULL,
     participation_status VARCHAR(20) NOT NULL DEFAULT 'GOING',
+    attendance_status VARCHAR(20) NULL,
     checked_in_at DATETIME NULL,
+    verified_by_club_profile_id BIGINT NULL,
+    attendance_note VARCHAR(500) NULL,
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT uk_club_event_participant_event_profile UNIQUE (event_id, club_profile_id),
     CONSTRAINT fk_club_event_participant_event FOREIGN KEY (event_id) REFERENCES club_schedule_event(event_id),
-    CONSTRAINT fk_club_event_participant_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id)
+    CONSTRAINT fk_club_event_participant_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id),
+    CONSTRAINT fk_club_event_participant_verifier FOREIGN KEY (verified_by_club_profile_id) REFERENCES club_profile(club_profile_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_club_event_participant_profile
     ON club_event_participant (club_profile_id, participation_status);
+
+CREATE INDEX idx_club_event_participant_attendance
+    ON club_event_participant (event_id, attendance_status);
 
 CREATE TABLE IF NOT EXISTS club_schedule_vote (
     vote_id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -680,47 +705,6 @@ CREATE INDEX idx_club_schedule_vote_selection_vote
     ON club_schedule_vote_selection (vote_id, vote_option_id);
 
 -- ============================================================
--- Attendance feature
--- Attendance is the first real club feature. Sessions are club-scoped and
--- individual check-ins are club-profile scoped.
--- ============================================================
-CREATE TABLE IF NOT EXISTS attendance_session (
-    attendance_session_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    club_id BIGINT NOT NULL,
-    created_by_club_profile_id BIGINT NOT NULL,
-    title VARCHAR(120) NOT NULL,
-    attendance_date DATE NOT NULL,
-    open_at DATETIME NOT NULL,
-    close_at DATETIME NULL,
-    session_status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
-    create_date DATETIME NOT NULL,
-    update_date DATETIME NOT NULL,
-    CONSTRAINT uk_attendance_session_day UNIQUE (club_id, attendance_date),
-    CONSTRAINT fk_attendance_session_club FOREIGN KEY (club_id) REFERENCES club(club_id),
-    CONSTRAINT fk_attendance_session_created_by FOREIGN KEY (created_by_club_profile_id) REFERENCES club_profile(club_profile_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE INDEX idx_attendance_session_status
-    ON attendance_session (club_id, session_status, attendance_date);
-
-CREATE TABLE IF NOT EXISTS attendance_checkin (
-    attendance_checkin_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    attendance_session_id BIGINT NOT NULL,
-    club_profile_id BIGINT NOT NULL,
-    status_code VARCHAR(20) NOT NULL DEFAULT 'CHECKED_IN',
-    checked_in_at DATETIME NOT NULL,
-    note VARCHAR(255) NULL,
-    create_date DATETIME NOT NULL,
-    update_date DATETIME NOT NULL,
-    CONSTRAINT uk_attendance_checkin UNIQUE (attendance_session_id, club_profile_id),
-    CONSTRAINT fk_attendance_checkin_session FOREIGN KEY (attendance_session_id) REFERENCES attendance_session(attendance_session_id),
-    CONSTRAINT fk_attendance_checkin_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE INDEX idx_attendance_checkin_profile
-    ON attendance_checkin (club_profile_id, checked_in_at);
-
--- ============================================================
 -- Member stats / profile widgets
 -- Dashboard cards, top rankings, profile summary all expand from club_profile.
 -- ============================================================
@@ -736,7 +720,6 @@ CREATE TABLE IF NOT EXISTS club_member_stat (
     win_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00,
     streak_count INT NOT NULL DEFAULT 0,
     best_streak_count INT NOT NULL DEFAULT 0,
-    attendance_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00,
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT uk_club_member_stat_club_profile UNIQUE (club_id, club_profile_id),
@@ -746,25 +729,6 @@ CREATE TABLE IF NOT EXISTS club_member_stat (
 
 CREATE INDEX idx_club_member_stat_rank
     ON club_member_stat (club_id, rank_position, ranking_points);
-
-CREATE TABLE IF NOT EXISTS club_attendance_record (
-    club_attendance_record_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    club_id BIGINT NOT NULL,
-    club_profile_id BIGINT NOT NULL,
-    event_id BIGINT NULL,
-    attendance_date DATE NOT NULL,
-    status_code VARCHAR(20) NOT NULL DEFAULT 'PRESENT',
-    session_label VARCHAR(100) NULL,
-    create_date DATETIME NOT NULL,
-    update_date DATETIME NOT NULL,
-    CONSTRAINT uk_club_attendance_record UNIQUE (club_id, club_profile_id, attendance_date, session_label),
-    CONSTRAINT fk_club_attendance_record_club FOREIGN KEY (club_id) REFERENCES club(club_id),
-    CONSTRAINT fk_club_attendance_record_profile FOREIGN KEY (club_profile_id) REFERENCES club_profile(club_profile_id),
-    CONSTRAINT fk_club_attendance_record_event FOREIGN KEY (event_id) REFERENCES club_schedule_event(event_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE INDEX idx_club_attendance_record_profile_date
-    ON club_attendance_record (club_profile_id, attendance_date);
 
 CREATE TABLE IF NOT EXISTS finance_obligation (
     finance_obligation_id BIGINT AUTO_INCREMENT PRIMARY KEY,

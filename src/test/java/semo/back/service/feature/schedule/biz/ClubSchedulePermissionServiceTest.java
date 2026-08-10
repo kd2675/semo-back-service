@@ -13,6 +13,7 @@ import semo.back.service.database.pub.entity.ClubPosition;
 import semo.back.service.database.pub.entity.ClubPositionPermission;
 import semo.back.service.database.pub.entity.ProfileUser;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
+import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
@@ -28,6 +29,8 @@ import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 import semo.back.service.feature.schedule.vo.UpsertScheduleEventRequest;
+import semo.back.service.feature.schedule.vo.UpdateScheduleEventAttendanceRequest;
+import semo.back.service.feature.schedule.vo.UpdateScheduleEventParticipationRequest;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -48,6 +51,12 @@ class ClubSchedulePermissionServiceTest {
 
     @Autowired
     private ClubScheduleService clubScheduleService;
+
+    @Autowired
+    private ClubScheduleAttendanceService clubScheduleAttendanceService;
+
+    @Autowired
+    private ClubEventParticipantRepository clubEventParticipantRepository;
 
     @Autowired
     private ClubScheduleEventRepository clubScheduleEventRepository;
@@ -81,6 +90,7 @@ class ClubSchedulePermissionServiceTest {
 
     @BeforeEach
     void setUp() {
+        clubEventParticipantRepository.deleteAll();
         clubScheduleEventRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();
@@ -95,6 +105,7 @@ class ClubSchedulePermissionServiceTest {
 
     @AfterEach
     void tearDown() {
+        clubEventParticipantRepository.deleteAll();
         clubScheduleEventRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();
@@ -183,6 +194,61 @@ class ClubSchedulePermissionServiceTest {
         assertThat(clubScheduleEventRepository.findByEventIdAndClubId(created.eventId(), clubId)).isEmpty();
     }
 
+    @Test
+    void delegatedAttendanceManagerCanVerifyEventAttendance() {
+        String ownerUserKey = "schedule-attendance-policy-owner-001";
+        String memberUserKey = "schedule-attendance-policy-member-001";
+        Long clubId = createScheduleClub(ownerUserKey, "Schedule Attendance Permission Lab");
+        ClubMember member = addActiveMember(clubId, memberUserKey, "Attendance Manager");
+        var created = clubScheduleService.createScheduleEvent(
+                clubId,
+                ownerUserKey,
+                attendanceEventRequest("권한 위임 출석 일정")
+        );
+        clubScheduleService.updateScheduleEventParticipation(
+                clubId,
+                created.eventId(),
+                memberUserKey,
+                new UpdateScheduleEventParticipationRequest("GOING")
+        );
+        Long memberClubProfileId = clubEventParticipantRepository
+                .findByEventIdIn(List.of(created.eventId()))
+                .getFirst()
+                .getClubProfileId();
+
+        assertThatThrownBy(() -> clubScheduleAttendanceService.getEventAttendance(
+                clubId,
+                created.eventId(),
+                memberUserKey
+        ))
+                .isInstanceOf(SemoException.ForbiddenException.class)
+                .hasMessageContaining("출석 관리 권한");
+
+        assignPositionPermissions(
+                clubId,
+                member,
+                ClubPositionPermissionEvaluator.PERMISSION_ATTENDANCE_MANAGE
+        );
+
+        var attendance = clubScheduleAttendanceService.updateEventAttendance(
+                clubId,
+                created.eventId(),
+                memberClubProfileId,
+                memberUserKey,
+                new UpdateScheduleEventAttendanceRequest("LATE", "교통 지연 확인")
+        );
+
+        assertThat(attendance.canManage()).isTrue();
+        assertThat(attendance.summary().lateCount()).isEqualTo(1);
+        assertThat(attendance.members())
+                .filteredOn(item -> item.clubProfileId().equals(memberClubProfileId))
+                .singleElement()
+                .satisfies(item -> {
+                    assertThat(item.attendanceStatus()).isEqualTo("LATE");
+                    assertThat(item.attendanceNote()).isEqualTo("교통 지연 확인");
+                });
+    }
+
     private Long createScheduleClub(String ownerUserKey, String clubName) {
         Long clubId = clubService.createClub(
                 ownerUserKey,
@@ -200,7 +266,7 @@ class ClubSchedulePermissionServiceTest {
         clubFeatureService.updateClubFeatures(
                 clubId,
                 ownerUserKey,
-                new UpdateClubFeaturesRequest(List.of("SCHEDULE_MANAGE", "ROLE_MANAGEMENT"))
+            new UpdateClubFeaturesRequest(List.of("SCHEDULE_MANAGE", "ATTENDANCE", "ROLE_MANAGEMENT"))
         );
         return clubId;
     }
@@ -260,6 +326,27 @@ class ClubSchedulePermissionServiceTest {
                 locationLabel,
                 null,
                 false,
+                false,
+                null,
+                false,
+                false,
+                false,
+                true,
+                false
+        );
+    }
+
+    private UpsertScheduleEventRequest attendanceEventRequest(String title) {
+        return new UpsertScheduleEventRequest(
+                title,
+                "2030-05-01",
+                null,
+                null,
+                null,
+                null,
+                "체육관",
+                null,
+                true,
                 false,
                 null,
                 false,

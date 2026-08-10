@@ -50,4 +50,21 @@ public interface ClubScheduleEventRepository extends JpaRepository<ClubScheduleE
             order by e.startAt asc, e.eventId asc
             """)
     List<ClubScheduleEvent> findScheduledBetween(Long clubId, LocalDateTime from, LocalDateTime to);
+
+    @Query("""
+            select count(event)
+            from ClubScheduleEvent event
+            where event.clubId = :clubId
+              and event.eventStatus <> 'CANCELLED'
+              and event.participationEnabled = true
+              and event.startAt >= :from
+              and not exists (
+                    select participant.clubEventParticipantId
+                    from ClubEventParticipant participant
+                    where participant.eventId = event.eventId
+                      and participant.clubProfileId = :clubProfileId
+                      and participant.participationStatus <> 'CANCELED'
+                  )
+            """)
+    long countPendingParticipationResponses(Long clubId, Long clubProfileId, LocalDateTime from);
 }

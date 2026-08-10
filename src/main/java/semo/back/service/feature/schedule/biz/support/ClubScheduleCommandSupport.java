@@ -20,7 +20,8 @@ import java.util.Objects;
 public class ClubScheduleCommandSupport {
     private static final String PARTICIPATION_GOING = "GOING";
     private static final String PARTICIPATION_NOT_GOING = "NOT_GOING";
-    private static final String PARTICIPATION_CANCEL = "CANCEL";
+    private static final String PARTICIPATION_CANCELED = "CANCELED";
+    private static final String PARTICIPATION_CANCEL_COMPATIBILITY_ALIAS = "CANCEL";
 
     private final ClubScheduleViewSupport clubScheduleViewSupport;
 
@@ -117,9 +118,12 @@ public class ClubScheduleCommandSupport {
         }
 
         String normalized = request.participationStatus().trim().toUpperCase(Locale.ROOT);
+        if (PARTICIPATION_CANCEL_COMPATIBILITY_ALIAS.equals(normalized)) {
+            return PARTICIPATION_CANCELED;
+        }
         if (!PARTICIPATION_GOING.equals(normalized)
                 && !PARTICIPATION_NOT_GOING.equals(normalized)
-                && !PARTICIPATION_CANCEL.equals(normalized)) {
+                && !PARTICIPATION_CANCELED.equals(normalized)) {
             throw new SemoException.ValidationException("지원하지 않는 참석 상태입니다.");
         }
         return normalized;
@@ -129,7 +133,7 @@ public class ClubScheduleCommandSupport {
         return switch (participationStatus) {
             case PARTICIPATION_GOING -> "참석으로 응답했습니다";
             case PARTICIPATION_NOT_GOING -> "불참으로 응답했습니다";
-            case PARTICIPATION_CANCEL -> "응답을 취소했습니다";
+            case PARTICIPATION_CANCELED -> "응답을 취소했습니다";
             default -> "응답했습니다";
         };
     }

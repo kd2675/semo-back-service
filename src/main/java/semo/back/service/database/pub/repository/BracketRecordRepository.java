@@ -10,4 +10,12 @@ public interface BracketRecordRepository extends JpaRepository<BracketRecord, Lo
     Optional<BracketRecord> findByBracketRecordIdAndClubIdAndDeletedFalse(Long bracketRecordId, Long clubId);
 
     List<BracketRecord> findByClubIdAndDeletedFalseOrderByCreateDateDescBracketRecordIdDesc(Long clubId);
+
+    long countByClubIdAndAuthorClubProfileIdAndDeletedFalseAndApprovalStatus(
+            Long clubId,
+            Long authorClubProfileId,
+            String approvalStatus
+    );
+
+    long countByClubIdAndDeletedFalseAndApprovalStatus(Long clubId, String approvalStatus);
 }

@@ -263,8 +263,8 @@ public final class TestCatalogSeeder {
                         .build(),
                 DashboardWidgetCatalog.builder()
                         .widgetKey("ATTENDANCE_STATUS")
-                        .displayName("Attendance Check")
-                        .description("Check in and review attendance status.")
+                        .displayName("다음 일정 출석")
+                        .description("다가오는 일정의 참석 응답과 실제 출석 상태를 확인합니다.")
                         .iconName("fact_check")
                         .requiredFeatureKey("ATTENDANCE")
                         .defaultVisibilityScope("USER_HOME")
@@ -275,8 +275,8 @@ public final class TestCatalogSeeder {
                         .build(),
                 DashboardWidgetCatalog.builder()
                         .widgetKey("ATTENDANCE_RECENT")
-                        .displayName("Attendance Recent")
-                        .description("Recent attendance logs and completion rate.")
+                        .displayName("최근 일정 출석")
+                        .description("최근 일정별 참석 예정 인원과 실제 출석률을 확인합니다.")
                         .iconName("event_note")
                         .requiredFeatureKey("ATTENDANCE")
                         .defaultVisibilityScope("USER_HOME")

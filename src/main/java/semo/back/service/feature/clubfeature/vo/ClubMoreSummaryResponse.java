@@ -8,6 +8,11 @@ public record ClubMoreSummaryResponse(
         boolean fullAdmin,
         List<String> grantedPermissionKeys,
         List<String> adminToolFeatureKeys,
+        int userPendingCount,
+        int userOverdueCount,
+        int adminPendingCount,
+        int adminOverdueCount,
+        List<ClubMoreFeatureStatusResponse> featureStatuses,
         List<ClubFeatureResponse> features
 ) {
 }

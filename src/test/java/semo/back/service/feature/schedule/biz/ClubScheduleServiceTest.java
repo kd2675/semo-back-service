@@ -7,8 +7,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubMember;
-import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
-import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
@@ -29,6 +27,7 @@ import semo.back.service.feature.notice.biz.ClubNoticeService;
 import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleEventRequest;
 import semo.back.service.feature.schedule.vo.UpdateScheduleEventParticipationRequest;
+import semo.back.service.feature.schedule.vo.UpdateScheduleEventAttendanceRequest;
 import semo.back.service.feature.schedule.vo.SubmitScheduleVoteSelectionRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleVoteRequest;
 
@@ -47,6 +46,9 @@ class ClubScheduleServiceTest {
     private ClubScheduleService clubScheduleService;
 
     @Autowired
+    private ClubScheduleAttendanceService clubScheduleAttendanceService;
+
+    @Autowired
     private ClubNoticeService clubNoticeService;
 
     @Autowired
@@ -54,12 +56,6 @@ class ClubScheduleServiceTest {
 
     @Autowired
     private ClubFeatureService clubFeatureService;
-
-    @Autowired
-    private ClubAttendanceCheckInRepository clubAttendanceCheckInRepository;
-
-    @Autowired
-    private ClubAttendanceSessionRepository clubAttendanceSessionRepository;
 
     @Autowired
     private ClubEventParticipantRepository clubEventParticipantRepository;
@@ -105,8 +101,6 @@ class ClubScheduleServiceTest {
         clubEventParticipantRepository.deleteAll();
         clubScheduleEventRepository.deleteAll();
         clubNoticeRepository.deleteAll();
-        clubAttendanceCheckInRepository.deleteAll();
-        clubAttendanceSessionRepository.deleteAll();
         clubFeatureRepository.deleteAll();
         clubProfileRepository.deleteAll();
         clubMemberRepository.deleteAll();
@@ -337,14 +331,119 @@ class ClubScheduleServiceTest {
                 new UpdateScheduleEventParticipationRequest("CANCEL")
         );
 
-        assertThat(canceled.myParticipationStatus()).isNull();
+        assertThat(canceled.myParticipationStatus()).isEqualTo("CANCELED");
         assertThat(canceled.goingCount()).isZero();
         assertThat(canceled.goingParticipants()).isEmpty();
-        assertThat(clubEventParticipantRepository.count()).isZero();
+        assertThat(clubEventParticipantRepository.count()).isOne();
 
         assertThat(voted.mySelectedOptionId()).isNotNull();
         assertThat(voted.totalResponses()).isEqualTo(1);
         assertThat(clubScheduleVoteSelectionRepository.count()).isOne();
+    }
+
+    @Test
+    void attendanceManagementStoresVerifiedEventAttendanceSeparateFromRsvp() {
+        Long clubId = clubService.createClub(
+                "schedule-attendance-owner-001",
+                "Schedule Attendance Owner",
+                new CreateClubRequest(
+                        "Schedule Attendance Lab",
+                        "일정 출석 통합 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "schedule-attendance-owner-001",
+                new UpdateClubFeaturesRequest(List.of("SCHEDULE_MANAGE", "ATTENDANCE"))
+        );
+        var createdEvent = clubScheduleService.createScheduleEvent(
+                clubId,
+                "schedule-attendance-owner-001",
+                new UpsertScheduleEventRequest(
+                        "오늘 정기 모임",
+                        LocalDate.now().toString(),
+                        null,
+                        "19:00",
+                        "21:00",
+                        null,
+                        "체육관",
+                        null,
+                        true,
+                        false,
+                        null,
+                        false,
+                        false,
+                        false,
+                        true,
+                        false
+                )
+        );
+        clubScheduleService.updateScheduleEventParticipation(
+                clubId,
+                createdEvent.eventId(),
+                "schedule-attendance-owner-001",
+                new UpdateScheduleEventParticipationRequest("GOING")
+        );
+        Long ownerClubProfileId = clubEventParticipantRepository
+                .findByEventIdIn(List.of(createdEvent.eventId()))
+                .getFirst()
+                .getClubProfileId();
+
+        var attendance = clubScheduleAttendanceService.updateEventAttendance(
+                clubId,
+                createdEvent.eventId(),
+                ownerClubProfileId,
+                "schedule-attendance-owner-001",
+                new UpdateScheduleEventAttendanceRequest("PRESENT", "  운영진 현장 확인  ")
+        );
+        var eventDetail = clubScheduleService.getScheduleEventDetail(
+                clubId,
+                createdEvent.eventId(),
+                "schedule-attendance-owner-001"
+        );
+        var participant = clubEventParticipantRepository
+                .findByEventIdAndClubProfileId(createdEvent.eventId(), ownerClubProfileId)
+                .orElseThrow();
+        var summary = clubScheduleAttendanceService.getAttendanceSummary(
+                clubId,
+                "schedule-attendance-owner-001"
+        );
+
+        assertThat(attendance.summary().presentCount()).isEqualTo(1);
+        assertThat(attendance.summary().unmarkedCount()).isZero();
+        assertThat(attendance.members().getFirst().attendanceNote()).isEqualTo("운영진 현장 확인");
+        assertThat(eventDetail.attendanceEnabled()).isTrue();
+        assertThat(eventDetail.canManageAttendance()).isTrue();
+        assertThat(eventDetail.myParticipationStatus()).isEqualTo("GOING");
+        assertThat(eventDetail.myAttendanceStatus()).isEqualTo("PRESENT");
+        assertThat(eventDetail.myCheckedInAtLabel()).isNotBlank();
+        assertThat(participant.getParticipationStatus()).isEqualTo("GOING");
+        assertThat(participant.getAttendanceStatus()).isEqualTo("PRESENT");
+        assertThat(participant.getVerifiedByClubProfileId()).isEqualTo(ownerClubProfileId);
+        assertThat(participant.getAttendanceNote()).isEqualTo("운영진 현장 확인");
+        assertThat(summary.nextEvent().eventId()).isEqualTo(createdEvent.eventId());
+        assertThat(summary.nextEvent().attendanceStatus()).isEqualTo("PRESENT");
+
+        var notGoing = clubScheduleService.updateScheduleEventParticipation(
+                clubId,
+                createdEvent.eventId(),
+                "schedule-attendance-owner-001",
+                new UpdateScheduleEventParticipationRequest("NOT_GOING")
+        );
+        var clearedParticipant = clubEventParticipantRepository
+                .findByEventIdAndClubProfileId(createdEvent.eventId(), ownerClubProfileId)
+                .orElseThrow();
+
+        assertThat(notGoing.myParticipationStatus()).isEqualTo("NOT_GOING");
+        assertThat(notGoing.myAttendanceStatus()).isNull();
+        assertThat(clearedParticipant.getAttendanceStatus()).isNull();
+        assertThat(clearedParticipant.getCheckedInAt()).isNull();
+        assertThat(clearedParticipant.getVerifiedByClubProfileId()).isNull();
+        assertThat(clearedParticipant.getAttendanceNote()).isNull();
     }
 
     @Test

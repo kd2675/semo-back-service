@@ -1,6 +1,7 @@
 package semo.back.service.database.pub.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import semo.back.service.database.pub.entity.TodoItemApplication;
 
 import java.util.Collection;
@@ -22,6 +23,15 @@ public interface TodoItemApplicationRepository extends JpaRepository<TodoItemApp
     );
 
     List<TodoItemApplication> findByClubProfileId(Long clubProfileId);
+
+    @Query("""
+            select count(application)
+            from TodoItemApplication application, TodoItem todo
+            where application.todoItemId = todo.todoItemId
+              and todo.clubId = :clubId
+              and application.applicationStatus = 'APPLIED'
+            """)
+    long countPendingApplicationsForClub(Long clubId);
 
     void deleteByTodoItemId(Long todoItemId);
 }

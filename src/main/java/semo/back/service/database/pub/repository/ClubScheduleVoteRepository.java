@@ -58,4 +58,20 @@ public interface ClubScheduleVoteRepository extends JpaRepository<ClubScheduleVo
             order by v.voteStartDate desc, v.voteStartTime desc, v.voteId desc
             """)
     List<ClubScheduleVote> findAllByClubIdForPollHome(Long clubId, String queryText);
+
+    @Query("""
+            select count(vote)
+            from ClubScheduleVote vote
+            where vote.clubId = :clubId
+              and vote.closedAt is null
+              and vote.voteStartDate <= :today
+              and vote.voteEndDate >= :today
+              and not exists (
+                    select selection.voteSelectionId
+                    from ClubScheduleVoteSelection selection
+                    where selection.voteId = vote.voteId
+                      and selection.clubProfileId = :clubProfileId
+                  )
+            """)
+    long countPendingSelections(Long clubId, Long clubProfileId, LocalDate today);
 }

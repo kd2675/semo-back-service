@@ -15,13 +15,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
+import semo.back.service.feature.schedule.biz.ClubScheduleAttendanceService;
 import semo.back.service.feature.schedule.biz.ClubScheduleService;
+import semo.back.service.feature.schedule.vo.ClubScheduleAttendanceSummaryResponse;
 import semo.back.service.feature.schedule.vo.ClubScheduleResponse;
+import semo.back.service.feature.schedule.vo.ScheduleEventAttendanceResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventDetailResponse;
 import semo.back.service.feature.schedule.vo.ScheduleEventUpsertResponse;
 import semo.back.service.feature.schedule.vo.ScheduleVoteDetailResponse;
 import semo.back.service.feature.schedule.vo.ScheduleVoteUpsertResponse;
 import semo.back.service.feature.schedule.vo.SubmitScheduleVoteSelectionRequest;
+import semo.back.service.feature.schedule.vo.UpdateScheduleEventAttendanceRequest;
 import semo.back.service.feature.schedule.vo.UpdateScheduleEventParticipationRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleEventRequest;
 import semo.back.service.feature.schedule.vo.UpsertScheduleVoteRequest;
@@ -33,6 +37,7 @@ import web.common.core.response.base.dto.ResponseDataDTO;
 @RequiredArgsConstructor
 public class ClubScheduleController {
     private final ClubScheduleService clubScheduleService;
+    private final ClubScheduleAttendanceService clubScheduleAttendanceService;
 
     @GetMapping
     public ResponseDataDTO<ClubScheduleResponse> getClubSchedule(
@@ -104,6 +109,53 @@ public class ClubScheduleController {
         return ResponseDataDTO.of(
                 clubScheduleService.updateScheduleEventParticipation(clubId, eventId, requireUserKey(userContext), request),
                 "일정 참석 상태 저장 성공"
+        );
+    }
+
+    @GetMapping("/attendance/summary")
+    public ResponseDataDTO<ClubScheduleAttendanceSummaryResponse> getScheduleAttendanceSummary(
+            @PathVariable Long clubId,
+            UserContext userContext
+    ) {
+        return ResponseDataDTO.of(
+                clubScheduleAttendanceService.getAttendanceSummary(clubId, requireUserKey(userContext)),
+                "일정 출석 요약 조회 성공"
+        );
+    }
+
+    @GetMapping("/events/{eventId}/attendance")
+    public ResponseDataDTO<ScheduleEventAttendanceResponse> getScheduleEventAttendance(
+            @PathVariable Long clubId,
+            @PathVariable Long eventId,
+            UserContext userContext
+    ) {
+        return ResponseDataDTO.of(
+                clubScheduleAttendanceService.getEventAttendance(
+                        clubId,
+                        eventId,
+                        requireUserKey(userContext)
+                ),
+                "일정 출석 현황 조회 성공"
+        );
+    }
+
+    @PutMapping("/events/{eventId}/attendance/{clubProfileId}")
+    public ResponseDataDTO<ScheduleEventAttendanceResponse> updateScheduleEventAttendance(
+            @PathVariable Long clubId,
+            @PathVariable Long eventId,
+            @PathVariable Long clubProfileId,
+            @Valid @RequestBody UpdateScheduleEventAttendanceRequest request,
+            UserContext userContext
+    ) {
+        return ResponseDataDTO.of(
+                clubScheduleAttendanceService.updateEventAttendance(
+                        clubId,
+                        eventId,
+                        clubProfileId,
+                        requireUserKey(userContext),
+                        request
+                ),
+                "일정 출석 상태 저장 성공"
         );
     }
 

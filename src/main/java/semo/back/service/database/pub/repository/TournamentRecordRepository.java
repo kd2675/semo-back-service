@@ -38,4 +38,6 @@ public interface TournamentRecordRepository extends JpaRepository<TournamentReco
     );
 
     List<TournamentRecord> findAllByTournamentRecordIdIn(List<Long> tournamentRecordIds);
+
+    long countByClubIdAndDeletedFalseAndApprovalStatus(Long clubId, String approvalStatus);
 }

@@ -20,6 +20,14 @@ public class ClubSchedulePermissionService {
                 && clubPositionPermissionEvaluator.hasPermission(access, ClubPositionPermissionEvaluator.PERMISSION_SCHEDULE_CREATE);
     }
 
+    public boolean canManageAttendance(ClubAccessResolver.ClubAccess access) {
+        return access.isAdmin()
+                || clubPositionPermissionEvaluator.hasPermission(
+                        access,
+                        ClubPositionPermissionEvaluator.PERMISSION_ATTENDANCE_MANAGE
+                );
+    }
+
     public ScheduleEventActionPermission getActionPermission(
             ClubAccessResolver.ClubAccess access,
             Long authorClubProfileId

@@ -8,8 +8,6 @@ import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ProfileUser;
-import semo.back.service.database.pub.repository.ClubAttendanceCheckInRepository;
-import semo.back.service.database.pub.repository.ClubAttendanceSessionRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
@@ -52,12 +50,6 @@ class ClubAdminMemberServiceTest {
     private ClubFeatureRepository clubFeatureRepository;
 
     @Autowired
-    private ClubAttendanceCheckInRepository clubAttendanceCheckInRepository;
-
-    @Autowired
-    private ClubAttendanceSessionRepository clubAttendanceSessionRepository;
-
-    @Autowired
     private ClubEventParticipantRepository clubEventParticipantRepository;
 
     @Autowired
@@ -82,8 +74,6 @@ class ClubAdminMemberServiceTest {
         clubScheduleVoteRepository.deleteAll();
         clubEventParticipantRepository.deleteAll();
         clubScheduleEventRepository.deleteAll();
-        clubAttendanceCheckInRepository.deleteAll();
-        clubAttendanceSessionRepository.deleteAll();
         clubFeatureRepository.deleteAll();
         clubProfileRepository.deleteAll();
         clubMemberRepository.deleteAll();

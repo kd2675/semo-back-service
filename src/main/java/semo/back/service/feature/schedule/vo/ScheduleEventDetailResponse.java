@@ -28,6 +28,15 @@ public record ScheduleEventDetailResponse(
         int goingCount,
         int notGoingCount,
         java.util.List<ScheduleEventParticipantSummaryResponse> goingParticipants,
+        boolean attendanceEnabled,
+        boolean canManageAttendance,
+        String myAttendanceStatus,
+        String myCheckedInAtLabel,
+        int presentCount,
+        int lateCount,
+        int absentCount,
+        int excusedCount,
+        int unmarkedCount,
         boolean canEdit,
         boolean canDelete
 ) {

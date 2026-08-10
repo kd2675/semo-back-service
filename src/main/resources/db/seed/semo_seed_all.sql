@@ -509,6 +509,20 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
+SELECT 'ATTENDANCE_MANAGE', 'ATTENDANCE', '일정 출석 관리', '일정별 실제 출석 상태와 확인 메모를 관리합니다.', 'CLUB', 1, 10, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'ATTENDANCE_MANAGE');
+
+INSERT INTO feature_permission_catalog (
+    permission_key,
+    feature_key,
+    display_name,
+    description,
+    ownership_scope,
+    active,
+    sort_order,
+    create_date,
+    update_date
+)
 SELECT 'TOURNAMENT_RECORD_CREATE', 'TOURNAMENT_RECORD', '대회 작성', '대회를 새로 생성합니다.', 'CLUB', 1, 10, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'TOURNAMENT_RECORD_CREATE');
 
@@ -1004,7 +1018,7 @@ INSERT INTO dashboard_widget_catalog (
     create_date,
     update_date
 )
-SELECT 'ATTENDANCE_STATUS', 'Attendance Check', 'Check in and review attendance status.', 'fact_check', 'ATTENDANCE', 'USER_HOME', 1, 1, 40, 1, NOW(), NOW()
+SELECT 'ATTENDANCE_STATUS', '다음 일정 출석', '다가오는 일정의 참석 응답과 실제 출석 상태를 확인합니다.', 'fact_check', 'ATTENDANCE', 'USER_HOME', 1, 1, 40, 1, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'ATTENDANCE_STATUS');
 
 UPDATE dashboard_widget_catalog
@@ -1033,7 +1047,7 @@ INSERT INTO dashboard_widget_catalog (
     create_date,
     update_date
 )
-SELECT 'ATTENDANCE_RECENT', 'Attendance Recent', 'Recent attendance logs and completion rate.', 'event_note', 'ATTENDANCE', 'USER_HOME', 1, 1, 41, 1, NOW(), NOW()
+SELECT 'ATTENDANCE_RECENT', '최근 일정 출석', '최근 일정별 참석 예정 인원과 실제 출석률을 확인합니다.', 'event_note', 'ATTENDANCE', 'USER_HOME', 1, 1, 41, 1, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM dashboard_widget_catalog WHERE widget_key = 'ATTENDANCE_RECENT');
 
 INSERT INTO dashboard_widget_catalog (

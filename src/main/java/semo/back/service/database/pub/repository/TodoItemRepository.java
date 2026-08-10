@@ -44,6 +44,44 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
     long countClaimableTodos(Long clubId);
 
     @Query("""
+            select count(t)
+            from TodoItem t
+            where t.clubId = :clubId
+              and t.assignedClubProfileId = :clubProfileId
+              and t.statusCode not in ('COMPLETED', 'CANCELED')
+            """)
+    long countActiveAssigned(Long clubId, Long clubProfileId);
+
+    @Query("""
+            select count(t)
+            from TodoItem t
+            where t.clubId = :clubId
+              and t.assignedClubProfileId = :clubProfileId
+              and t.statusCode not in ('COMPLETED', 'CANCELED')
+              and t.dueAt is not null
+              and t.dueAt < :now
+            """)
+    long countOverdueAssigned(Long clubId, Long clubProfileId, LocalDateTime now);
+
+    @Query("""
+            select count(t)
+            from TodoItem t
+            where t.clubId = :clubId
+              and t.statusCode not in ('COMPLETED', 'CANCELED')
+            """)
+    long countActiveForAdmin(Long clubId);
+
+    @Query("""
+            select count(t)
+            from TodoItem t
+            where t.clubId = :clubId
+              and t.statusCode not in ('COMPLETED', 'CANCELED')
+              and t.dueAt is not null
+              and t.dueAt < :now
+            """)
+    long countOverdueForAdmin(Long clubId, LocalDateTime now);
+
+    @Query("""
             select t
             from TodoItem t
             where t.clubId = :clubId

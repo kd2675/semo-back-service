@@ -26,6 +26,7 @@ public class ClubPositionPermissionEvaluator {
     public static final String PERMISSION_SCHEDULE_CREATE = "SCHEDULE_CREATE";
     public static final String PERMISSION_SCHEDULE_UPDATE_SELF = "SCHEDULE_UPDATE_SELF";
     public static final String PERMISSION_SCHEDULE_DELETE_SELF = "SCHEDULE_DELETE_SELF";
+    public static final String PERMISSION_ATTENDANCE_MANAGE = "ATTENDANCE_MANAGE";
     public static final String PERMISSION_POLL_CREATE = "POLL_CREATE";
     public static final String PERMISSION_POLL_UPDATE_SELF = "POLL_UPDATE_SELF";
     public static final String PERMISSION_POLL_DELETE_SELF = "POLL_DELETE_SELF";

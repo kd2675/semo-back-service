@@ -15,7 +15,7 @@
   - `schedule`
   - `poll`
   - member activity
-  - `attendance`
+  - schedule attendance
   - `finance`
   - `tournament`
   - `bracket`
@@ -101,7 +101,6 @@
 - `src/main/java/semo/back/service/feature/contentread`
 - `src/main/java/semo/back/service/feature/schedule`
 - `src/main/java/semo/back/service/feature/poll`
-- `src/main/java/semo/back/service/feature/attendance`
 - `src/main/java/semo/back/service/feature/finance`
 - `src/main/java/semo/back/service/feature/tournament`
 - `src/main/java/semo/back/service/feature/bracket`
@@ -117,7 +116,7 @@
 - 기능별 권한 카탈로그: `feature_permission_catalog`
 - 홈 위젯 카탈로그: `dashboard_widget_catalog`
 - 기능 전용 테이블 예시
-  - `attendance_session`, `attendance_checkin`
+  - `club_schedule_event`, `club_event_participant`
   - `finance_obligation`, `finance_payment`
   - `tournament_record`, `tournament_application`
   - `bracket_record`, `bracket_participant`
@@ -177,6 +176,9 @@
 - `PUT /api/semo/v1/clubs/{clubId}/schedule/events/{eventId}`
 - `DELETE /api/semo/v1/clubs/{clubId}/schedule/events/{eventId}`
 - `PUT /api/semo/v1/clubs/{clubId}/schedule/events/{eventId}/participation`
+- `GET /api/semo/v1/clubs/{clubId}/schedule/attendance/summary`
+- `GET /api/semo/v1/clubs/{clubId}/schedule/events/{eventId}/attendance`
+- `PUT /api/semo/v1/clubs/{clubId}/schedule/events/{eventId}/attendance/{clubProfileId}`
 - `GET /api/semo/v1/clubs/{clubId}/schedule/votes/{voteId}`
 - `POST /api/semo/v1/clubs/{clubId}/schedule/votes`
 - `PUT /api/semo/v1/clubs/{clubId}/schedule/votes/{voteId}`
@@ -184,9 +186,8 @@
 - `PUT /api/semo/v1/clubs/{clubId}/schedule/votes/{voteId}/selection`
 - `PUT /api/semo/v1/clubs/{clubId}/schedule/votes/{voteId}/close`
 - `GET /api/semo/v1/clubs/{clubId}/schedule/votes/summary`
-- `GET /api/semo/v1/clubs/{clubId}/more/attendance`
-- `POST /api/semo/v1/clubs/{clubId}/more/attendance/check-in`
-- `GET /api/semo/v1/clubs/{clubId}/admin/more/attendance`
+
+일정 참석 응답과 실제 출석은 `club_event_participant`에서 함께 관리합니다. `participation_status`는 `GOING`, `NOT_GOING`, `CANCELED`, 실제 `attendance_status`는 `PRESENT`, `LATE`, `ABSENT`, `EXCUSED`를 사용합니다. 실제 출석에는 확인자, 확인 시각, 운영 메모가 함께 저장되며 `ATTENDANCE_MANAGE` 권한을 직책에 위임할 수 있습니다.
 
 ### Activity
 - `GET /api/semo/v1/clubs/{clubId}/profile/activity`
@@ -250,6 +251,10 @@
   - 승인된 정산 요청과 지출 원장을 연결하는 nullable FK/unique 컬럼을 추가하며, 배포 전 백업 후 1회 적용
   - `src/main/resources/db/ddl/semo_timeline_feature_remove.sql`
   - 폐기된 `TIMELINE` 카탈로그·활성화·권한 데이터만 외래 키 순서대로 제거
+  - `src/main/resources/db/ddl/semo_schedule_attendance_integration.sql`
+  - 일정 참가자 원장에 실제 출석 필드를 추가하고 event 연결이 있는 레거시 출석을 이관
+  - 날짜만 가진 `attendance_session`/`attendance_checkin`은 임의로 일정에 연결하지 않고, 운영자가 임시 `semo_attendance_session_event_mapping`에 세션-일정 관계를 명시한 건만 이관
+  - `invalid_session_event_mapping_count`, `unmapped_daily_checkin_count`, `unmapped_legacy_attendance_count`가 모두 0이고 백업·이관 행을 검증한 뒤에만 주석 처리된 레거시 테이블/컬럼 제거문을 별도로 실행
 
 현재 seed에는 아래 카탈로그 성격의 데이터가 포함됩니다.
 
@@ -267,7 +272,7 @@
   - `FEEDBACK`
   - `ROLE_MANAGEMENT`
 - `feature_permission_catalog`
-  - 공지, 투표, 대회, 대진표, 재정, 직책관리 권한
+  - 공지, 투표, 일정 출석, 대회, 대진표, 재정, 직책관리 권한
 - `dashboard_widget_catalog`
   - 공지, 보드 스트립, 일정 개요, 일정 인사이트, 투표 상태, 투표 펄스, 프로필, 출석 상태, 최근 출석, 재정 상태, 재정 요약, 대회 센터, 내 대회, 대진표 보드, 대진표 워크벤치 위젯
 
@@ -298,7 +303,6 @@
 - `profile`
 - `club`
 - `clubfeature`
-- `attendance`
 - `contentread`
 - `dashboard`
 - `feedback`

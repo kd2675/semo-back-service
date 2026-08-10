@@ -15,4 +15,6 @@ public interface ClubJoinRequestRepository extends JpaRepository<ClubJoinRequest
     List<ClubJoinRequest> findByClubIdAndRequestStatusOrderByCreateDateDescClubJoinRequestIdDesc(Long clubId, String requestStatus);
 
     List<ClubJoinRequest> findByProfileIdAndClubIdIn(Long profileId, Collection<Long> clubIds);
+
+    long countByClubIdAndRequestStatus(Long clubId, String requestStatus);
 }

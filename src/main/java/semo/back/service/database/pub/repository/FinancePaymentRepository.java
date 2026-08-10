@@ -36,4 +36,25 @@ public interface FinancePaymentRepository extends JpaRepository<FinancePayment, 
               and o.financeObligationId = p.financeObligationId
             """)
     ClubAdminFinanceSummaryAggregate summarizeAdminFinance(Long clubId, LocalDateTime now);
+
+    @Query("""
+            select count(p)
+            from FinancePayment p
+            where p.clubId = :clubId
+              and p.clubProfileId = :clubProfileId
+              and p.paymentStatusCode = 'PENDING'
+            """)
+    long countPendingForMember(Long clubId, Long clubProfileId);
+
+    @Query("""
+            select count(p)
+            from FinancePayment p, FinanceObligation o
+            where p.financeObligationId = o.financeObligationId
+              and p.clubId = :clubId
+              and p.clubProfileId = :clubProfileId
+              and p.paymentStatusCode = 'PENDING'
+              and o.dueAt is not null
+              and o.dueAt < :now
+            """)
+    long countOverdueForMember(Long clubId, Long clubProfileId, LocalDateTime now);
 }
