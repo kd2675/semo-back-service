@@ -15,6 +15,8 @@ import java.util.Optional;
 public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
     List<TodoItem> findByClubIdOrderByTodoItemIdDesc(Long clubId);
 
+    List<TodoItem> findByClubIdOrderByTodoItemIdDesc(Long clubId, Pageable pageable);
+
     List<TodoItem> findByClubIdAndAssignedClubProfileIdOrderByTodoItemIdDesc(Long clubId, Long assignedClubProfileId);
 
     @Query("""
@@ -124,6 +126,46 @@ public interface TodoItemRepository extends JpaRepository<TodoItem, Long> {
               and t.statusCode not in ('COMPLETED', 'CANCELED')
             """)
     long countActiveForAdmin(Long clubId);
+
+    long countByClubIdAndStatusCode(Long clubId, String statusCode);
+
+    long countByClubIdAndStatusCodeIn(Long clubId, Collection<String> statusCodes);
+
+    @Query("""
+            select t
+            from TodoItem t
+            where t.clubId = :clubId
+              and t.statusCode in :statusCodes
+            order by
+              case when t.dueAt is null then 1 else 0 end,
+              t.dueAt asc,
+              t.todoItemId asc
+            """)
+    List<TodoItem> findByStatusCodes(
+            Long clubId,
+            Collection<String> statusCodes,
+            Pageable pageable
+    );
+
+    @Query("""
+            select t
+            from TodoItem t
+            where t.clubId = :clubId
+              and t.statusCode in :statusCodes
+            order by t.todoItemId desc
+            """)
+    List<TodoItem> findAllByStatusCodes(Long clubId, Collection<String> statusCodes);
+
+    @Query("""
+            select count(t)
+            from TodoItem t
+            where t.clubId = :clubId
+              and (
+                    (t.dueAt is not null and t.dueAt >= :from and t.dueAt < :toExclusive)
+                    or (t.dueAt is null and t.createDate >= :from and t.createDate < :toExclusive)
+                  )
+            """)
+    long countWithinTerm(Long clubId, LocalDateTime from, LocalDateTime toExclusive);
 
     @Query("""
             select count(t)

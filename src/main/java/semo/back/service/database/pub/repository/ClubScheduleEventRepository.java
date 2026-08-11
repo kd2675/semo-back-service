@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 
 public interface ClubScheduleEventRepository extends JpaRepository<ClubScheduleEvent, Long> {
     Optional<ClubScheduleEvent> findByEventIdAndClubId(Long eventId, Long clubId);
@@ -36,6 +37,44 @@ public interface ClubScheduleEventRepository extends JpaRepository<ClubScheduleE
             order by e.startAt asc, e.eventId asc
             """)
     List<ClubScheduleEvent> findAllActiveEvents(Long clubId);
+
+    @Query("""
+            select e
+            from ClubScheduleEvent e
+            where e.clubId = :clubId
+              and e.eventStatus <> 'CANCELLED'
+            order by e.startAt desc, e.eventId desc
+            """)
+    List<ClubScheduleEvent> findRecentActiveEvents(Long clubId, Pageable pageable);
+
+    @Query("""
+            select e
+            from ClubScheduleEvent e
+            where e.clubId = :clubId
+              and e.eventStatus <> 'CANCELLED'
+              and e.startAt >= :from
+            order by e.startAt asc, e.eventId asc
+            """)
+    List<ClubScheduleEvent> findUpcomingActiveEvents(Long clubId, LocalDateTime from, Pageable pageable);
+
+    @Query("""
+            select count(e)
+            from ClubScheduleEvent e
+            where e.clubId = :clubId
+              and e.eventStatus <> 'CANCELLED'
+              and e.startAt >= :from
+            """)
+    long countUpcomingActiveEvents(Long clubId, LocalDateTime from);
+
+    @Query("""
+            select count(e)
+            from ClubScheduleEvent e
+            where e.clubId = :clubId
+              and e.eventStatus <> 'CANCELLED'
+              and e.startAt >= :from
+              and e.startAt < :toExclusive
+            """)
+    long countActiveEventsWithinTerm(Long clubId, LocalDateTime from, LocalDateTime toExclusive);
 
     @Query("""
             select e

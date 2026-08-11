@@ -1,7 +1,6 @@
 package semo.back.service.feature.decision.biz;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -57,17 +56,14 @@ public class DecisionResourceResolver {
 
     public List<DecisionResourceOptionResponse> getOptions(Long clubId) {
         List<ResourceDescriptor> options = new ArrayList<>();
-        todoItemRepository.findByClubIdOrderByTodoItemIdDesc(clubId).stream()
-                .limit(OPTION_LIMIT_PER_TYPE)
+        PageRequest optionPage = PageRequest.of(0, OPTION_LIMIT_PER_TYPE);
+        todoItemRepository.findByClubIdOrderByTodoItemIdDesc(clubId, optionPage).stream()
                 .map(this::toDescriptor)
                 .forEach(options::add);
-        clubScheduleEventRepository.findAllActiveEvents(clubId).stream()
-                .sorted(Comparator.comparing(ClubScheduleEvent::getStartAt).reversed())
-                .limit(OPTION_LIMIT_PER_TYPE)
+        clubScheduleEventRepository.findRecentActiveEvents(clubId, optionPage).stream()
                 .map(this::toDescriptor)
                 .forEach(options::add);
-        financeRequestRepository.findByClubIdOrderByFinanceRequestIdDesc(clubId).stream()
-                .limit(OPTION_LIMIT_PER_TYPE)
+        financeRequestRepository.findByClubIdOrderByFinanceRequestIdDesc(clubId, optionPage).stream()
                 .map(this::toDescriptor)
                 .forEach(options::add);
         financeObligationRepository.findAdminFeed(
@@ -75,13 +71,15 @@ public class DecisionResourceResolver {
                         null,
                         null,
                         null,
-                        PageRequest.of(0, OPTION_LIMIT_PER_TYPE)
+                        optionPage
                 ).stream()
                 .map(this::toDescriptor)
                 .forEach(options::add);
         tournamentRecordRepository
-                .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(clubId).stream()
-                .limit(OPTION_LIMIT_PER_TYPE)
+                .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(
+                        clubId,
+                        optionPage
+                ).stream()
                 .map(this::toDescriptor)
                 .forEach(options::add);
         return options.stream()
@@ -142,7 +140,7 @@ public class DecisionResourceResolver {
                 event.getEventId(),
                 event.getTitle(),
                 event.getEventStatus(),
-                "/clubs/%d/schedule/events/%d".formatted(event.getClubId(), event.getEventId())
+                "/clubs/%d/schedule/%d".formatted(event.getClubId(), event.getEventId())
         );
     }
 

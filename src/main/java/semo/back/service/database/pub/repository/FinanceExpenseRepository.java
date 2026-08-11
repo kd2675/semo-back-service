@@ -9,6 +9,7 @@ import semo.back.service.database.pub.entity.FinanceExpense;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 import jakarta.persistence.LockModeType;
 
@@ -53,4 +54,13 @@ public interface FinanceExpenseRepository extends JpaRepository<FinanceExpense, 
               and expense.statusCode = 'POSTED'
             """)
     BigDecimal sumPostedAmountByFinancePeriodIdAndCategoryCode(Long financePeriodId, String categoryCode);
+
+    @Query("""
+            select coalesce(sum(expense.amount), 0)
+            from FinanceExpense expense
+            where expense.clubId = :clubId
+              and expense.spentAt >= :from
+              and expense.spentAt < :toExclusive
+            """)
+    BigDecimal sumAmountWithinTerm(Long clubId, LocalDateTime from, LocalDateTime toExclusive);
 }

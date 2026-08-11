@@ -406,14 +406,6 @@ public class ClubTodoService {
         requireTodoFeature(clubId);
         requireAdminTodoView(access);
 
-        List<TodoItem> allItems = todoItemRepository.findByClubIdOrderByTodoItemIdDesc(clubId);
-        List<Long> allTodoIds = allItems.stream().map(TodoItem::getTodoItemId).toList();
-        List<TodoItemApplication> allApplications = allTodoIds.isEmpty()
-                ? List.of()
-                : todoItemApplicationRepository.findByTodoItemIdIn(allTodoIds);
-        List<TodoItemAssignee> allAssignees = allTodoIds.isEmpty()
-                ? List.of()
-                : todoItemAssigneeRepository.findByTodoItemIdInOrderByTodoItemAssigneeIdAsc(allTodoIds);
         List<ClubAccessResolver.ClubMemberSnapshot> activeMembers = clubAccessResolver.getActiveMemberSnapshots(clubId);
         List<TodoMemberOptionResponse> availableMembers = activeMembers.stream()
                 .map(snapshot -> new TodoMemberOptionResponse(
@@ -441,19 +433,26 @@ public class ClubTodoService {
         boolean hasNext = feed.size() > pageSize;
         List<TodoItem> pageItems = hasNext ? feed.subList(0, pageSize) : feed;
         TodoItem lastItem = pageItems.isEmpty() ? null : pageItems.get(pageItems.size() - 1);
+        List<Long> pageTodoIds = pageItems.stream().map(TodoItem::getTodoItemId).toList();
+        List<TodoItemApplication> pageApplications = pageTodoIds.isEmpty()
+                ? List.of()
+                : todoItemApplicationRepository.findByTodoItemIdIn(pageTodoIds);
+        List<TodoItemAssignee> pageAssignees = pageTodoIds.isEmpty()
+                ? List.of()
+                : todoItemAssigneeRepository.findByTodoItemIdInOrderByTodoItemAssigneeIdAsc(pageTodoIds);
         Map<Long, List<Long>> assigneeIdsByTodoItemId = resolveAssigneeIdsByTodoItemId(
-                List.of(allItems),
-                allAssignees
+                List.of(pageItems),
+                pageAssignees
         );
         Map<Long, ClubProfile> profileById = clubTodoViewSupport.resolveClubProfiles(
-                List.of(allItems, pageItems),
-                List.of(allApplications),
-                List.of(allAssignees)
+                List.of(pageItems),
+                List.of(pageApplications),
+                List.of(pageAssignees)
         );
-        Map<Long, ClubScheduleEvent> scheduleById = resolveScheduleById(List.of(allItems));
-        Map<Long, DecisionRecord> decisionById = resolveDecisionById(List.of(allItems));
+        Map<Long, ClubScheduleEvent> scheduleById = resolveScheduleById(List.of(pageItems));
+        Map<Long, DecisionRecord> decisionById = resolveDecisionById(List.of(pageItems));
         Map<Long, Integer> applicationCountByTodoItemId =
-                clubTodoViewSupport.resolveApplicationCountByTodoItemId(allApplications);
+                clubTodoViewSupport.resolveApplicationCountByTodoItemId(pageApplications);
 
         return new ClubAdminTodoResponse(
                 access.club().getClubId(),
@@ -464,13 +463,11 @@ public class ClubTodoService {
                 clubTodoPermissionService.canManageStatus(access),
                 clubTodoPermissionService.canDeleteTodo(access),
                 activeMembers.size(),
-                (int) allItems.stream().filter(item -> STATUS_OPEN.equals(item.getStatusCode())).count(),
-                (int) allItems.stream().filter(item -> STATUS_IN_PROGRESS.equals(item.getStatusCode())).count(),
-                (int) allItems.stream().filter(item -> STATUS_COMPLETED.equals(item.getStatusCode())).count(),
-                (int) allApplications.stream()
-                        .filter(application -> APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus()))
-                        .count(),
-                (int) allItems.stream().filter(clubTodoViewSupport::isOverdue).count(),
+                Math.toIntExact(todoItemRepository.countByClubIdAndStatusCode(clubId, STATUS_OPEN)),
+                Math.toIntExact(todoItemRepository.countByClubIdAndStatusCode(clubId, STATUS_IN_PROGRESS)),
+                Math.toIntExact(todoItemRepository.countByClubIdAndStatusCode(clubId, STATUS_COMPLETED)),
+                Math.toIntExact(todoItemApplicationRepository.countPendingApplicationsForClub(clubId)),
+                Math.toIntExact(todoItemRepository.countOverdueForAdmin(clubId, now)),
                 availableMembers,
                 buildScheduleOptions(clubId),
                 buildDecisionOptions(clubId),

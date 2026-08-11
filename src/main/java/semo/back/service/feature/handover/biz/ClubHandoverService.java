@@ -31,11 +31,9 @@ import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.entity.ClubTermExecutiveAssignment;
 import semo.back.service.database.pub.entity.ClubTermCarryoverItem;
-import semo.back.service.database.pub.entity.FinanceExpense;
 import semo.back.service.database.pub.entity.FinanceRequest;
 import semo.back.service.database.pub.entity.DecisionRecord;
 import semo.back.service.database.pub.entity.TodoItem;
-import semo.back.service.database.pub.entity.TournamentRecord;
 import semo.back.service.database.pub.repository.ClubFeedbackRepository;
 import semo.back.service.database.pub.repository.ClubHandoverNoteRepository;
 import semo.back.service.database.pub.repository.ClubJoinRequestRepository;
@@ -758,19 +756,36 @@ public class ClubHandoverService {
 
     private QueueSnapshot buildQueue(Long clubId) {
         LocalDateTime now = LocalDateTime.now();
-        List<TodoItem> openTodos = todoItemRepository.findByClubIdOrderByTodoItemIdDesc(clubId).stream()
-                .filter(item -> OPEN_TODO_STATUSES.contains(item.getStatusCode()))
-                .toList();
+        List<TodoItem> openTodos = todoItemRepository.findByStatusCodes(
+                clubId,
+                OPEN_TODO_STATUSES,
+                PageRequest.of(0, 5)
+        );
         List<FinanceRequest> pendingFinanceRequests = financeRequestRepository
-                .findByClubIdOrderByFinanceRequestIdDesc(clubId).stream()
-                .filter(item -> REQUEST_STATUS_SUBMITTED.equals(item.getStatusCode()))
-                .toList();
-        List<ClubScheduleEvent> upcomingSchedules = clubScheduleEventRepository.findAllActiveEvents(clubId).stream()
-                .filter(item -> !item.getStartAt().isBefore(now))
-                .toList();
-        List<ClubFeedback> openFeedback = clubFeedbackRepository.findFeed(clubId).stream()
-                .filter(item -> OPEN_FEEDBACK_STATUSES.contains(item.getStatusCode()))
-                .toList();
+                .findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(
+                        clubId,
+                        REQUEST_STATUS_SUBMITTED,
+                        PageRequest.of(0, 3)
+                );
+        List<ClubScheduleEvent> upcomingSchedules = clubScheduleEventRepository.findUpcomingActiveEvents(
+                clubId,
+                now,
+                PageRequest.of(0, 3)
+        );
+        List<ClubFeedback> openFeedback = clubFeedbackRepository.findOpenFeedback(
+                clubId,
+                OPEN_FEEDBACK_STATUSES,
+                PageRequest.of(0, 2)
+        );
+        int openTodoCount = safeCount(todoItemRepository.countByClubIdAndStatusCodeIn(clubId, OPEN_TODO_STATUSES));
+        int overdueTodoCount = safeCount(todoItemRepository.countOverdueForAdmin(clubId, now));
+        int pendingFinanceRequestCount = safeCount(
+                financeRequestRepository.countByClubIdAndStatusCode(clubId, REQUEST_STATUS_SUBMITTED)
+        );
+        int upcomingScheduleCount = safeCount(clubScheduleEventRepository.countUpcomingActiveEvents(clubId, now));
+        int openFeedbackCount = safeCount(
+                clubFeedbackRepository.countByClubIdAndDeletedFalseAndStatusCodeIn(clubId, OPEN_FEEDBACK_STATUSES)
+        );
         int pendingJoinRequestCount = safeCount(
                 clubJoinRequestRepository.countByClubIdAndRequestStatus(clubId, "PENDING")
         );
@@ -805,7 +820,7 @@ public class ClubHandoverService {
                         item.getTitle(),
                         "정산 검토 대기",
                         null,
-                        "/clubs/%d/admin/more/finance?tab=requests".formatted(clubId),
+                        "/clubs/%d/admin/more/finance?tab=settlements".formatted(clubId),
                         false
                 ))
                 .forEach(items::add);
@@ -845,14 +860,12 @@ public class ClubHandoverService {
 
         return new QueueSnapshot(
                 new HandoverQueueSummaryResponse(
-                        openTodos.size(),
-                        safeCount(openTodos.stream()
-                                .filter(item -> item.getDueAt() != null && item.getDueAt().isBefore(now))
-                                .count()),
+                        openTodoCount,
+                        overdueTodoCount,
                         unpaidPaymentCount,
-                        pendingFinanceRequests.size(),
-                        upcomingSchedules.size(),
-                        openFeedback.size(),
+                        pendingFinanceRequestCount,
+                        upcomingScheduleCount,
+                        openFeedbackCount,
                         pendingJoinRequestCount,
                         openNoteCount,
                         openCarryoverCount
@@ -872,8 +885,7 @@ public class ClubHandoverService {
     private List<HandoverQueueItemResponse> buildCarryoverCandidates(Long clubId) {
         LocalDateTime now = LocalDateTime.now();
         List<HandoverQueueItemResponse> items = new ArrayList<>();
-        todoItemRepository.findByClubIdOrderByTodoItemIdDesc(clubId).stream()
-                .filter(item -> OPEN_TODO_STATUSES.contains(item.getStatusCode()))
+        todoItemRepository.findAllByStatusCodes(clubId, OPEN_TODO_STATUSES).stream()
                 .map(item -> new HandoverQueueItemResponse(
                         "TODO_ITEM",
                         item.getTodoItemId(),
@@ -884,20 +896,21 @@ public class ClubHandoverService {
                         item.getDueAt() != null && item.getDueAt().isBefore(now)
                 ))
                 .forEach(items::add);
-        financeRequestRepository.findByClubIdOrderByFinanceRequestIdDesc(clubId).stream()
-                .filter(item -> REQUEST_STATUS_SUBMITTED.equals(item.getStatusCode()))
+        financeRequestRepository.findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(
+                        clubId,
+                        REQUEST_STATUS_SUBMITTED
+                ).stream()
                 .map(item -> new HandoverQueueItemResponse(
                         "FINANCE_REQUEST",
                         item.getFinanceRequestId(),
                         item.getTitle(),
                         "정산 검토 대기",
                         null,
-                        "/clubs/%d/admin/more/finance?tab=requests".formatted(clubId),
+                        "/clubs/%d/admin/more/finance?tab=settlements".formatted(clubId),
                         false
                 ))
                 .forEach(items::add);
-        clubFeedbackRepository.findFeed(clubId).stream()
-                .filter(item -> OPEN_FEEDBACK_STATUSES.contains(item.getStatusCode()))
+        clubFeedbackRepository.findAllOpenFeedback(clubId, OPEN_FEEDBACK_STATUSES).stream()
                 .map(item -> new HandoverQueueItemResponse(
                         "FEEDBACK",
                         item.getFeedbackId(),
@@ -914,34 +927,22 @@ public class ClubHandoverService {
     private ClubTermMetricsResponse buildTermMetrics(Long clubId, ClubOperatingTerm term) {
         LocalDateTime from = term.getStartDate().atStartOfDay();
         LocalDateTime toExclusive = term.getEndDate().plusDays(1).atStartOfDay();
-        int todoCount = safeCount(todoItemRepository.findByClubIdOrderByTodoItemIdDesc(clubId).stream()
-                .filter(item -> within(item.getDueAt(), item.getCreateDate(), from, toExclusive))
-                .count());
-        int scheduleCount = safeCount(clubScheduleEventRepository.findAllActiveEvents(clubId).stream()
-                .filter(item -> within(item.getStartAt(), null, from, toExclusive))
-                .count());
+        int todoCount = safeCount(todoItemRepository.countWithinTerm(clubId, from, toExclusive));
+        int scheduleCount = safeCount(clubScheduleEventRepository.countActiveEventsWithinTerm(
+                clubId,
+                from,
+                toExclusive
+        ));
         int tournamentCount = safeCount(tournamentRecordRepository
-                .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(clubId).stream()
-                .filter(item -> overlaps(item, term))
-                .count());
-        int obligationCount = safeCount(financeObligationRepository.findAdminFeed(
+                .countByClubIdAndDeletedFalseAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
                         clubId,
-                        null,
-                        null,
-                        null,
-                        org.springframework.data.domain.Pageable.unpaged()
-                ).stream()
-                .filter(item -> within(item.getDueAt(), item.getCreateDate(), from, toExclusive))
-                .count());
+                        term.getEndDate(),
+                        term.getStartDate()
+                ));
+        int obligationCount = safeCount(financeObligationRepository.countWithinTerm(clubId, from, toExclusive));
         int financeRequestCount = safeCount(financeRequestRepository
-                .findByClubIdOrderByFinanceRequestIdDesc(clubId).stream()
-                .filter(item -> within(null, item.getCreateDate(), from, toExclusive))
-                .count());
-        BigDecimal expenseAmount = financeExpenseRepository.findByClubIdOrderBySpentAtDescFinanceExpenseIdDesc(clubId)
-                .stream()
-                .filter(item -> within(item.getSpentAt(), null, from, toExclusive))
-                .map(FinanceExpense::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .countByClubIdAndCreateDateGreaterThanEqualAndCreateDateLessThan(clubId, from, toExclusive));
+        BigDecimal expenseAmount = financeExpenseRepository.sumAmountWithinTerm(clubId, from, toExclusive);
         return new ClubTermMetricsResponse(
                 todoCount,
                 scheduleCount,
@@ -951,21 +952,6 @@ public class ClubHandoverService {
                 expenseAmount,
                 "KRW"
         );
-    }
-
-    private boolean within(
-            LocalDateTime primary,
-            LocalDateTime fallback,
-            LocalDateTime from,
-            LocalDateTime toExclusive
-    ) {
-        LocalDateTime value = primary == null ? fallback : primary;
-        return value != null && !value.isBefore(from) && value.isBefore(toExclusive);
-    }
-
-    private boolean overlaps(TournamentRecord tournament, ClubOperatingTerm term) {
-        return !tournament.getEndDate().isBefore(term.getStartDate())
-                && !tournament.getStartDate().isAfter(term.getEndDate());
     }
 
     private ClubHandoverNote requireNote(Long clubId, Long noteId) {

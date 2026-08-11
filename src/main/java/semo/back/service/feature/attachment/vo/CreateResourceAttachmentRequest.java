@@ -9,6 +9,7 @@ public record CreateResourceAttachmentRequest(
         @NotBlank @Size(max = 40) String resourceType,
         @NotNull @Positive Long resourceId,
         @NotBlank @Size(max = 500) String tempFileName,
+        @NotBlank @Size(max = 128) String uploadToken,
         @NotBlank @Size(max = 255) String originalFileName
 ) {
 }

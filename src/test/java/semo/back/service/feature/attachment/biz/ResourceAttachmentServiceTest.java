@@ -1,6 +1,7 @@
 package semo.back.service.feature.attachment.biz;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import java.io.ByteArrayOutputStream;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -52,7 +54,8 @@ class ResourceAttachmentServiceTest {
         )).thenReturn(0L);
         when(attachmentFinalizeClient.finalizeAttachment(
                 "temp/files/2026/08/10/file.pdf",
-                "semo/attachments/feedback/31"
+                "semo/attachments/feedback/31",
+                "upload-token"
         )).thenReturn(finalized());
         when(resourceAttachmentRepository.findByFileNameAndDeletedFalse(finalized().fileName()))
                 .thenReturn(Optional.empty());
@@ -66,6 +69,7 @@ class ResourceAttachmentServiceTest {
                         "feedback",
                         31L,
                         "temp/files/2026/08/10/file.pdf",
+                        "upload-token",
                         "C:\\fakepath\\운영 계획.pdf"
                 )
         );
@@ -96,10 +100,11 @@ class ResourceAttachmentServiceTest {
                         "TODO_ITEM",
                         21L,
                         "temp/files/2026/08/10/file.pdf",
+                        "upload-token",
                         "운영 계획.pdf"
                 )
         )).isInstanceOf(SemoException.ValidationException.class);
-        verify(attachmentFinalizeClient, never()).finalizeAttachment(any(), any());
+        verify(attachmentFinalizeClient, never()).finalizeAttachment(any(), any(), any());
     }
 
     @Test
@@ -128,6 +133,7 @@ class ResourceAttachmentServiceTest {
                         "feedback",
                         31L,
                         "temp/files/2026/08/10/file.pdf",
+                        "upload-token",
                         "운영 계획.pdf"
                 )
         );
@@ -149,7 +155,7 @@ class ResourceAttachmentServiceTest {
                 "FEEDBACK",
                 31L
         )).thenReturn(0L);
-        when(attachmentFinalizeClient.finalizeAttachment(any(), any())).thenReturn(finalized());
+        when(attachmentFinalizeClient.finalizeAttachment(any(), any(), any())).thenReturn(finalized());
         when(resourceAttachmentRepository.findByFileNameAndDeletedFalse(finalized().fileName()))
                 .thenReturn(Optional.empty());
         doThrow(new IllegalStateException("database unavailable"))
@@ -163,6 +169,7 @@ class ResourceAttachmentServiceTest {
                         "FEEDBACK",
                         31L,
                         "temp/files/2026/08/10/file.pdf",
+                        "upload-token",
                         "운영 계획.pdf"
                 )
         )).isInstanceOf(IllegalStateException.class);
@@ -171,7 +178,7 @@ class ResourceAttachmentServiceTest {
     }
 
     @Test
-    void downloadAttachment_authorizedResource_readsThroughProtectedFileClient() {
+    void prepareAttachmentDownload_authorizedResource_returnsStreamingMetadata() {
         ClubAccessResolver.ClubAccess access = mock(ClubAccessResolver.ClubAccess.class);
         ResourceAttachment attachment = ResourceAttachment.builder()
                 .resourceAttachmentId(91L)
@@ -189,16 +196,28 @@ class ResourceAttachmentServiceTest {
         when(clubAccessResolver.requireActiveMember(1L, "user-key")).thenReturn(access);
         when(resourceAttachmentRepository.findByResourceAttachmentIdAndClubIdAndDeletedFalse(91L, 1L))
                 .thenReturn(Optional.of(attachment));
-        when(attachmentFinalizeClient.downloadAttachment(attachment.getFileName()))
-                .thenReturn(new byte[] {1, 2, 3, 4});
-
-        var download = resourceAttachmentService.downloadAttachment(1L, 91L, "user-key");
+        var download = resourceAttachmentService.prepareAttachmentDownload(1L, 91L, "user-key");
 
         assertThat(download)
                 .returns("운영 계획.pdf", item -> item.originalFileName())
                 .returns("application/pdf", item -> item.contentType())
-                .returns(4, item -> item.content().length);
+                .returns(4L, item -> item.sizeBytes());
         verify(resourceAttachmentPolicy).requireCanView(access, "FEEDBACK", 31L);
+    }
+
+    @Test
+    void writeAttachment_matchingSize_streamsWithoutBuffering() {
+        var outputStream = new ByteArrayOutputStream();
+        var download = new ResourceAttachmentService.AttachmentDownload(
+                finalized().fileName(),
+                "운영 계획.pdf",
+                "application/pdf",
+                4L
+        );
+        when(attachmentFinalizeClient.writeAttachment(finalized().fileName(), outputStream)).thenReturn(4L);
+
+        assertThatCode(() -> resourceAttachmentService.writeAttachment(download, outputStream))
+                .doesNotThrowAnyException();
     }
 
     private ClubAccessResolver.ClubAccess access(Long clubProfileId) {
@@ -216,6 +235,7 @@ class ResourceAttachmentServiceTest {
                 "application/pdf",
                 128L,
                 "http://localhost:8081/files/final.pdf",
+                null,
                 false,
                 true
         );

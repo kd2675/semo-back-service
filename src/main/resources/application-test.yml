@@ -25,6 +25,10 @@ spring:
     database:
       replace: any
 
+eureka:
+  client:
+    enabled: false
+
 database:
   datasource:
     pub:

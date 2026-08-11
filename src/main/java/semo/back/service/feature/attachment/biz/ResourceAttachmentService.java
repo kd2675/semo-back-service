@@ -1,5 +1,6 @@
 package semo.back.service.feature.attachment.biz;
 
+import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -85,7 +86,8 @@ public class ResourceAttachmentService {
         }
         FinalizedAttachment finalized = attachmentFinalizeClient.finalizeAttachment(
                 request.tempFileName(),
-                targetDir
+                targetDir,
+                request.uploadToken()
         );
         boolean lifecycleRegistered = finalized.newlyFinalized()
                 && registerFinalizedAttachmentLifecycle(finalized.fileName());
@@ -122,7 +124,7 @@ public class ResourceAttachmentService {
         }
     }
 
-    public AttachmentDownload downloadAttachment(Long clubId, Long attachmentId, String userKey) {
+    public AttachmentDownload prepareAttachmentDownload(Long clubId, Long attachmentId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ResourceAttachment attachment = resourceAttachmentRepository
                 .findByResourceAttachmentIdAndClubIdAndDeletedFalse(attachmentId, clubId)
@@ -136,15 +138,19 @@ public class ResourceAttachmentService {
                 attachment.getResourceType(),
                 attachment.getResourceId()
         );
-        byte[] content = attachmentFinalizeClient.downloadAttachment(attachment.getFileName());
-        if (content.length != attachment.getSizeBytes()) {
-            throw new SemoException.ValidationException("저장된 첨부파일 크기가 등록 정보와 일치하지 않습니다.");
-        }
         return new AttachmentDownload(
+                attachment.getFileName(),
                 attachment.getOriginalFileName(),
                 attachment.getContentType(),
-                content
+                attachment.getSizeBytes()
         );
+    }
+
+    public void writeAttachment(AttachmentDownload download, OutputStream outputStream) {
+        long transferred = attachmentFinalizeClient.writeAttachment(download.fileName(), outputStream);
+        if (transferred != download.sizeBytes()) {
+            throw new SemoException.ValidationException("저장된 첨부파일 크기가 등록 정보와 일치하지 않습니다.");
+        }
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
@@ -290,9 +296,10 @@ public class ResourceAttachmentService {
     }
 
     public record AttachmentDownload(
+            String fileName,
             String originalFileName,
             String contentType,
-            byte[] content
+            long sizeBytes
     ) {
     }
 }

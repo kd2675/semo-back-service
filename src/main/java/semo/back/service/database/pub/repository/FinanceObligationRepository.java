@@ -9,6 +9,7 @@ import semo.back.service.database.pub.entity.FinanceObligation;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 import jakarta.persistence.LockModeType;
 
@@ -60,6 +61,17 @@ public interface FinanceObligationRepository extends JpaRepository<FinanceObliga
     Optional<FinanceObligation> findByFinanceObligationIdAndClubId(Long financeObligationId, Long clubId);
 
     Optional<FinanceObligation> findByRecurrenceSourceFinanceObligationId(Long recurrenceSourceFinanceObligationId);
+
+    @Query("""
+            select count(o)
+            from FinanceObligation o
+            where o.clubId = :clubId
+              and (
+                    (o.dueAt is not null and o.dueAt >= :from and o.dueAt < :toExclusive)
+                    or (o.dueAt is null and o.createDate >= :from and o.createDate < :toExclusive)
+                  )
+            """)
+    long countWithinTerm(Long clubId, LocalDateTime from, LocalDateTime toExclusive);
 
     Optional<FinanceObligation> findBySourceTournamentApplicationId(Long sourceTournamentApplicationId);
 

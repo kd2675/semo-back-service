@@ -89,7 +89,7 @@
 | `test` | `30280` |
 
 - 기본 profile: `local-direct`
-- `local-direct`는 `local` DB 설정을 재사용하면서 Eureka 등록/탐색을 끄고 `SEMO_AUTH_BASE_URL`로 auth 서버를 직접 찾습니다.
+- `local-direct`는 `local` DB 설정을 재사용하면서 Eureka 등록/탐색을 끄고 `127.0.0.1`에만 바인딩한 뒤 `SEMO_AUTH_BASE_URL`로 auth 서버를 직접 찾습니다.
 - Cloud Gateway/Eureka 경유가 필요하면 기존 `local` profile을 사용합니다.
 - 테스트 profile: H2 in-memory datasource 사용
 - `muse-back-service`와 기본 포트가 같아서 로컬 동시 실행 시 포트 조정이 필요합니다.

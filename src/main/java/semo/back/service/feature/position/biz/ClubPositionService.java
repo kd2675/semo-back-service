@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
+import semo.back.service.common.jpa.MonotonicDateTimeProvider;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubMemberPosition;
 import semo.back.service.database.pub.entity.ClubMemberPositionHistory;
@@ -38,7 +39,6 @@ import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubPositionService {
+    private final MonotonicDateTimeProvider dateTimeProvider;
     private static final String FEATURE_NOTICE = "NOTICE";
     private static final String FEATURE_POLL = "POLL";
     private static final String FEATURE_ROLE_MANAGEMENT = "ROLE_MANAGEMENT";
@@ -362,7 +363,7 @@ public class ClubPositionService {
     }
 
     private LocalDateTime currentTimestamp() {
-        return LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+        return dateTimeProvider.now();
     }
 
     private ClubPositionDetailResponse buildPositionDetail(

@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import web.common.core.response.base.dto.ResponseErrorDTO;
 import web.common.core.response.base.exception.GeneralException;
 import web.common.core.response.base.vo.Code;
@@ -57,6 +59,24 @@ public class GlobalExceptionHandler {
 
         ResponseErrorDTO errorResponse = ResponseErrorDTO.of(Code.NOT_FOUND, "Endpoint not found");
         return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ResponseErrorDTO> handleNoResourceFoundException(NoResourceFoundException ex) {
+        log.warn("Endpoint not found: method={}, path={}", ex.getHttpMethod(), ex.getResourcePath());
+
+        ResponseErrorDTO errorResponse = ResponseErrorDTO.of(Code.NOT_FOUND, "Endpoint not found");
+        return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ResponseErrorDTO> handleMethodNotSupportedException(
+            HttpRequestMethodNotSupportedException ex
+    ) {
+        log.warn("HTTP method not allowed: method={}, supported={}", ex.getMethod(), ex.getSupportedHttpMethods());
+
+        ResponseErrorDTO errorResponse = ResponseErrorDTO.of(Code.METHOD_NOT_ALLOWED, "HTTP method not allowed");
+        return new ResponseEntity<>(errorResponse, HttpStatus.METHOD_NOT_ALLOWED);
     }
 
     @ExceptionHandler(Exception.class)

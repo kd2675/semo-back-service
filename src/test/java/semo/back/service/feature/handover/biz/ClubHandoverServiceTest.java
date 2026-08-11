@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -117,7 +118,7 @@ class ClubHandoverServiceTest {
         when(clubOperatingTermRepository
                 .findFirstByClubIdAndStatusCodeOrderByStartDateDescClubOperatingTermIdDesc(1L, "ACTIVE"))
                 .thenReturn(Optional.of(current));
-        when(todoItemRepository.findByClubIdOrderByTodoItemIdDesc(1L)).thenReturn(List.of(
+        when(todoItemRepository.findAllByStatusCodes(1L, Set.of("OPEN", "IN_PROGRESS"))).thenReturn(List.of(
                 TodoItem.builder()
                         .todoItemId(11L)
                         .clubId(1L)
@@ -126,7 +127,8 @@ class ClubHandoverServiceTest {
                         .dueAt(LocalDateTime.of(2026, 7, 5, 18, 0))
                         .build()
         ));
-        when(financeRequestRepository.findByClubIdOrderByFinanceRequestIdDesc(1L)).thenReturn(List.of(
+        when(financeRequestRepository.findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(1L, "SUBMITTED"))
+                .thenReturn(List.of(
                 FinanceRequest.builder()
                         .financeRequestId(21L)
                         .clubId(1L)
@@ -135,7 +137,7 @@ class ClubHandoverServiceTest {
                         .amount(BigDecimal.valueOf(30_000))
                         .build()
         ));
-        when(clubFeedbackRepository.findFeed(1L)).thenReturn(List.of(
+        when(clubFeedbackRepository.findAllOpenFeedback(1L, Set.of("RECEIVED", "IN_REVIEW"))).thenReturn(List.of(
                 ClubFeedback.builder()
                         .feedbackId(31L)
                         .clubId(1L)

@@ -4,6 +4,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
 import semo.back.service.database.pub.entity.ClubFeedback;
 
 import java.util.List;
@@ -39,4 +40,28 @@ public interface ClubFeedbackRepository extends JpaRepository<ClubFeedback, Long
     );
 
     long countByClubIdAndDeletedFalseAndStatusCodeIn(Long clubId, Collection<String> statusCodes);
+
+    @Query("""
+            select f
+            from ClubFeedback f
+            where f.clubId = :clubId
+              and f.deleted = false
+              and f.statusCode in :statusCodes
+            order by f.createDate asc, f.feedbackId asc
+            """)
+    List<ClubFeedback> findOpenFeedback(
+            Long clubId,
+            Collection<String> statusCodes,
+            Pageable pageable
+    );
+
+    @Query("""
+            select f
+            from ClubFeedback f
+            where f.clubId = :clubId
+              and f.deleted = false
+              and f.statusCode in :statusCodes
+            order by f.createDate asc, f.feedbackId asc
+            """)
+    List<ClubFeedback> findAllOpenFeedback(Long clubId, Collection<String> statusCodes);
 }

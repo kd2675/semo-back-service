@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.attachment.biz.ResourceAttachmentService;
 import semo.back.service.feature.attachment.vo.CreateResourceAttachmentRequest;
@@ -77,12 +78,12 @@ public class ResourceAttachmentController {
     }
 
     @GetMapping("/{attachmentId}/download")
-    public ResponseEntity<byte[]> downloadAttachment(
+    public ResponseEntity<StreamingResponseBody> downloadAttachment(
             @PathVariable Long clubId,
             @PathVariable Long attachmentId,
             UserContext userContext
     ) {
-        ResourceAttachmentService.AttachmentDownload download = resourceAttachmentService.downloadAttachment(
+        ResourceAttachmentService.AttachmentDownload download = resourceAttachmentService.prepareAttachmentDownload(
                 clubId,
                 attachmentId,
                 requireUserKey(userContext)
@@ -94,8 +95,8 @@ public class ResourceAttachmentController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
                 .header("X-Content-Type-Options", "nosniff")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .contentLength(download.content().length)
-                .body(download.content());
+                .contentLength(download.sizeBytes())
+                .body(outputStream -> resourceAttachmentService.writeAttachment(download, outputStream));
     }
 
     private String requireUserKey(UserContext userContext) {

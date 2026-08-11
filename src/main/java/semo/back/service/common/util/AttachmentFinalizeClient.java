@@ -1,10 +1,13 @@
 package semo.back.service.common.util;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -30,13 +33,13 @@ public class AttachmentFinalizeClient {
         this.internalToken = internalToken;
     }
 
-    public FinalizedAttachment finalizeAttachment(String fileName, String targetDir) {
+    public FinalizedAttachment finalizeAttachment(String fileName, String targetDir, String uploadToken) {
         try {
             FinalizedAttachment response = restClient.post()
                     .uri("/files/finalize-attachment")
                     .header(INTERNAL_TOKEN_HEADER, internalToken)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(new FinalizeAttachmentRequest(fileName, targetDir))
+                    .body(new FinalizeAttachmentRequest(fileName, targetDir, uploadToken))
                     .retrieve()
                     .body(FinalizedAttachment.class);
             if (response == null
@@ -88,24 +91,36 @@ public class AttachmentFinalizeClient {
         }
     }
 
-    public byte[] downloadAttachment(String fileName) {
+    public long writeAttachment(String fileName, OutputStream outputStream) {
         try {
-            byte[] response = restClient.get()
+            Long transferred = restClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/internal/files/content")
                             .queryParam("fileName", fileName)
                             .build())
                     .header(INTERNAL_TOKEN_HEADER, internalToken)
-                    .retrieve()
-                    .body(byte[].class);
-            if (response == null || response.length == 0) {
+                    .exchange((request, response) -> transferResponse(response.getStatusCode(), response.getBody(), outputStream));
+            if (transferred == null || transferred < 1) {
                 throw new SemoException.ValidationException("첨부파일 내용이 비어 있습니다.");
             }
-            return response;
+            return transferred;
         } catch (SemoException exception) {
             throw exception;
         } catch (Exception exception) {
             throw new SemoException.ValidationException("첨부파일 다운로드에 실패했습니다.");
+        }
+    }
+
+    private long transferResponse(
+            HttpStatusCode statusCode,
+            java.io.InputStream inputStream,
+            OutputStream outputStream
+    ) throws IOException {
+        if (statusCode.isError()) {
+            throw new SemoException.ValidationException("파일 서버가 첨부파일 다운로드를 거부했습니다.");
+        }
+        try (inputStream) {
+            return inputStream.transferTo(outputStream);
         }
     }
 
@@ -115,7 +130,7 @@ public class AttachmentFinalizeClient {
                     .uri(path)
                     .header(INTERNAL_TOKEN_HEADER, internalToken)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(new FinalizeAttachmentRequest(fileName, null))
+                    .body(new FinalizeAttachmentRequest(fileName, null, null))
                     .retrieve()
                     .toBodilessEntity();
         } catch (Exception exception) {
@@ -123,7 +138,7 @@ public class AttachmentFinalizeClient {
         }
     }
 
-    private record FinalizeAttachmentRequest(String fileName, String targetDir) {
+    private record FinalizeAttachmentRequest(String fileName, String targetDir, String uploadToken) {
     }
 
     public record FinalizedAttachment(
@@ -132,6 +147,7 @@ public class AttachmentFinalizeClient {
             String contentType,
             long sizeBytes,
             String downloadUrl,
+            String uploadToken,
             boolean temporary,
             boolean newlyFinalized
     ) {

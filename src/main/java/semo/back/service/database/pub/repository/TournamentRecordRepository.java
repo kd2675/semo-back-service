@@ -10,6 +10,7 @@ import semo.back.service.database.pub.entity.TournamentRecord;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 
 public interface TournamentRecordRepository extends JpaRepository<TournamentRecord, Long> {
     Optional<TournamentRecord> findByTournamentRecordIdAndClubIdAndDeletedFalse(Long tournamentRecordId, Long clubId);
@@ -29,6 +30,11 @@ public interface TournamentRecordRepository extends JpaRepository<TournamentReco
 
     List<TournamentRecord> findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(Long clubId);
 
+    List<TournamentRecord> findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(
+            Long clubId,
+            Pageable pageable
+    );
+
     List<TournamentRecord> findByClubIdAndDeletedFalseAndPinnedTrueOrderByStartDateAscTournamentRecordIdDesc(Long clubId);
 
     List<TournamentRecord> findByClubIdAndDeletedFalseAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByPinnedDescStartDateAscTournamentRecordIdDesc(
@@ -40,4 +46,10 @@ public interface TournamentRecordRepository extends JpaRepository<TournamentReco
     List<TournamentRecord> findAllByTournamentRecordIdIn(List<Long> tournamentRecordIds);
 
     long countByClubIdAndDeletedFalseAndApprovalStatus(Long clubId, String approvalStatus);
+
+    long countByClubIdAndDeletedFalseAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+            Long clubId,
+            LocalDate endDate,
+            LocalDate startDate
+    );
 }

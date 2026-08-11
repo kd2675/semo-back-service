@@ -9,13 +9,30 @@ import semo.back.service.database.pub.entity.FinanceRequest;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 
 public interface FinanceRequestRepository extends JpaRepository<FinanceRequest, Long> {
     List<FinanceRequest> findByClubIdAndRequesterClubProfileIdOrderByFinanceRequestIdDesc(Long clubId, Long requesterClubProfileId);
 
     List<FinanceRequest> findByClubIdOrderByFinanceRequestIdDesc(Long clubId);
 
+    List<FinanceRequest> findByClubIdOrderByFinanceRequestIdDesc(Long clubId, Pageable pageable);
+
     long countByClubIdAndStatusCode(Long clubId, String statusCode);
+
+    List<FinanceRequest> findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(
+            Long clubId,
+            String statusCode,
+            Pageable pageable
+    );
+
+    List<FinanceRequest> findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(Long clubId, String statusCode);
+
+    long countByClubIdAndCreateDateGreaterThanEqualAndCreateDateLessThan(
+            Long clubId,
+            java.time.LocalDateTime from,
+            java.time.LocalDateTime toExclusive
+    );
 
     long countByClubIdAndRequesterClubProfileIdAndStatusCode(
             Long clubId,
