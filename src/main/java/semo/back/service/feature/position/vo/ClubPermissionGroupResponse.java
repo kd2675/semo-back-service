@@ -7,6 +7,8 @@ public record ClubPermissionGroupResponse(
         String displayName,
         String description,
         String iconName,
+        int policyVersion,
+        List<ClubFeatureAccessLevelResponse> accessLevels,
         List<ClubPermissionItemResponse> permissions
 ) {
 }

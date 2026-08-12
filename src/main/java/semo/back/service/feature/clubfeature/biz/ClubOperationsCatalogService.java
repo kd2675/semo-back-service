@@ -19,7 +19,6 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.FeatureCatalog;
 import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
-import semo.back.service.database.pub.repository.FeaturePermissionCatalogRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.vo.ApplyClubOperationTemplateRequest;
 import semo.back.service.feature.clubfeature.vo.ApplyClubOperationTemplateResponse;
@@ -36,6 +35,7 @@ import semo.back.service.feature.dashboard.vo.ClubDashboardWidgetResponse;
 import semo.back.service.feature.dashboard.vo.UpdateClubDashboardLayoutRequest;
 import semo.back.service.feature.dashboard.vo.UpdateClubDashboardWidgetItemRequest;
 import semo.back.service.feature.position.biz.ClubPositionService;
+import semo.back.service.feature.position.vo.ClubPositionFeatureGrantRequest;
 import semo.back.service.feature.position.vo.CreateClubPositionRequest;
 import semo.back.service.feature.todo.biz.ClubTodoCollaborationService;
 import semo.back.service.feature.todo.biz.ClubTodoService;
@@ -74,11 +74,11 @@ public class ClubOperationsCatalogService {
                                     "sports_score",
                                     "#2563EB",
                                     List.of(
-                                            "SCHEDULE_CREATE", "SCHEDULE_UPDATE_SELF", "SCHEDULE_DELETE_SELF",
-                                            "ATTENDANCE_MANAGE", "TOURNAMENT_RECORD_CREATE",
-                                            "TOURNAMENT_RECORD_UPDATE_SELF", "TOURNAMENT_RECORD_REVIEW",
-                                            "BRACKET_CREATE", "BRACKET_UPDATE_SELF", "BRACKET_REVIEW",
-                                            "TODO_VIEW", "TODO_CREATE", "TODO_ASSIGN", "TODO_MANAGE_STATUS"
+                                            grant("SCHEDULE_MANAGE", "OPERATOR"),
+                                            grant("ATTENDANCE", "OPERATOR"),
+                                            grant("TOURNAMENT_RECORD", "MANAGER"),
+                                            grant("BRACKET", "MANAGER"),
+                                            grant("TODO", "OPERATOR")
                                     )
                             ),
                             treasurerPosition()
@@ -103,11 +103,11 @@ public class ClubOperationsCatalogService {
                                     "event_note",
                                     "#7C3AED",
                                     List.of(
-                                            "NOTICE_CREATE", "NOTICE_UPDATE_SELF", "NOTICE_DELETE_SELF",
-                                            "SCHEDULE_CREATE", "SCHEDULE_UPDATE_SELF", "SCHEDULE_DELETE_SELF",
-                                            "POLL_CREATE", "POLL_UPDATE_SELF", "POLL_DELETE_SELF",
-                                            "TODO_VIEW", "TODO_CREATE", "TODO_ASSIGN", "TODO_MANAGE_STATUS",
-                                            "DECISION_VIEW", "DECISION_MANAGE"
+                                            grant("NOTICE", "OPERATOR"),
+                                            grant("SCHEDULE_MANAGE", "OPERATOR"),
+                                            grant("POLL", "OPERATOR"),
+                                            grant("TODO", "OPERATOR"),
+                                            grant("DECISION_LOG", "MANAGER")
                                     )
                             ),
                             treasurerPosition()
@@ -130,10 +130,11 @@ public class ClubOperationsCatalogService {
                             "co_present",
                             "#059669",
                             List.of(
-                                    "NOTICE_CREATE", "NOTICE_UPDATE_SELF", "NOTICE_DELETE_SELF",
-                                    "SCHEDULE_CREATE", "SCHEDULE_UPDATE_SELF", "SCHEDULE_DELETE_SELF",
-                                    "POLL_CREATE", "POLL_UPDATE_SELF", "POLL_DELETE_SELF",
-                                    "ATTENDANCE_MANAGE", "TODO_VIEW", "TODO_CREATE", "TODO_ASSIGN", "TODO_MANAGE_STATUS"
+                                    grant("NOTICE", "OPERATOR"),
+                                    grant("SCHEDULE_MANAGE", "OPERATOR"),
+                                    grant("POLL", "OPERATOR"),
+                                    grant("ATTENDANCE", "OPERATOR"),
+                                    grant("TODO", "OPERATOR")
                             )
                     ))
             )
@@ -204,7 +205,6 @@ public class ClubOperationsCatalogService {
     private final ClubTodoService clubTodoService;
     private final ClubTodoCollaborationService clubTodoCollaborationService;
     private final FeatureCatalogRepository featureCatalogRepository;
-    private final FeaturePermissionCatalogRepository featurePermissionCatalogRepository;
     private final ClubPositionRepository clubPositionRepository;
 
     public ClubOperationsCatalogResponse getCatalog(Long clubId, String userKey) {
@@ -410,11 +410,6 @@ public class ClubOperationsCatalogService {
             String userKey,
             List<PositionDefinition> positions
     ) {
-        Set<String> availablePermissionKeys = featurePermissionCatalogRepository
-                .findByActiveTrueOrderByFeatureKeyAscSortOrderAscPermissionKeyAsc()
-                .stream()
-                .map(permission -> permission.getPermissionKey())
-                .collect(Collectors.toSet());
         Set<String> existingPositionCodes = clubPositionRepository
                 .findByClubIdOrderByDisplayNameAscClubPositionIdAsc(clubId)
                 .stream()
@@ -425,9 +420,6 @@ public class ClubOperationsCatalogService {
             if (existingPositionCodes.contains(position.positionCode())) {
                 continue;
             }
-            List<String> permissionKeys = position.permissionKeys().stream()
-                    .filter(availablePermissionKeys::contains)
-                    .toList();
             clubPositionService.createPosition(
                     clubId,
                     userKey,
@@ -437,7 +429,7 @@ public class ClubOperationsCatalogService {
                             position.description(),
                             position.iconName(),
                             position.colorHex(),
-                            permissionKeys
+                            position.featureGrants()
                     )
             );
             createdPositionNames.add(position.displayName());
@@ -510,15 +502,15 @@ public class ClubOperationsCatalogService {
         return new PositionDefinition(
                 "TREASURER",
                 "회계",
-                "회비 발행, 수납, 지출, 정산과 기간 마감을 담당합니다.",
+                "회비 발행과 지출 입력을 담당합니다. 승인, 내보내기와 기간 마감은 별도로 부여합니다.",
                 "account_balance_wallet",
                 "#D97706",
-                List.of(
-                        "FINANCE_VIEW", "FINANCE_BILLING_ISSUE", "FINANCE_REQUEST_REVIEW",
-                        "FINANCE_EXPENSE_CREATE", "FINANCE_PAYMENT_UPDATE", "FINANCE_EXPORT",
-                        "FINANCE_PERIOD_CLOSE"
-                )
+                List.of(grant("FINANCE", "OPERATOR"))
         );
+    }
+
+    private static ClubPositionFeatureGrantRequest grant(String featureKey, String accessLevel) {
+        return new ClubPositionFeatureGrantRequest(featureKey, accessLevel, null, List.of());
     }
 
     private record PresetDefinition(
@@ -538,7 +530,7 @@ public class ClubOperationsCatalogService {
             String description,
             String iconName,
             String colorHex,
-            List<String> permissionKeys
+            List<ClubPositionFeatureGrantRequest> featureGrants
     ) {
     }
 

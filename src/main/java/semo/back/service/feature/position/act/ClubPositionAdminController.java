@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.feature.position.biz.ClubPositionService;
@@ -92,10 +93,11 @@ public class ClubPositionAdminController {
     public ResponseDataDTO<Boolean> deletePosition(
             @PathVariable Long clubId,
             @PathVariable Long clubPositionId,
+            @RequestParam Long version,
             UserContext userContext
     ) {
-        clubPositionService.deletePosition(clubId, clubPositionId, requireUserKey(userContext));
-        return ResponseDataDTO.of(true, "직책 삭제 성공");
+        clubPositionService.deletePosition(clubId, clubPositionId, version, requireUserKey(userContext));
+        return ResponseDataDTO.of(true, "직책 사용 종료 성공");
     }
 
     private String requireUserKey(UserContext userContext) {

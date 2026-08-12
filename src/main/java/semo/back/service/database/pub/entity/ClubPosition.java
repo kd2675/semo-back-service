@@ -54,4 +54,26 @@ public class ClubPosition extends CommonDateEntity {
 
     @Column(name = "created_by_club_profile_id")
     private Long createdByClubProfileId;
+
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private Long version = 0L;
+
+    public void updateDetails(
+            String displayName,
+            String description,
+            String iconName,
+            String colorHex,
+            boolean active
+    ) {
+        this.displayName = displayName;
+        this.description = description;
+        this.iconName = iconName;
+        this.colorHex = colorHex;
+        this.active = active;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }

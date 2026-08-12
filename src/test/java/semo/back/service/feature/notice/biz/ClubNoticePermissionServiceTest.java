@@ -27,6 +27,7 @@ import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 import semo.back.service.feature.notice.vo.UpsertClubNoticeRequest;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
+import semo.back.service.feature.position.biz.ClubCapability;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -209,7 +210,7 @@ class ClubNoticePermissionServiceTest {
                 .build());
     }
 
-    private void assignPositionPermissions(Long clubId, ClubMember member, String... permissionKeys) {
+    private void assignPositionPermissions(Long clubId, ClubMember member, ClubCapability... capabilities) {
         long nextCodeSuffix = clubPositionRepository.count() + 1;
         ClubPosition position = clubPositionRepository.save(ClubPosition.builder()
                 .clubId(clubId)
@@ -221,10 +222,10 @@ class ClubNoticePermissionServiceTest {
                 .active(true)
                 .build());
 
-        for (String permissionKey : permissionKeys) {
+        for (ClubCapability capability : capabilities) {
             clubPositionPermissionRepository.save(ClubPositionPermission.builder()
                     .clubPositionId(position.getClubPositionId())
-                    .permissionKey(permissionKey)
+                    .permissionKey(capability.permissionKey())
                     .build());
         }
 

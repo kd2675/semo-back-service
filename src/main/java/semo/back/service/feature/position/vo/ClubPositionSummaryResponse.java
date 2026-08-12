@@ -10,8 +10,10 @@ public record ClubPositionSummaryResponse(
         String iconName,
         String colorHex,
         boolean active,
+        long version,
         int permissionCount,
         int memberCount,
+        List<ClubPositionFeatureGrantResponse> featureGrants,
         List<String> permissionKeys
 ) {
 }

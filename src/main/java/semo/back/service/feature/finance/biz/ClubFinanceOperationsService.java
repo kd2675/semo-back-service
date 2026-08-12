@@ -27,6 +27,7 @@ import semo.back.service.database.pub.repository.FinancePeriodRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.finance.biz.policy.ClubFinancePermissionService;
 import semo.back.service.feature.finance.biz.support.ClubFinanceSupport;
 import semo.back.service.feature.finance.vo.ClubFinanceOperationsResponse;
@@ -46,6 +47,7 @@ public class ClubFinanceOperationsService {
     private static final String PERIOD_STATUS_CLOSED = "CLOSED";
 
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubFeatureService clubFeatureService;
     private final ClubFinancePermissionService clubFinancePermissionService;
     private final ClubFinanceSupport clubFinanceSupport;
     private final FinanceAccountRepository financeAccountRepository;
@@ -85,6 +87,9 @@ public class ClubFinanceOperationsService {
     }
 
     public List<FinanceScheduleOptionResponse> getScheduleOptions(Long clubId) {
+        if (!clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")) {
+            return List.of();
+        }
         return clubScheduleEventRepository.findScheduledBetween(
                         clubId,
                         LocalDateTime.now().minusYears(1),
@@ -330,6 +335,9 @@ public class ClubFinanceOperationsService {
     public ClubScheduleEvent resolveScheduleEvent(Long clubId, Long linkedScheduleEventId) {
         if (linkedScheduleEventId == null) {
             return null;
+        }
+        if (!clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")) {
+            throw new SemoException.ValidationException("일정 기능이 비활성화되어 재정 항목에 일정을 연결할 수 없습니다.");
         }
         return clubScheduleEventRepository.findByEventIdAndClubId(linkedScheduleEventId, clubId)
                 .filter(event -> !"CANCELLED".equals(event.getEventStatus()))

@@ -233,8 +233,8 @@ public class ClubTournamentService {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         TournamentRecord current = getTournamentForUpdate(clubId, tournamentRecordId);
-        if (!APPROVAL_PENDING.equals(current.getApprovalStatus())) {
-            throw new SemoException.ValidationException("승인 대기 중인 대회만 검토할 수 있습니다.");
+        if (current.getCancelledAt() != null || STATUS_COMPLETED.equals(resolveTournamentStatus(current))) {
+            throw new SemoException.ValidationException("취소되었거나 종료된 대회는 수정할 수 없습니다.");
         }
         ClubTournamentPermissionService.TournamentActionPermission permission =
                 clubTournamentPermissionService.getActionPermission(access, current.getAuthorClubProfileId());
@@ -299,16 +299,16 @@ public class ClubTournamentService {
         if (!clubTournamentPermissionService.canReviewTournament(access)) {
             throw new SemoException.ForbiddenException("대회 승인 검토 권한이 없습니다.");
         }
-        TournamentRecord current = getTournament(clubId, tournamentRecordId);
+        TournamentRecord current = getTournamentForUpdate(clubId, tournamentRecordId);
+        if (!APPROVAL_PENDING.equals(current.getApprovalStatus())) {
+            throw new SemoException.ValidationException("승인 대기 중인 대회만 검토할 수 있습니다.");
+        }
         String approvalStatus = clubTournamentSupport.normalizeTournamentApprovalStatus(
                 request.approvalStatus()
         );
         String rejectionReason = clubTournamentSupport.trimToNull(request.rejectionReason());
         if (APPROVAL_REJECTED.equals(approvalStatus) && rejectionReason == null) {
             throw new SemoException.ValidationException("대회 거절 사유를 입력해야 합니다.");
-        }
-        if (APPROVAL_APPROVED.equals(current.getApprovalStatus()) && APPROVAL_REJECTED.equals(approvalStatus)) {
-            throw new SemoException.ValidationException("이미 승인된 대회는 거절 상태로 되돌릴 수 없습니다.");
         }
         ClubActivityContextHolder.setDetails(
                 "대회 '" + current.getTitle() + "'을 " + approvalStatus + " 처리했습니다.",
@@ -377,11 +377,21 @@ public class ClubTournamentService {
     ) {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        TournamentRecord current = getTournament(clubId, tournamentRecordId);
+        TournamentRecord current = getTournamentForUpdate(clubId, tournamentRecordId);
         ClubTournamentPermissionService.TournamentActionPermission permission =
                 clubTournamentPermissionService.getActionPermission(access, current.getAuthorClubProfileId());
         if (!permission.canCancel()) {
             throw new SemoException.ForbiddenException("대회를 취소할 권한이 없습니다.");
+        }
+        if (current.getCancelledAt() != null) {
+            throw new SemoException.ConflictException("이미 취소된 대회입니다.");
+        }
+        if (STATUS_COMPLETED.equals(resolveTournamentStatus(current))) {
+            throw new SemoException.ValidationException("이미 종료된 대회는 취소할 수 없습니다.");
+        }
+        String cancelReason = clubTournamentSupport.trimToNull(request == null ? null : request.cancelReason());
+        if (cancelReason == null) {
+            throw new SemoException.ValidationException("대회 취소 사유를 입력해야 합니다.");
         }
         ClubActivityContextHolder.setDetails(
                 "대회 '" + current.getTitle() + "'을 조기 취소했습니다.",
@@ -414,13 +424,29 @@ public class ClubTournamentService {
                 .sharedToCalendar(current.isSharedToCalendar())
                 .pinned(current.isPinned())
                 .cancelledAt(LocalDateTime.now())
-                .cancelReason(clubTournamentSupport.trimToNull(request == null ? null : request.cancelReason()))
+                .cancelReason(cancelReason)
                 .deleted(false)
                 .build());
         syncTournamentShares(saved);
-        tournamentApplicationRepository
-                .findByTournamentRecordIdOrderByCreateDateAscTournamentApplicationIdAsc(tournamentRecordId)
-                .forEach(tournamentFinanceLinkService::waivePendingTournamentFee);
+        List<TournamentApplication> applications = tournamentApplicationRepository
+                .findByTournamentRecordIdOrderByCreateDateAscTournamentApplicationIdAsc(tournamentRecordId);
+        applications.forEach(tournamentFinanceLinkService::waivePendingTournamentFee);
+        applications.stream()
+                .filter(application -> isActiveApplicationStatus(application.getApplicationStatus()))
+                .forEach(application -> clubNotificationPublisher.notifyClubProfile(
+                        application.getClubProfileId(),
+                        new NotificationCommand(
+                                clubId,
+                                "TOURNAMENT_CANCELLED",
+                                "대회가 취소되었습니다",
+                                "'" + saved.getTitle() + "' 대회가 취소되었습니다. · 사유: " + cancelReason,
+                                "TOURNAMENT",
+                                saved.getTournamentRecordId(),
+                                "/clubs/" + clubId + "/more/tournaments/" + saved.getTournamentRecordId(),
+                                "tournament:" + saved.getTournamentRecordId() + ":cancelled:"
+                                        + application.getTournamentApplicationId()
+                        )
+                ));
         return buildTournamentDetail(access, saved);
     }
 
@@ -851,6 +877,7 @@ public class ClubTournamentService {
                 tournament.isFeeRequired(),
                 tournament.getFeeAmount(),
                 tournament.getFeeCurrencyCode(),
+                tournamentFinanceLinkService.isFinanceIntegrationEnabled(tournament.getClubId()),
                 tournament.isSharedToBoard(),
                 tournament.isSharedToCalendar(),
                 tournament.isPinned(),
@@ -865,8 +892,8 @@ public class ClubTournamentService {
                 viewerState.applicationStatus(),
                 viewerState.participating(),
                 canReviewTournament,
-                actionPermission.canEdit(),
-                actionPermission.canCancel(),
+                actionPermission.canEdit() && canModifyTournament(tournament),
+                actionPermission.canCancel() && canModifyTournament(tournament),
                 clubTournamentPermissionService.canDeleteTournament(access),
                 canManageApplications,
                 (canManageApplications ? applications : List.<TournamentApplication>of()).stream()
@@ -951,8 +978,8 @@ public class ClubTournamentService {
                             tournament.isPinned(),
                             viewerState.mine(),
                             viewerState.participating(),
-                            permission.canEdit(),
-                            permission.canCancel(),
+                            permission.canEdit() && canModifyTournament(tournament),
+                            permission.canCancel() && canModifyTournament(tournament),
                             clubTournamentPermissionService.canDeleteTournament(access)
                     );
                 })
@@ -1403,6 +1430,11 @@ public class ClubTournamentService {
 
     private boolean isArchived(String status) {
         return STATUS_COMPLETED.equals(status) || STATUS_CANCELLED.equals(status);
+    }
+
+    private boolean canModifyTournament(TournamentRecord tournament) {
+        String status = resolveTournamentStatus(tournament);
+        return !STATUS_COMPLETED.equals(status) && !STATUS_CANCELLED.equals(status);
     }
 
     private String resolveTournamentStatus(TournamentRecord tournament) {

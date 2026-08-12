@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.FeaturePermissionCatalog;
+import semo.back.service.database.pub.entity.ClubPositionFeatureGrant;
 import semo.back.service.database.pub.repository.ClubActivityLogRepository;
 import semo.back.service.database.pub.repository.ClubBoardItemRepository;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
@@ -16,7 +17,9 @@ import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubNoticeRepository;
 import semo.back.service.database.pub.repository.ClubPositionPermissionRepository;
+import semo.back.service.database.pub.repository.ClubPositionFeatureGrantRepository;
 import semo.back.service.database.pub.repository.ClubPositionRepository;
+import semo.back.service.database.pub.repository.ClubPositionSensitiveGrantRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
@@ -34,6 +37,7 @@ import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 import semo.back.service.feature.activity.biz.ClubActivityRecorder;
 import semo.back.service.feature.activity.biz.ClubActivityService;
 import semo.back.service.feature.position.vo.CreateClubPositionRequest;
+import semo.back.service.feature.position.vo.ClubPositionFeatureGrantRequest;
 import semo.back.service.feature.position.vo.UpdateClubPositionRequest;
 
 import java.util.List;
@@ -66,6 +70,9 @@ class ClubPositionServiceTest {
     private ClubPositionService clubPositionService;
 
     @Autowired
+    private ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
+
+    @Autowired
     private ClubActivityLogRepository clubActivityLogRepository;
 
     @Autowired
@@ -91,6 +98,12 @@ class ClubPositionServiceTest {
 
     @Autowired
     private ClubPositionPermissionRepository clubPositionPermissionRepository;
+
+    @Autowired
+    private ClubPositionFeatureGrantRepository clubPositionFeatureGrantRepository;
+
+    @Autowired
+    private ClubPositionSensitiveGrantRepository clubPositionSensitiveGrantRepository;
 
     @Autowired
     private ClubPositionRepository clubPositionRepository;
@@ -135,6 +148,8 @@ class ClubPositionServiceTest {
         clubMemberPositionHistoryRepository.deleteAll();
         clubMemberPositionRepository.deleteAll();
         clubPositionPermissionRepository.deleteAll();
+        clubPositionSensitiveGrantRepository.deleteAll();
+        clubPositionFeatureGrantRepository.deleteAll();
         clubPositionRepository.deleteAll();
         clubFeatureRepository.deleteAll();
         clubProfileRepository.deleteAll();
@@ -166,7 +181,7 @@ class ClubPositionServiceTest {
                         null,
                         "campaign",
                         "#c76117",
-                        List.of("NOTICE_CREATE")
+                        noticeOperatorGrants()
                 )
         );
 
@@ -174,14 +189,33 @@ class ClubPositionServiceTest {
 
         assertThat(response.permissionGroups())
                 .extracting(item -> item.featureKey() + ":" + item.displayName())
-                .containsExactly(
-                        "NOTICE:게시판 공지",
-                        "ROLE_MANAGEMENT:직책관리"
-                );
+                .containsExactly("NOTICE:게시판 공지");
+        assertThat(response.permissionGroups().getFirst().accessLevels())
+                .extracting(item -> item.accessLevel())
+                .containsExactly("NONE", "OPERATOR");
+        assertThat(response.permissionGroups().getFirst().accessLevels().getLast().permissionKeys())
+                .containsExactlyInAnyOrderElementsOf(noticeOperatorPermissions());
         assertThat(response.positions()).singleElement().satisfies(position -> {
-            assertThat(position.permissionKeys()).containsExactly("NOTICE_CREATE");
-            assertThat(position.permissionCount()).isEqualTo(1);
+            assertThat(position.permissionKeys()).containsExactlyInAnyOrderElementsOf(noticeOperatorPermissions());
+            assertThat(position.permissionCount()).isEqualTo(3);
+            assertThat(position.featureGrants()).singleElement().satisfies(grant -> {
+                assertThat(grant.featureKey()).isEqualTo("NOTICE");
+                assertThat(grant.accessLevel()).isEqualTo("OPERATOR");
+                assertThat(grant.policyVersion()).isEqualTo(1);
+                assertThat(grant.status()).isEqualTo(ClubPositionGrantService.STATUS_CURRENT);
+            });
         });
+        assertThat(clubPositionFeatureGrantRepository.findAll()).singleElement().satisfies(grant -> {
+            assertThat(grant.getFeatureKey()).isEqualTo("NOTICE");
+            assertThat(grant.getAccessLevel()).isEqualTo("OPERATOR");
+        });
+        assertThat(response.positionTemplates())
+                .filteredOn(template -> template.templateKey().equals("CONTENT_COORDINATOR"))
+                .singleElement()
+                .satisfies(template -> {
+                    assertThat(template.featureCount()).isEqualTo(1);
+                    assertThat(template.permissionKeys()).containsExactlyInAnyOrderElementsOf(noticeOperatorPermissions());
+                });
     }
 
     @Test
@@ -202,10 +236,58 @@ class ClubPositionServiceTest {
                         null,
                         "shield",
                         "#0053dd",
-                        List.of("POLL_CREATE")
+                        List.of(grant("POLL", "OPERATOR"))
                 )
         )).isInstanceOf(SemoException.ValidationException.class)
-                .hasMessageContaining("지원하지 않는 하위 권한");
+                .hasMessageContaining("활성화되지 않은 기능");
+    }
+
+    @Test
+    void createPositionRejectsNonStandardPermissionCombination() {
+        Long clubId = createClub("role-owner-standard", "직책 표준 수준 검증 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-standard",
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "ROLE_MANAGEMENT"))
+        );
+
+        assertThatThrownBy(() -> clubPositionService.createPosition(
+                clubId,
+                "role-owner-standard",
+                new CreateClubPositionRequest(
+                        "불완전한 공지 담당",
+                        "PARTIAL_NOTICE",
+                        null,
+                        "campaign",
+                        "#0053dd",
+                        List.of(grant("NOTICE", "PARTIAL"))
+                )
+        )).isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("지원하지 않는 운영 수준");
+    }
+
+    @Test
+    void createPositionRejectsInvalidColorValue() {
+        Long clubId = createClub("role-owner-color", "직책 색상 검증 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-color",
+                new UpdateClubFeaturesRequest(List.of("ROLE_MANAGEMENT"))
+        );
+
+        assertThatThrownBy(() -> clubPositionService.createPosition(
+                clubId,
+                "role-owner-color",
+                new CreateClubPositionRequest(
+                        "색상 오류",
+                        "INVALID_COLOR",
+                        null,
+                        "shield",
+                        "orange",
+                        List.of()
+                )
+        )).isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("HEX 형식");
     }
 
     @Test
@@ -226,7 +308,10 @@ class ClubPositionServiceTest {
                         null,
                         "shield",
                         "#0053dd",
-                        List.of("NOTICE_CREATE", "POLL_CREATE")
+                        List.of(
+                                grant("NOTICE", "OPERATOR"),
+                                grant("POLL", "OPERATOR")
+                        )
                 )
         );
 
@@ -243,8 +328,15 @@ class ClubPositionServiceTest {
         );
         assertThat(hiddenBeforeUpdate.permissionGroups())
                 .extracting(item -> item.featureKey())
-                .containsExactly("NOTICE", "ROLE_MANAGEMENT");
-        assertThat(hiddenBeforeUpdate.position().permissionKeys()).containsExactly("NOTICE_CREATE");
+                .containsExactly("NOTICE");
+        assertThat(hiddenBeforeUpdate.position().permissionKeys()).containsExactlyInAnyOrder(
+                "NOTICE_CREATE",
+                "NOTICE_UPDATE_SELF",
+                "NOTICE_DELETE_SELF",
+                "POLL_CREATE",
+                "POLL_UPDATE_SELF",
+                "POLL_DELETE_SELF"
+        );
 
         var updated = clubPositionService.updatePosition(
                 clubId,
@@ -256,17 +348,163 @@ class ClubPositionServiceTest {
                         "공지 운영 담당",
                         "shield",
                         "#0053dd",
+                        created.position().version(),
                         true,
-                        List.of("NOTICE_CREATE", "NOTICE_UPDATE_SELF")
+                        noticeOperatorGrants()
                 )
         );
 
         assertThat(updated.position().permissionKeys())
-                .containsExactlyInAnyOrder("NOTICE_CREATE", "NOTICE_UPDATE_SELF");
-        assertThat(updated.position().permissionCount()).isEqualTo(2);
+                .containsExactlyInAnyOrder(
+                        "NOTICE_CREATE",
+                        "NOTICE_UPDATE_SELF",
+                        "NOTICE_DELETE_SELF",
+                        "POLL_CREATE",
+                        "POLL_UPDATE_SELF",
+                        "POLL_DELETE_SELF"
+                );
+        assertThat(updated.position().version()).isEqualTo(created.position().version() + 1);
+        assertThat(updated.position().permissionCount()).isEqualTo(6);
         assertThat(clubPositionPermissionRepository.findByClubPositionId(created.position().clubPositionId()))
                 .extracting(item -> item.getPermissionKey())
-                .containsExactlyInAnyOrder("NOTICE_CREATE", "NOTICE_UPDATE_SELF", "POLL_CREATE");
+                .containsExactlyInAnyOrder(
+                        "NOTICE_CREATE",
+                        "NOTICE_UPDATE_SELF",
+                        "NOTICE_DELETE_SELF",
+                        "POLL_CREATE",
+                        "POLL_UPDATE_SELF",
+                        "POLL_DELETE_SELF"
+                );
+    }
+
+    @Test
+    void updatePosition_rejectsChangingStablePositionCode() {
+        Long clubId = createClub("role-owner-stable-code", "직책 코드 불변 테스트 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-stable-code",
+                new UpdateClubFeaturesRequest(List.of("ROLE_MANAGEMENT"))
+        );
+        var created = clubPositionService.createPosition(
+                clubId,
+                "role-owner-stable-code",
+                new CreateClubPositionRequest("총무", "TREASURER", null, "payments", "#0053dd", List.of())
+        );
+
+        assertThatThrownBy(() -> clubPositionService.updatePosition(
+                clubId,
+                created.position().clubPositionId(),
+                "role-owner-stable-code",
+                new UpdateClubPositionRequest(
+                        "재정 담당",
+                        "FINANCE_MANAGER",
+                        null,
+                        "payments",
+                        "#0053dd",
+                        created.position().version(),
+                        true,
+                        List.of()
+                )
+        )).isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("생성 후 변경할 수 없습니다");
+    }
+
+    @Test
+    void updatePosition_staleVersion_throwsConflictWithoutChangingGrants() {
+        Long clubId = createClub("role-owner-stale-version", "직책 동시 수정 테스트 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-stale-version",
+                new UpdateClubFeaturesRequest(List.of("NOTICE"))
+        );
+        var created = clubPositionService.createPosition(
+                clubId,
+                "role-owner-stale-version",
+                new CreateClubPositionRequest(
+                        "공지 담당",
+                        "NOTICE_OPERATOR",
+                        null,
+                        "campaign",
+                        "#0053dd",
+                        noticeOperatorGrants()
+                )
+        );
+
+        assertThatThrownBy(() -> clubPositionService.updatePosition(
+                clubId,
+                created.position().clubPositionId(),
+                "role-owner-stale-version",
+                new UpdateClubPositionRequest(
+                        "오래된 수정",
+                        "NOTICE_OPERATOR",
+                        null,
+                        "campaign",
+                        "#0053dd",
+                        created.position().version() + 1,
+                        true,
+                        List.of()
+                )
+        )).isInstanceOf(SemoException.ConflictException.class)
+                .hasMessageContaining("최신 내용을 다시 불러온 뒤");
+
+        assertThat(clubPositionPermissionRepository.findByClubPositionId(created.position().clubPositionId()))
+                .extracting(item -> item.getPermissionKey())
+                .containsExactlyInAnyOrderElementsOf(noticeOperatorPermissions());
+    }
+
+    @Test
+    void updatePosition_previousPolicyVersion_preservesExistingProjectionUntilExplicitUpgrade() {
+        Long clubId = createClub("role-owner-policy-version", "직책 정책 버전 테스트 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-policy-version",
+                new UpdateClubFeaturesRequest(List.of("NOTICE"))
+        );
+        var created = clubPositionService.createPosition(
+                clubId,
+                "role-owner-policy-version",
+                new CreateClubPositionRequest(
+                        "공지 담당",
+                        "NOTICE_OPERATOR",
+                        null,
+                        "campaign",
+                        "#0053dd",
+                        noticeOperatorGrants()
+                )
+        );
+        Long positionId = created.position().clubPositionId();
+        clubPositionFeatureGrantRepository.deleteAll();
+        clubPositionFeatureGrantRepository.saveAndFlush(ClubPositionFeatureGrant.builder()
+                .clubPositionId(positionId)
+                .featureKey("NOTICE")
+                .accessLevel("OPERATOR")
+                .policyVersion(0)
+                .build());
+
+        var updated = clubPositionService.updatePosition(
+                clubId,
+                positionId,
+                "role-owner-policy-version",
+                new UpdateClubPositionRequest(
+                        "공지 담당",
+                        "NOTICE_OPERATOR",
+                        "이전 정책을 유지합니다.",
+                        "campaign",
+                        "#0053dd",
+                        created.position().version(),
+                        true,
+                        List.of(new ClubPositionFeatureGrantRequest("NOTICE", "OPERATOR", 0, List.of()))
+                )
+        );
+
+        assertThat(updated.position().featureGrants()).singleElement().satisfies(grant -> {
+            assertThat(grant.policyVersion()).isZero();
+            assertThat(grant.currentPolicyVersion()).isEqualTo(1);
+            assertThat(grant.status()).isEqualTo(ClubPositionGrantService.STATUS_POLICY_UPDATE_AVAILABLE);
+        });
+        assertThat(clubPositionPermissionRepository.findByClubPositionId(positionId))
+                .extracting(item -> item.getPermissionKey())
+                .containsExactlyInAnyOrderElementsOf(noticeOperatorPermissions());
     }
 
     @Test
@@ -287,7 +525,7 @@ class ClubPositionServiceTest {
                         null,
                         "shield",
                         "#0053dd",
-                        List.of("NOTICE_CREATE")
+                        noticeOperatorGrants()
                 )
         );
         var manager = clubPositionService.createPosition(
@@ -321,6 +559,8 @@ class ClubPositionServiceTest {
         assertThat(clubMemberPositionRepository.findByClubMemberId(ownerMember.getClubMemberId()))
                 .extracting(item -> item.getClubPositionId())
                 .containsExactlyInAnyOrder(leader.position().clubPositionId(), manager.position().clubPositionId());
+        assertThat(clubPositionService.getRoleManagement(clubId, "role-owner-004").assignedMemberCount())
+                .isEqualTo(1);
     }
 
     @Test
@@ -340,7 +580,7 @@ class ClubPositionServiceTest {
                         null,
                         "shield",
                         "#0053dd",
-                        List.of("NOTICE_CREATE")
+                        noticeOperatorGrants()
                 )
         );
         var access = clubAccessResolver.requireAdmin(clubId, "role-owner-005");
@@ -376,7 +616,7 @@ class ClubPositionServiceTest {
     }
 
     @Test
-    void getRoleManagement_memberWithViewPermissionReceivesReadOnlyCapabilities() {
+    void getRoleManagement_memberWithLegacyGovernancePermissionIsRejected() {
         Long clubId = createClub("role-owner-view", "직책 위임 테스트 클럽");
         clubFeatureService.updateClubFeatures(
                 clubId,
@@ -392,9 +632,26 @@ class ClubPositionServiceTest {
                         null,
                         "visibility",
                         "#0053dd",
-                        List.of("ROLE_MANAGEMENT_VIEW")
+                        List.of()
                 )
         );
+        clubPositionPermissionRepository.save(semo.back.service.database.pub.entity.ClubPositionPermission.builder()
+                .clubPositionId(viewerPosition.position().clubPositionId())
+                .permissionKey("ROLE_MANAGEMENT_VIEW")
+                .build());
+        featurePermissionCatalogRepository.save(FeaturePermissionCatalog.builder()
+                .permissionKey("ROLE_MANAGEMENT_FUTURE")
+                .featureKey("ROLE_MANAGEMENT")
+                .displayName("미래 거버넌스 권한")
+                .description("향후 추가되는 거버넌스 권한도 위임되지 않아야 합니다.")
+                .ownershipScope("CLUB")
+                .active(true)
+                .sortOrder(999)
+                .build());
+        clubPositionPermissionRepository.save(semo.back.service.database.pub.entity.ClubPositionPermission.builder()
+                .clubPositionId(viewerPosition.position().clubPositionId())
+                .permissionKey("ROLE_MANAGEMENT_FUTURE")
+                .build());
         var profileUser = profileUserRepository.save(semo.back.service.database.pub.entity.ProfileUser.builder()
                 .userKey("delegated-role-viewer")
                 .displayName("위임 조회자")
@@ -417,15 +674,183 @@ class ClubPositionServiceTest {
                 List.of(viewerPosition.position().clubPositionId())
         );
 
-        var response = clubPositionService.getRoleManagement(clubId, "delegated-role-viewer");
+        assertThat(clubPositionPermissionEvaluator.getPermissionKeysForMember(clubId, member.getClubMemberId()))
+                .doesNotContain("ROLE_MANAGEMENT_VIEW", "ROLE_MANAGEMENT_FUTURE");
+        assertThatThrownBy(() -> clubPositionService.getRoleManagement(clubId, "delegated-role-viewer"))
+                .isInstanceOf(SemoException.ForbiddenException.class);
+    }
 
-        assertThat(List.of(
-                response.admin(),
-                response.canCreate(),
-                response.canUpdate(),
-                response.canDelete(),
-                response.canAssign()
-        )).containsExactly(false, false, false, false, false);
+    @Test
+    void deletePosition_retiresAssignmentsAndPreservesHistory() {
+        Long clubId = createClub("role-owner-retire", "직책 사용 종료 테스트 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-retire",
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "ROLE_MANAGEMENT"))
+        );
+        var position = clubPositionService.createPosition(
+                clubId,
+                "role-owner-retire",
+                new CreateClubPositionRequest(
+                        "운영 담당",
+                        "OPERATIONS",
+                        null,
+                        "shield",
+                        "#0053dd",
+                        noticeOperatorGrants()
+                )
+        );
+        var access = clubAccessResolver.requireAdmin(clubId, "role-owner-retire");
+        var ownerMember = clubMemberRepository.findByClubIdOrderByClubMemberIdAsc(clubId).getFirst();
+        Long positionId = position.position().clubPositionId();
+        clubPositionService.replaceMemberPositions(access, ownerMember, List.of(positionId));
+
+        clubPositionService.deletePosition(clubId, positionId, position.position().version(), "role-owner-retire");
+
+        assertThat(clubPositionRepository.findById(positionId)).hasValueSatisfying(retired ->
+                assertThat(retired.isActive()).isFalse()
+        );
+        assertThat(clubMemberPositionRepository.findByClubMemberId(ownerMember.getClubMemberId())).isEmpty();
+        assertThat(clubMemberPositionHistoryRepository.findOpenHistories(ownerMember.getClubMemberId(), positionId)).isEmpty();
+        assertThat(clubPositionPermissionRepository.findByClubPositionId(positionId))
+                .extracting(item -> item.getPermissionKey())
+                .containsExactlyInAnyOrderElementsOf(noticeOperatorPermissions());
+    }
+
+    @Test
+    void deletePosition_staleVersion_throwsConflictWithoutDeactivatingPosition() {
+        Long clubId = createClub("role-owner-stale-delete", "직책 종료 충돌 테스트 클럽");
+        var position = clubPositionService.createPosition(
+                clubId,
+                "role-owner-stale-delete",
+                new CreateClubPositionRequest(
+                        "운영 담당",
+                        "OPERATIONS",
+                        null,
+                        "shield",
+                        "#0053dd",
+                        List.of()
+                )
+        );
+        Long positionId = position.position().clubPositionId();
+
+        assertThatThrownBy(() -> clubPositionService.deletePosition(
+                clubId,
+                positionId,
+                position.position().version() + 1,
+                "role-owner-stale-delete"
+        )).isInstanceOf(SemoException.ConflictException.class)
+                .hasMessageContaining("최신 내용을 다시 불러온 뒤");
+        assertThat(clubPositionRepository.findById(positionId)).hasValueSatisfying(current ->
+                assertThat(current.isActive()).isTrue()
+        );
+    }
+
+    @Test
+    void updatePosition_deactivationRetiresAssignmentsAndPreservesHistory() {
+        Long clubId = createClub("role-owner-deactivate", "직책 비활성화 테스트 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-deactivate",
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "ROLE_MANAGEMENT"))
+        );
+        var position = clubPositionService.createPosition(
+                clubId,
+                "role-owner-deactivate",
+                new CreateClubPositionRequest(
+                        "공지 담당",
+                        "NOTICE_OPERATOR",
+                        "공지를 운영합니다.",
+                        "campaign",
+                        "#0053dd",
+                        noticeOperatorGrants()
+                )
+        );
+        var access = clubAccessResolver.requireAdmin(clubId, "role-owner-deactivate");
+        var ownerMember = clubMemberRepository.findByClubIdOrderByClubMemberIdAsc(clubId).getFirst();
+        Long positionId = position.position().clubPositionId();
+        clubPositionService.replaceMemberPositions(access, ownerMember, List.of(positionId));
+
+        var updated = clubPositionService.updatePosition(
+                clubId,
+                positionId,
+                "role-owner-deactivate",
+                new UpdateClubPositionRequest(
+                        "공지 담당",
+                        "NOTICE_OPERATOR",
+                        "공지를 운영합니다.",
+                        "campaign",
+                        "#0053dd",
+                        position.position().version(),
+                        false,
+                        noticeOperatorGrants()
+                )
+        );
+
+        assertThat(updated.position().active()).isFalse();
+        assertThat(clubMemberPositionRepository.findByClubMemberId(ownerMember.getClubMemberId())).isEmpty();
+        assertThat(clubMemberPositionHistoryRepository.findOpenHistories(ownerMember.getClubMemberId(), positionId)).isEmpty();
+        assertThat(clubPositionPermissionRepository.findByClubPositionId(positionId))
+                .extracting(item -> item.getPermissionKey())
+                .containsExactlyInAnyOrderElementsOf(noticeOperatorPermissions());
+    }
+
+    @Test
+    void replaceMemberPositions_rejectsRetiredPosition() {
+        Long clubId = createClub("role-owner-inactive", "종료 직책 배정 테스트 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-inactive",
+                new UpdateClubFeaturesRequest(List.of("NOTICE", "ROLE_MANAGEMENT"))
+        );
+        var position = clubPositionService.createPosition(
+                clubId,
+                "role-owner-inactive",
+                new CreateClubPositionRequest("종료 직책", "RETIRED", null, "shield", "#0053dd", List.of())
+        );
+        Long positionId = position.position().clubPositionId();
+        clubPositionService.deletePosition(clubId, positionId, position.position().version(), "role-owner-inactive");
+        var access = clubAccessResolver.requireAdmin(clubId, "role-owner-inactive");
+        var ownerMember = clubMemberRepository.findByClubIdOrderByClubMemberIdAsc(clubId).getFirst();
+
+        assertThatThrownBy(() -> clubPositionService.replaceMemberPositions(access, ownerMember, List.of(positionId)))
+                .isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("사용 종료된 직책");
+    }
+
+    @Test
+    void replaceMemberPositions_rejectsMemberFromAnotherClub() {
+        Long actorClubId = createClub("role-owner-cross-actor", "직책 배정 주체 클럽");
+        Long targetClubId = createClub("role-owner-cross-target", "직책 배정 대상 클럽");
+        clubFeatureService.updateClubFeatures(
+                actorClubId,
+                "role-owner-cross-actor",
+                new UpdateClubFeaturesRequest(List.of("ROLE_MANAGEMENT"))
+        );
+        var actorAccess = clubAccessResolver.requireAdmin(actorClubId, "role-owner-cross-actor");
+        var foreignTarget = clubMemberRepository.findByClubIdOrderByClubMemberIdAsc(targetClubId).getFirst();
+
+        assertThatThrownBy(() -> clubPositionService.replaceMemberPositions(actorAccess, foreignTarget, List.of()))
+                .isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("다른 모임의 멤버");
+    }
+
+    @Test
+    void replaceMemberPositions_rejectsDormantMember() {
+        Long clubId = createClub("role-owner-dormant", "휴면 멤버 직책 테스트 클럽");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "role-owner-dormant",
+                new UpdateClubFeaturesRequest(List.of("ROLE_MANAGEMENT"))
+        );
+        var actorAccess = clubAccessResolver.requireAdmin(clubId, "role-owner-dormant");
+        var target = clubMemberRepository.findByClubIdOrderByClubMemberIdAsc(clubId).getFirst();
+        target.updateMembershipStatus("DORMANT");
+        clubMemberRepository.saveAndFlush(target);
+
+        assertThatThrownBy(() -> clubPositionService.replaceMemberPositions(actorAccess, target, List.of()))
+                .isInstanceOf(SemoException.ValidationException.class)
+                .hasMessageContaining("활동 중인 멤버");
     }
 
     @Test
@@ -445,7 +870,7 @@ class ClubPositionServiceTest {
                         null,
                         "shield",
                         "#0053dd",
-                        List.of("NOTICE_CREATE")
+                        noticeOperatorGrants()
                 )
         );
         var access = clubAccessResolver.requireAdmin(clubId, "role-owner-006");
@@ -515,6 +940,15 @@ class ClubPositionServiceTest {
                         .sortOrder(20)
                         .build(),
                 FeaturePermissionCatalog.builder()
+                        .permissionKey("NOTICE_DELETE_SELF")
+                        .featureKey("NOTICE")
+                        .displayName("공지 삭제")
+                        .description("본인 공지 삭제 권한")
+                        .ownershipScope("SELF")
+                        .active(true)
+                        .sortOrder(30)
+                        .build(),
+                FeaturePermissionCatalog.builder()
                         .permissionKey("POLL_CREATE")
                         .featureKey("POLL")
                         .displayName("투표 작성")
@@ -522,6 +956,24 @@ class ClubPositionServiceTest {
                         .ownershipScope("CLUB")
                         .active(true)
                         .sortOrder(10)
+                        .build(),
+                FeaturePermissionCatalog.builder()
+                        .permissionKey("POLL_UPDATE_SELF")
+                        .featureKey("POLL")
+                        .displayName("투표 수정")
+                        .description("본인 투표 수정 권한")
+                        .ownershipScope("SELF")
+                        .active(true)
+                        .sortOrder(20)
+                        .build(),
+                FeaturePermissionCatalog.builder()
+                        .permissionKey("POLL_DELETE_SELF")
+                        .featureKey("POLL")
+                        .displayName("투표 삭제")
+                        .description("본인 투표 삭제 권한")
+                        .ownershipScope("SELF")
+                        .active(true)
+                        .sortOrder(30)
                         .build(),
                 FeaturePermissionCatalog.builder()
                         .permissionKey("ROLE_MANAGEMENT_VIEW")
@@ -533,5 +985,17 @@ class ClubPositionServiceTest {
                         .sortOrder(10)
                         .build()
         ));
+    }
+
+    private List<String> noticeOperatorPermissions() {
+        return List.of("NOTICE_CREATE", "NOTICE_UPDATE_SELF", "NOTICE_DELETE_SELF");
+    }
+
+    private List<ClubPositionFeatureGrantRequest> noticeOperatorGrants() {
+        return List.of(grant("NOTICE", "OPERATOR"));
+    }
+
+    private ClubPositionFeatureGrantRequest grant(String featureKey, String accessLevel) {
+        return new ClubPositionFeatureGrantRequest(featureKey, accessLevel, null, List.of());
     }
 }

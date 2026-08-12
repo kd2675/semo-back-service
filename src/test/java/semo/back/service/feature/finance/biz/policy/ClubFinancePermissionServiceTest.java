@@ -3,8 +3,6 @@ package semo.back.service.feature.finance.biz.policy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import java.util.Set;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +13,7 @@ import semo.back.service.database.pub.entity.Club;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
+import semo.back.service.feature.position.biz.ClubCapability;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,13 +40,10 @@ class ClubFinancePermissionServiceTest {
                 null,
                 null
         );
-        when(clubPositionPermissionEvaluator.isRoleManagementEnabled(CLUB_ID)).thenReturn(true);
     }
 
     @Test
     void canIssueFinance_legacyBroadPermission_doesNotGrantOperations() {
-        grantPermissions("FINANCE_ISSUE");
-
         assertThat(clubFinancePermissionService.canIssueFinance(memberAccess)).isFalse();
     }
 
@@ -79,8 +75,7 @@ class ClubFinancePermissionServiceTest {
         assertThat(clubFinancePermissionService.canUpdatePayments(memberAccess)).isTrue();
     }
 
-    private void grantPermissions(String... permissionKeys) {
-        when(clubPositionPermissionEvaluator.getPermissionKeysForMember(CLUB_ID, CLUB_MEMBER_ID))
-                .thenReturn(Set.of(permissionKeys));
+    private void grantPermissions(ClubCapability capability) {
+        when(clubPositionPermissionEvaluator.hasAnyPermission(memberAccess, capability)).thenReturn(true);
     }
 }

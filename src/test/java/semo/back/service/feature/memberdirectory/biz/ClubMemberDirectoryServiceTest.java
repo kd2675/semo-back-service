@@ -183,7 +183,8 @@ class ClubMemberDirectoryServiceTest {
         assertThat(response.members()).hasSize(2);
         assertThat(response.members()).anySatisfy(memberResponse -> {
             assertThat(memberResponse.displayName()).isEqualTo("한결");
-            assertThat(memberResponse.roleLabel()).isEqualTo("어드민");
+            assertThat(memberResponse.roleCode()).isEqualTo("ADMIN");
+            assertThat(memberResponse.roleLabel()).isEqualTo("관리자");
             assertThat(memberResponse.positions()).extracting("displayName").containsExactly("총무");
             assertThat(memberResponse.tagline()).isEqualTo("주말마다 나오는 운영진");
             assertThat(memberResponse.recentActivity()).isNotNull();
@@ -292,6 +293,8 @@ class ClubMemberDirectoryServiceTest {
         assertThat(response.members()).hasSize(2);
         assertThat(response.members()).anySatisfy(memberResponse -> {
             assertThat(memberResponse.displayName()).isEqualTo("도연");
+            assertThat(memberResponse.roleCode()).isEmpty();
+            assertThat(memberResponse.roleLabel()).isEmpty();
             assertThat(memberResponse.positions()).isEmpty();
             assertThat(memberResponse.tagline()).isNull();
             assertThat(memberResponse.recentActivity()).isNull();

@@ -34,6 +34,7 @@ import semo.back.service.feature.bracket.vo.ReviewBracketRequest;
 import semo.back.service.feature.bracket.vo.UpsertBracketParticipantRequest;
 import semo.back.service.feature.bracket.vo.UpsertBracketRequest;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
 import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 
@@ -80,6 +81,7 @@ public class ClubBracketService {
     private final ClubMemberRepository clubMemberRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubFeatureService clubFeatureService;
     private final ClubBracketPermissionService clubBracketPermissionService;
     private final ImageFileUrlResolver imageFileUrlResolver;
     private final ClubNotificationPublisher clubNotificationPublisher;
@@ -105,6 +107,7 @@ public class ClubBracketService {
                 access.club().getName(),
                 access.isAdmin(),
                 clubBracketPermissionService.canCreateBracket(access),
+                clubFeatureService.isFeatureEnabled(clubId, "TOURNAMENT_RECORD"),
                 publishedBrackets.size(),
                 (int) summaries.stream().filter(summary -> APPROVAL_PENDING.equals(summary.approvalStatus())).count(),
                 publishedBrackets.isEmpty() ? null : publishedBrackets.get(0),
@@ -473,6 +476,9 @@ public class ClubBracketService {
     }
 
     private List<BracketImportTournamentResponse> loadImportableTournaments(Long clubId) {
+        if (!clubFeatureService.isFeatureEnabled(clubId, "TOURNAMENT_RECORD")) {
+            return List.of();
+        }
         List<TournamentRecord> tournaments = tournamentRecordRepository
                 .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(clubId).stream()
                 .filter(tournament -> APPROVAL_APPROVED.equals(tournament.getApprovalStatus()))
@@ -557,6 +563,9 @@ public class ClubBracketService {
         Map<Long, TournamentApplication> approvedApplicationById = Map.of();
         Map<Long, ClubProfile> clubProfileById = Map.of();
         if (SOURCE_TYPE_TOURNAMENT.equals(sourceType)) {
+            if (!clubFeatureService.isFeatureEnabled(clubId, "TOURNAMENT_RECORD")) {
+                throw new SemoException.ValidationException("대회 기능이 비활성화되어 대회 참가자를 불러올 수 없습니다.");
+            }
             if (sourceTournamentRecordId == null) {
                 throw new SemoException.ValidationException("대회 불러오기 대진표에는 sourceTournamentRecordId가 필요합니다.");
             }

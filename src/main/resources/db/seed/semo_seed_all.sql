@@ -17,7 +17,7 @@ INSERT INTO feature_catalog (
 SELECT
     'JOIN_REQUEST',
     '가입 신청',
-    '관리자가 가입 신청 대기열을 검토하고 승인 또는 반려합니다.',
+    '가입 승인제 클럽에서 신청 대기열을 검토하고 승인 또는 반려합니다.',
     'group_add',
     'ADMIN_ONLY',
     1,
@@ -73,7 +73,7 @@ INSERT INTO feature_catalog (
 SELECT
     'ATTENDANCE',
     '일정 참석',
-    '대표 캘린더의 일정별 참가 응답과 참석 현황을 관리합니다.',
+    '일정 기능과 함께 참가 응답과 실제 참석 현황을 관리합니다.',
     'fact_check',
     'USER_AND_ADMIN',
     1,
@@ -157,7 +157,7 @@ INSERT INTO feature_catalog (
 SELECT
     'TOURNAMENT_RECORD',
     '대회 운영',
-    '대회 등록, 승인, 참가 신청과 참가자 확정을 한 흐름에서 운영합니다.',
+    '대회 등록, 승인과 참가자를 독립적으로 운영하며 재정 기능을 켜면 참가비 납부를 연결합니다.',
     'emoji_events',
     'USER_AND_ADMIN',
     1,
@@ -185,7 +185,7 @@ INSERT INTO feature_catalog (
 SELECT
     'BRACKET',
     '대진표 초안',
-    '대회 참가자를 불러와 표준 시드 배치 초안을 만들고 관리자 승인을 받습니다.',
+    '참가자를 직접 입력해 대진표를 만들고, 대회 기능을 켜면 승인 참가자를 불러옵니다.',
     'account_tree',
     'USER_AND_ADMIN',
     1,
@@ -240,8 +240,8 @@ INSERT INTO feature_catalog (
 )
 SELECT
     'ROLE_MANAGEMENT',
-    '직책관리',
-    '직책을 생성하고 하위 권한을 연결해 멤버 권한을 세밀하게 관리합니다.',
+    '직책·권한',
+    'OWNER와 ADMIN이 업무 직책을 만들고 일반 회원에게 필요한 기능 권한만 위임합니다.',
     'manage_accounts',
     'ADMIN_ONLY',
     1,
@@ -341,7 +341,7 @@ WHERE NOT EXISTS (
 
 -- Keep existing installations aligned with the current product navigation contract.
 UPDATE feature_catalog
-SET display_name = '가입 신청', description = '관리자가 가입 신청 대기열을 검토하고 승인 또는 반려합니다.', navigation_scope = 'ADMIN_ONLY', sort_order = 10, update_date = NOW()
+SET display_name = '가입 신청', description = '가입 승인제 클럽에서 신청 대기열을 검토하고 승인 또는 반려합니다.', navigation_scope = 'ADMIN_ONLY', sort_order = 10, update_date = NOW()
 WHERE feature_key = 'JOIN_REQUEST';
 UPDATE feature_catalog
 SET display_name = '게시판 공지', description = '대표 게시판에서 공지를 작성하고 공유 범위를 관리합니다.', sort_order = 20, update_date = NOW()
@@ -353,13 +353,13 @@ UPDATE feature_catalog
 SET display_name = '투표', description = '대표 캘린더에서 투표를 작성하고 응답 결과를 관리합니다.', sort_order = 40, update_date = NOW()
 WHERE feature_key = 'POLL';
 UPDATE feature_catalog
-SET display_name = '일정 참석', description = '대표 캘린더의 일정별 참가 응답과 참석 현황을 관리합니다.', sort_order = 45, update_date = NOW()
+SET display_name = '일정 참석', description = '일정 기능과 함께 참가 응답과 실제 참석 현황을 관리합니다.', sort_order = 45, update_date = NOW()
 WHERE feature_key = 'ATTENDANCE';
 UPDATE feature_catalog
-SET display_name = '대회 운영', description = '대회 등록, 승인, 참가 신청과 참가자 확정을 한 흐름에서 운영합니다.', sort_order = 50, update_date = NOW()
+SET display_name = '대회 운영', description = '대회 등록, 승인과 참가자를 독립적으로 운영하며 재정 기능을 켜면 참가비 납부를 연결합니다.', sort_order = 50, update_date = NOW()
 WHERE feature_key = 'TOURNAMENT_RECORD';
 UPDATE feature_catalog
-SET display_name = '대진표 초안', description = '대회 참가자를 불러와 표준 시드 배치 초안을 만들고 관리자 승인을 받습니다.', sort_order = 51, update_date = NOW()
+SET display_name = '대진표 초안', description = '참가자를 직접 입력해 대진표를 만들고, 대회 기능을 켜면 승인 참가자를 불러옵니다.', sort_order = 51, update_date = NOW()
 WHERE feature_key = 'BRACKET';
 UPDATE feature_catalog
 SET display_name = '회비·정산', description = '회비 수납, 멤버 요청, 승인 지출과 지출 원장을 분리해 관리합니다.', sort_order = 60, update_date = NOW()
@@ -371,7 +371,13 @@ WHERE feature_key = 'MEMBER_DIRECTORY';
 UPDATE feature_catalog
 SET description = '비공개로 건의와 불편 신고를 접수하고 운영 답변을 확인합니다.', sort_order = 90, update_date = NOW()
 WHERE feature_key = 'FEEDBACK';
-UPDATE feature_catalog SET sort_order = 100, update_date = NOW() WHERE feature_key = 'ROLE_MANAGEMENT';
+UPDATE feature_catalog
+SET display_name = '직책·권한',
+    description = 'OWNER와 ADMIN이 업무 직책을 만들고 일반 회원에게 필요한 기능 권한만 위임합니다.',
+    navigation_scope = 'ADMIN_ONLY',
+    sort_order = 100,
+    update_date = NOW()
+WHERE feature_key = 'ROLE_MANAGEMENT';
 INSERT INTO feature_permission_catalog (
     permission_key,
     feature_key,
@@ -842,7 +848,7 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'ROLE_MANAGEMENT_VIEW', 'ROLE_MANAGEMENT', '직책 조회', '직책 목록과 권한 구성을 조회합니다.', 'CLUB', 1, 10, NOW(), NOW()
+SELECT 'ROLE_MANAGEMENT_VIEW', 'ROLE_MANAGEMENT', '직책 조회', '거버넌스 권한은 OWNER와 ADMIN에게만 부여됩니다.', 'CLUB', 0, 10, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'ROLE_MANAGEMENT_VIEW');
 
 INSERT INTO feature_permission_catalog (
@@ -856,7 +862,7 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'ROLE_MANAGEMENT_CREATE', 'ROLE_MANAGEMENT', '직책 생성', '새 직책을 생성합니다.', 'CLUB', 1, 20, NOW(), NOW()
+SELECT 'ROLE_MANAGEMENT_CREATE', 'ROLE_MANAGEMENT', '직책 생성', '거버넌스 권한은 OWNER와 ADMIN에게만 부여됩니다.', 'CLUB', 0, 20, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'ROLE_MANAGEMENT_CREATE');
 
 INSERT INTO feature_permission_catalog (
@@ -870,7 +876,7 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'ROLE_MANAGEMENT_UPDATE', 'ROLE_MANAGEMENT', '직책 수정', '직책 정보와 권한 구성을 수정합니다.', 'CLUB', 1, 30, NOW(), NOW()
+SELECT 'ROLE_MANAGEMENT_UPDATE', 'ROLE_MANAGEMENT', '직책 수정', '거버넌스 권한은 OWNER와 ADMIN에게만 부여됩니다.', 'CLUB', 0, 30, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'ROLE_MANAGEMENT_UPDATE');
 
 INSERT INTO feature_permission_catalog (
@@ -884,7 +890,7 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'ROLE_MANAGEMENT_DELETE', 'ROLE_MANAGEMENT', '직책 삭제', '직책을 삭제합니다.', 'CLUB', 1, 40, NOW(), NOW()
+SELECT 'ROLE_MANAGEMENT_DELETE', 'ROLE_MANAGEMENT', '직책 사용 종료', '거버넌스 권한은 OWNER와 ADMIN에게만 부여됩니다.', 'CLUB', 0, 40, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'ROLE_MANAGEMENT_DELETE');
 
 INSERT INTO feature_permission_catalog (
@@ -898,8 +904,31 @@ INSERT INTO feature_permission_catalog (
     create_date,
     update_date
 )
-SELECT 'ROLE_MANAGEMENT_ASSIGN', 'ROLE_MANAGEMENT', '직책 할당', '멤버에게 직책을 할당하거나 해제합니다.', 'CLUB', 1, 50, NOW(), NOW()
+SELECT 'ROLE_MANAGEMENT_ASSIGN', 'ROLE_MANAGEMENT', '직책 할당', '거버넌스 권한은 OWNER와 ADMIN에게만 부여됩니다.', 'CLUB', 0, 50, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_permission_catalog WHERE permission_key = 'ROLE_MANAGEMENT_ASSIGN');
+
+-- 직책 구성 자체를 다시 직책으로 위임하면 사용자가 자신의 권한을 증폭시킬 수 있습니다.
+-- 거버넌스는 클럽 접근 등급(OWNER/ADMIN)으로만 관리하고 기존 위임 데이터는 정리합니다.
+DELETE FROM club_position_permission
+WHERE permission_key IN (
+    'ROLE_MANAGEMENT_VIEW',
+    'ROLE_MANAGEMENT_CREATE',
+    'ROLE_MANAGEMENT_UPDATE',
+    'ROLE_MANAGEMENT_DELETE',
+    'ROLE_MANAGEMENT_ASSIGN'
+);
+
+UPDATE feature_permission_catalog
+SET active = 0,
+    description = '거버넌스 권한은 OWNER와 ADMIN에게만 부여됩니다.',
+    update_date = NOW()
+WHERE permission_key IN (
+    'ROLE_MANAGEMENT_VIEW',
+    'ROLE_MANAGEMENT_CREATE',
+    'ROLE_MANAGEMENT_UPDATE',
+    'ROLE_MANAGEMENT_DELETE',
+    'ROLE_MANAGEMENT_ASSIGN'
+);
 
 INSERT INTO dashboard_widget_catalog (
     widget_key,
@@ -1205,22 +1234,22 @@ INSERT INTO feature_catalog (
 SELECT
     'HANDOVER',
     '인수인계 센터',
-    '운영 임기, 집행부 구성, 미완료 업무와 다음 담당자 메모를 한곳에서 관리합니다.',
+    '직책·권한과 함께 운영 임기, 집행부 구성과 다음 담당자 메모를 관리합니다.',
     'move_up',
     'ADMIN_ONLY',
     1,
-    95,
+    110,
     NOW(),
     NOW()
 WHERE NOT EXISTS (SELECT 1 FROM feature_catalog WHERE feature_key = 'HANDOVER');
 
 UPDATE feature_catalog
 SET display_name = '인수인계 센터',
-    description = '운영 임기, 집행부 구성, 미완료 업무와 다음 담당자 메모를 한곳에서 관리합니다.',
+    description = '직책·권한과 함께 운영 임기, 집행부 구성과 다음 담당자 메모를 관리합니다.',
     icon_name = 'move_up',
     navigation_scope = 'ADMIN_ONLY',
     active = 1,
-    sort_order = 95,
+    sort_order = 110,
     update_date = NOW()
 WHERE feature_key = 'HANDOVER';
 

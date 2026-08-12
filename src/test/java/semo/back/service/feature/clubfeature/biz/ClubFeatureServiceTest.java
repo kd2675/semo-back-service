@@ -2,10 +2,13 @@ package semo.back.service.feature.clubfeature.biz;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.common.exception.SemoException;
+import semo.back.service.database.pub.entity.ClubFeature;
 import semo.back.service.database.pub.repository.ClubEventParticipantRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
@@ -20,6 +23,8 @@ import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.club.biz.ClubService;
 import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -84,7 +89,7 @@ class ClubFeatureServiceTest {
     }
 
     @Test
-    void updateClubFeaturesEnablesAttendanceFeature() {
+    void updateClubFeatures_attendanceAutomaticallyIncludesRequiredScheduleAndApprovalQueue() {
         Long clubId = clubService.createClub(
                 "feature-user-001",
                 "Feature Admin",
@@ -108,31 +113,33 @@ class ClubFeatureServiceTest {
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
-                        "JOIN_REQUEST:false",
+                        "JOIN_REQUEST:true",
                         "ATTENDANCE:true",
                         "NOTICE:false",
                         "POLL:false",
-                        "SCHEDULE_MANAGE:false",
+                        "SCHEDULE_MANAGE:true",
                         "TOURNAMENT_RECORD:false",
                         "BRACKET:false",
                         "FINANCE:false",
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false",
+                        "ROLE_MANAGEMENT:true",
                         "HANDOVER:false",
                         "DECISION_LOG:false"
                 );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "ATTENDANCE")).isTrue();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "NOTICE")).isFalse();
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "POLL")).isFalse();
-        assertThat(clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")).isFalse();
-        assertThat(clubFeatureService.isFeatureEnabled(clubId, "ROLE_MANAGEMENT")).isFalse();
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")).isTrue();
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "ROLE_MANAGEMENT")).isTrue();
         assertThat(responses)
                 .filteredOn(response -> "JOIN_REQUEST".equals(response.featureKey()))
                 .singleElement()
                 .satisfies(response -> {
                     assertThat(response.navigationScope()).isEqualTo("ADMIN_ONLY");
+                    assertThat(response.mandatory()).isTrue();
+                    assertThat(response.mandatoryReason()).contains("가입 승인제");
                     assertThat(response.userPath()).isEqualTo("/clubs/" + clubId);
                     assertThat(response.adminPath()).isEqualTo("/clubs/" + clubId + "/admin/more/join-requests");
                 });
@@ -140,9 +147,53 @@ class ClubFeatureServiceTest {
                 .filteredOn(response -> "ATTENDANCE".equals(response.featureKey()))
                 .singleElement()
                 .satisfies(response -> {
+                    assertThat(response.requiredFeatureKeys()).containsExactly("SCHEDULE_MANAGE");
                     assertThat(response.userPath()).isEqualTo("/clubs/" + clubId + "/schedule");
                     assertThat(response.adminPath()).isEqualTo("/clubs/" + clubId + "/schedule");
                 });
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "NOTICE",
+            "SCHEDULE_MANAGE",
+            "POLL",
+            "TOURNAMENT_RECORD",
+            "BRACKET",
+            "FINANCE",
+            "MEMBER_DIRECTORY",
+            "FEEDBACK",
+            "TODO",
+            "ROLE_MANAGEMENT",
+            "DECISION_LOG"
+    })
+    void updateClubFeatures_standaloneFeatureEnablesWithoutAnotherFeature(String featureKey) {
+        String userKey = "standalone-" + featureKey.toLowerCase();
+        Long clubId = clubService.createClub(
+                userKey,
+                "Standalone Admin",
+                new CreateClubRequest(
+                        "Standalone " + featureKey,
+                        "단독 기능 계약 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "OPEN",
+                        null
+                )
+        ).clubId();
+
+        var responses = clubFeatureService.updateClubFeatures(
+                clubId,
+                userKey,
+                new UpdateClubFeaturesRequest(List.of(featureKey))
+        );
+
+        var expectedEnabledKeys = "ROLE_MANAGEMENT".equals(featureKey)
+                ? List.of("ROLE_MANAGEMENT")
+                : List.of(featureKey, "ROLE_MANAGEMENT");
+        assertThat(responses).filteredOn(response -> response.enabled())
+                .extracting(response -> response.featureKey())
+                .containsExactlyInAnyOrderElementsOf(expectedEnabledKeys);
     }
 
     @Test
@@ -166,9 +217,41 @@ class ClubFeatureServiceTest {
                 new UpdateClubFeaturesRequest(java.util.List.of("FINANCE", "TODO", "MEMBER_DIRECTORY"))
         );
 
-        assertThat(responses.stream().filter(response -> response.enabled() && !"JOIN_REQUEST".equals(response.featureKey())))
+        assertThat(responses.stream().filter(response -> response.enabled()
+                        && !"JOIN_REQUEST".equals(response.featureKey())
+                        && !"ROLE_MANAGEMENT".equals(response.featureKey())))
                 .extracting(response -> response.featureKey() + ":" + response.sortOrder())
                 .containsExactly("FINANCE:10", "TODO:20", "MEMBER_DIRECTORY:30");
+    }
+
+    @Test
+    void getClubFeatures_handoverRemainsEnabledBecauseRoleManagementIsCore() {
+        Long clubId = clubService.createClub(
+                "feature-user-inconsistent",
+                "Feature Admin",
+                new CreateClubRequest(
+                        "Inconsistent Feature Club",
+                        "의존성 방어 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "OPEN",
+                        null
+                )
+        ).clubId();
+        clubFeatureRepository.save(ClubFeature.builder()
+                .clubId(clubId)
+                .featureKey("HANDOVER")
+                .enabled(true)
+                .sortOrder(10)
+                .build());
+
+        var features = clubFeatureService.getClubFeatures(clubId, "feature-user-inconsistent");
+
+        assertThat(clubFeatureService.isFeatureEnabled(clubId, "HANDOVER")).isTrue();
+        assertThat(features)
+                .filteredOn(feature -> "HANDOVER".equals(feature.featureKey()))
+                .singleElement()
+                .returns(true, feature -> feature.enabled());
     }
 
     @Test
@@ -220,7 +303,7 @@ class ClubFeatureServiceTest {
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
-                        "JOIN_REQUEST:false",
+                        "JOIN_REQUEST:true",
                         "ATTENDANCE:false",
                         "NOTICE:true",
                         "POLL:false",
@@ -231,7 +314,7 @@ class ClubFeatureServiceTest {
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false",
+                        "ROLE_MANAGEMENT:true",
                         "HANDOVER:false",
                         "DECISION_LOG:false"
                 );
@@ -263,7 +346,7 @@ class ClubFeatureServiceTest {
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
-                        "JOIN_REQUEST:false",
+                        "JOIN_REQUEST:true",
                         "ATTENDANCE:false",
                         "NOTICE:false",
                         "POLL:true",
@@ -274,7 +357,7 @@ class ClubFeatureServiceTest {
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false",
+                        "ROLE_MANAGEMENT:true",
                         "HANDOVER:false",
                         "DECISION_LOG:false"
                 );
@@ -306,7 +389,7 @@ class ClubFeatureServiceTest {
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
-                        "JOIN_REQUEST:false",
+                        "JOIN_REQUEST:true",
                         "ATTENDANCE:false",
                         "NOTICE:false",
                         "POLL:false",
@@ -317,7 +400,7 @@ class ClubFeatureServiceTest {
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:false",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false",
+                        "ROLE_MANAGEMENT:true",
                         "HANDOVER:false",
                         "DECISION_LOG:false"
                 );
@@ -349,7 +432,7 @@ class ClubFeatureServiceTest {
         assertThat(responses)
                 .extracting(response -> response.featureKey() + ":" + response.enabled())
                 .containsExactlyInAnyOrder(
-                        "JOIN_REQUEST:false",
+                        "JOIN_REQUEST:true",
                         "ATTENDANCE:false",
                         "NOTICE:false",
                         "POLL:false",
@@ -360,10 +443,95 @@ class ClubFeatureServiceTest {
                         "FEEDBACK:false",
                         "MEMBER_DIRECTORY:true",
                         "TODO:false",
-                        "ROLE_MANAGEMENT:false",
+                        "ROLE_MANAGEMENT:true",
                         "HANDOVER:false",
                         "DECISION_LOG:false"
                 );
         assertThat(clubFeatureService.isFeatureEnabled(clubId, "MEMBER_DIRECTORY")).isTrue();
+    }
+
+    @Test
+    void getClubFeatures_newApprovalClubEnablesOnlyPolicyMandatoryJoinRequest() {
+        Long clubId = clubService.createClub(
+                "feature-user-approval-default",
+                "Feature Admin",
+                new CreateClubRequest(
+                        "Approval Feature Club",
+                        "승인제 기본 기능 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "APPROVAL",
+                        null
+                )
+        ).clubId();
+
+        var responses = clubFeatureService.getClubFeatures(clubId, "feature-user-approval-default");
+
+        assertThat(responses).filteredOn(response -> response.enabled())
+                .extracting(response -> response.featureKey())
+                .containsExactlyInAnyOrder("JOIN_REQUEST", "ROLE_MANAGEMENT");
+        assertThat(responses).filteredOn(response -> "HANDOVER".equals(response.featureKey()))
+                .singleElement()
+                .satisfies(response -> assertThat(response.enabled()).isFalse());
+    }
+
+    @Test
+    void updateClubFeatures_openClubCannotEnableUnusedJoinRequestQueue() {
+        Long clubId = clubService.createClub(
+                "feature-user-open",
+                "Feature Admin",
+                new CreateClubRequest(
+                        "Open Feature Club",
+                        "자유 가입 기능 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "OPEN",
+                        null
+                )
+        ).clubId();
+
+        var responses = clubFeatureService.updateClubFeatures(
+                clubId,
+                "feature-user-open",
+                new UpdateClubFeaturesRequest(List.of("JOIN_REQUEST"))
+        );
+
+        assertThat(responses).filteredOn(response -> "JOIN_REQUEST".equals(response.featureKey()))
+                .singleElement()
+                .satisfies(response -> {
+                    assertThat(response.enabled()).isFalse();
+                    assertThat(response.mandatory()).isFalse();
+                    assertThat(response.available()).isFalse();
+                    assertThat(response.unavailableReason()).contains("가입 승인제");
+                });
+    }
+
+    @Test
+    void updateClubFeatures_handoverAutomaticallyIncludesRoleManagement() {
+        Long clubId = clubService.createClub(
+                "feature-user-handover",
+                "Feature Admin",
+                new CreateClubRequest(
+                        "Handover Feature Club",
+                        "인수인계 필수 조합 테스트",
+                        "OTHER",
+                        "PUBLIC",
+                        "OPEN",
+                        null
+                )
+        ).clubId();
+
+        var responses = clubFeatureService.updateClubFeatures(
+                clubId,
+                "feature-user-handover",
+                new UpdateClubFeaturesRequest(List.of("HANDOVER"))
+        );
+
+        assertThat(responses).filteredOn(response -> response.enabled())
+                .extracting(response -> response.featureKey())
+                .containsExactlyInAnyOrder("ROLE_MANAGEMENT", "HANDOVER");
+        assertThat(responses).filteredOn(response -> "HANDOVER".equals(response.featureKey()))
+                .singleElement()
+                .satisfies(response -> assertThat(response.requiredFeatureKeys()).containsExactly("ROLE_MANAGEMENT"));
     }
 }

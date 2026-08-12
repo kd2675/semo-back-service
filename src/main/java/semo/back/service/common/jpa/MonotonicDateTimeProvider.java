@@ -14,13 +14,15 @@ import org.springframework.stereotype.Component;
 @Component("semoDateTimeProvider")
 @RequiredArgsConstructor
 public class MonotonicDateTimeProvider implements DateTimeProvider {
-    private static final long DATABASE_PRECISION_NANOS = 1_000L;
+    // CommonDateEntity still uses Jsr310JpaConverters.LocalDateTimeConverter,
+    // which persists through java.util.Date and therefore keeps milliseconds.
+    private static final long DATABASE_PRECISION_NANOS = 1_000_000L;
 
     private final Clock clock;
     private final AtomicReference<LocalDateTime> lastIssued = new AtomicReference<>();
 
     public LocalDateTime now() {
-        LocalDateTime observed = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+        LocalDateTime observed = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MILLIS);
         return lastIssued.updateAndGet(previous -> previous == null || observed.isAfter(previous)
                 ? observed
                 : previous.plusNanos(DATABASE_PRECISION_NANOS));

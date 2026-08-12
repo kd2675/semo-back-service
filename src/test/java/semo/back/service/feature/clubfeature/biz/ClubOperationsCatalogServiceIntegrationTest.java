@@ -234,14 +234,18 @@ class ClubOperationsCatalogServiceIntegrationTest {
                 Map.entry("ATTENDANCE_MANAGE", "ATTENDANCE"),
                 Map.entry("TOURNAMENT_RECORD_CREATE", "TOURNAMENT_RECORD"),
                 Map.entry("TOURNAMENT_RECORD_UPDATE_SELF", "TOURNAMENT_RECORD"),
+                Map.entry("TOURNAMENT_RECORD_PIN", "TOURNAMENT_RECORD"),
                 Map.entry("TOURNAMENT_RECORD_REVIEW", "TOURNAMENT_RECORD"),
+                Map.entry("TOURNAMENT_RECORD_DELETE_ANY", "TOURNAMENT_RECORD"),
                 Map.entry("BRACKET_CREATE", "BRACKET"),
                 Map.entry("BRACKET_UPDATE_SELF", "BRACKET"),
                 Map.entry("BRACKET_REVIEW", "BRACKET"),
+                Map.entry("BRACKET_DELETE_ANY", "BRACKET"),
                 Map.entry("TODO_VIEW", "TODO"),
                 Map.entry("TODO_CREATE", "TODO"),
                 Map.entry("TODO_ASSIGN", "TODO"),
                 Map.entry("TODO_MANAGE_STATUS", "TODO"),
+                Map.entry("TODO_DELETE_ANY", "TODO"),
                 Map.entry("FINANCE_VIEW", "FINANCE"),
                 Map.entry("FINANCE_BILLING_ISSUE", "FINANCE"),
                 Map.entry("FINANCE_REQUEST_REVIEW", "FINANCE"),
@@ -253,7 +257,11 @@ class ClubOperationsCatalogServiceIntegrationTest {
                 Map.entry("ROLE_MANAGEMENT_CREATE", "ROLE_MANAGEMENT"),
                 Map.entry("ROLE_MANAGEMENT_UPDATE", "ROLE_MANAGEMENT"),
                 Map.entry("ROLE_MANAGEMENT_DELETE", "ROLE_MANAGEMENT"),
-                Map.entry("ROLE_MANAGEMENT_ASSIGN", "ROLE_MANAGEMENT")
+                Map.entry("ROLE_MANAGEMENT_ASSIGN", "ROLE_MANAGEMENT"),
+                Map.entry("HANDOVER_VIEW", "HANDOVER"),
+                Map.entry("HANDOVER_MANAGE", "HANDOVER"),
+                Map.entry("DECISION_VIEW", "DECISION_LOG"),
+                Map.entry("DECISION_MANAGE", "DECISION_LOG")
         );
         int sortOrder = 10;
         for (Map.Entry<String, String> entry : featureByPermission.entrySet()) {

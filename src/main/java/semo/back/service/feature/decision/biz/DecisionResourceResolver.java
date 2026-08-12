@@ -19,6 +19,7 @@ import semo.back.service.database.pub.repository.FinanceObligationRepository;
 import semo.back.service.database.pub.repository.FinanceRequestRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.decision.vo.DecisionResourceOptionResponse;
 
 @Component
@@ -38,12 +39,14 @@ public class DecisionResourceResolver {
     private final FinanceRequestRepository financeRequestRepository;
     private final FinanceObligationRepository financeObligationRepository;
     private final TournamentRecordRepository tournamentRecordRepository;
+    private final ClubFeatureService clubFeatureService;
 
     public ResourceDescriptor resolve(Long clubId, String resourceType, Long resourceId) {
         String normalizedType = normalizeType(resourceType);
         if (resourceId == null || resourceId <= 0) {
             throw new SemoException.ValidationException("연결할 리소스 ID가 올바르지 않습니다.");
         }
+        requireSourceFeature(clubId, normalizedType);
         return switch (normalizedType) {
             case RESOURCE_SCHEDULE_EVENT -> toDescriptor(requireScheduleEvent(clubId, resourceId));
             case RESOURCE_TODO_ITEM -> toDescriptor(requireTodoItem(clubId, resourceId));
@@ -57,31 +60,39 @@ public class DecisionResourceResolver {
     public List<DecisionResourceOptionResponse> getOptions(Long clubId) {
         List<ResourceDescriptor> options = new ArrayList<>();
         PageRequest optionPage = PageRequest.of(0, OPTION_LIMIT_PER_TYPE);
-        todoItemRepository.findByClubIdOrderByTodoItemIdDesc(clubId, optionPage).stream()
-                .map(this::toDescriptor)
-                .forEach(options::add);
-        clubScheduleEventRepository.findRecentActiveEvents(clubId, optionPage).stream()
-                .map(this::toDescriptor)
-                .forEach(options::add);
-        financeRequestRepository.findByClubIdOrderByFinanceRequestIdDesc(clubId, optionPage).stream()
-                .map(this::toDescriptor)
-                .forEach(options::add);
-        financeObligationRepository.findAdminFeed(
-                        clubId,
-                        null,
-                        null,
-                        null,
-                        optionPage
-                ).stream()
-                .map(this::toDescriptor)
-                .forEach(options::add);
-        tournamentRecordRepository
-                .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(
-                        clubId,
-                        optionPage
-                ).stream()
-                .map(this::toDescriptor)
-                .forEach(options::add);
+        if (clubFeatureService.isFeatureEnabled(clubId, "TODO")) {
+            todoItemRepository.findByClubIdOrderByTodoItemIdDesc(clubId, optionPage).stream()
+                    .map(this::toDescriptor)
+                    .forEach(options::add);
+        }
+        if (clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")) {
+            clubScheduleEventRepository.findRecentActiveEvents(clubId, optionPage).stream()
+                    .map(this::toDescriptor)
+                    .forEach(options::add);
+        }
+        if (clubFeatureService.isFeatureEnabled(clubId, "FINANCE")) {
+            financeRequestRepository.findByClubIdOrderByFinanceRequestIdDesc(clubId, optionPage).stream()
+                    .map(this::toDescriptor)
+                    .forEach(options::add);
+            financeObligationRepository.findAdminFeed(
+                            clubId,
+                            null,
+                            null,
+                            null,
+                            optionPage
+                    ).stream()
+                    .map(this::toDescriptor)
+                    .forEach(options::add);
+        }
+        if (clubFeatureService.isFeatureEnabled(clubId, "TOURNAMENT_RECORD")) {
+            tournamentRecordRepository
+                    .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(
+                            clubId,
+                            optionPage
+                    ).stream()
+                    .map(this::toDescriptor)
+                    .forEach(options::add);
+        }
         return options.stream()
                 .map(item -> new DecisionResourceOptionResponse(
                         item.resourceType(),
@@ -189,6 +200,19 @@ public class DecisionResourceResolver {
 
     private String normalizeType(String resourceType) {
         return resourceType == null ? "" : resourceType.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void requireSourceFeature(Long clubId, String resourceType) {
+        String featureKey = switch (resourceType) {
+            case RESOURCE_SCHEDULE_EVENT -> "SCHEDULE_MANAGE";
+            case RESOURCE_TODO_ITEM -> "TODO";
+            case RESOURCE_FINANCE_REQUEST, RESOURCE_FINANCE_OBLIGATION -> "FINANCE";
+            case RESOURCE_TOURNAMENT -> "TOURNAMENT_RECORD";
+            default -> null;
+        };
+        if (featureKey != null && !clubFeatureService.isFeatureEnabled(clubId, featureKey)) {
+            throw new SemoException.ValidationException("비활성화된 기능의 운영 항목은 결정 기록에 새로 연결할 수 없습니다.");
+        }
     }
 
     public record ResourceDescriptor(

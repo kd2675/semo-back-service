@@ -31,6 +31,10 @@ public class TournamentFinanceLinkService {
     private final FinanceAccountRepository financeAccountRepository;
     private final ClubNotificationPublisher clubNotificationPublisher;
 
+    public boolean isFinanceIntegrationEnabled(Long clubId) {
+        return clubFinancePermissionService.isFinanceEnabled(clubId);
+    }
+
     @Transactional(transactionManager = "pubTransactionManager")
     public Long ensureTournamentFeePayment(
             TournamentRecord tournament,

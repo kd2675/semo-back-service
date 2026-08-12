@@ -185,6 +185,7 @@ public class ClubMemberDirectoryService {
                 snapshot.clubProfile().getClubProfileId(),
                 snapshot.clubProfile().getDisplayName(),
                 imageFileUrlResolver.resolveImageUrl(snapshot.clubProfile().getAvatarFileName()),
+                membership.getRoleCode(),
                 toRoleLabel(membership.getRoleCode()),
                 positions,
                 trimToNull(snapshot.clubProfile().getTagline()),
@@ -201,6 +202,7 @@ public class ClubMemberDirectoryService {
                 member.clubProfileId(),
                 member.displayName(),
                 member.avatarImageUrl(),
+                settings.showPositions() ? member.roleCode() : "",
                 settings.showPositions() ? member.roleLabel() : "",
                 settings.showPositions() ? member.positions() : List.of(),
                 settings.showTagline() ? member.tagline() : null,
@@ -209,15 +211,15 @@ public class ClubMemberDirectoryService {
     }
 
     private Comparator<MemberDirectoryMemberResponse> directoryComparator() {
-        return Comparator.comparingInt((MemberDirectoryMemberResponse member) -> rolePriority(member.roleLabel()))
+        return Comparator.comparingInt((MemberDirectoryMemberResponse member) -> rolePriority(member.roleCode()))
                 .thenComparing(MemberDirectoryMemberResponse::displayName, String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(MemberDirectoryMemberResponse::clubMemberId);
     }
 
-    private int rolePriority(String roleLabel) {
-        return switch (roleLabel) {
-            case "오너" -> 0;
-            case "어드민" -> 1;
+    private int rolePriority(String roleCode) {
+        return switch (roleCode) {
+            case "OWNER" -> 0;
+            case "ADMIN" -> 1;
             default -> 2;
         };
     }
@@ -259,9 +261,9 @@ public class ClubMemberDirectoryService {
 
     private String toRoleLabel(String roleCode) {
         return switch (trimToNull(roleCode)) {
-            case "OWNER" -> "오너";
-            case "ADMIN" -> "어드민";
-            default -> "회원";
+            case "OWNER" -> "소유자";
+            case "ADMIN" -> "관리자";
+            default -> "일반 회원";
         };
     }
 

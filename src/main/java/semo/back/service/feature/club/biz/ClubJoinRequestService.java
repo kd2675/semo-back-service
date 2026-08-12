@@ -23,6 +23,7 @@ import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.club.biz.support.ClubClassificationSupport;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.club.vo.ClubDiscoverResponse;
 import semo.back.service.feature.club.vo.ClubDiscoverSummaryResponse;
 import semo.back.service.feature.club.vo.ClubJoinActionResponse;
@@ -71,6 +72,7 @@ public class ClubJoinRequestService {
     private final ImageFileUrlResolver imageFileUrlResolver;
     private final ClubClassificationSupport clubClassificationSupport;
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubFeatureService clubFeatureService;
     private final ClubNotificationPublisher clubNotificationPublisher;
 
     public ClubDiscoverResponse getDiscoverClubs(String userKey, String query) {
@@ -165,6 +167,8 @@ public class ClubJoinRequestService {
             );
         }
 
+        clubFeatureService.requireFeatureEnabled(clubId, "JOIN_REQUEST", "가입 신청");
+
         String requestMessage = trimToNull(request == null ? null : request.requestMessage());
         ClubJoinRequest joinRequest;
         if (existingRequest == null) {
@@ -210,6 +214,7 @@ public class ClubJoinRequestService {
     }
 
     public ClubJoinRequestInboxResponse getAdminJoinRequestInbox(Long clubId, String userKey) {
+        clubFeatureService.requireFeatureEnabled(clubId, "JOIN_REQUEST", "가입 신청");
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         return buildJoinRequestInboxResponse(access);
     }
@@ -222,6 +227,7 @@ public class ClubJoinRequestService {
             String userKey,
             ReviewClubJoinRequestRequest request
     ) {
+        clubFeatureService.requireFeatureEnabled(clubId, "JOIN_REQUEST", "가입 신청");
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         ClubJoinRequest joinRequest = clubJoinRequestRepository.findForUpdate(clubJoinRequestId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubJoinRequest", "clubJoinRequestId", clubJoinRequestId));

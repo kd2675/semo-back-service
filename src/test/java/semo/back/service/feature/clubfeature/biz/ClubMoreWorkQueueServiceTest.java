@@ -71,9 +71,9 @@ class ClubMoreWorkQueueServiceTest {
         when(financeRequestRepository.countByClubIdAndRequesterClubProfileIdAndStatusCode(
                 1L,
                 11L,
-                "PENDING"
+                "SUBMITTED"
         )).thenReturn(2L);
-        when(financeRequestRepository.countByClubIdAndStatusCode(1L, "PENDING")).thenReturn(4L);
+        when(financeRequestRepository.countByClubIdAndStatusCode(1L, "SUBMITTED")).thenReturn(4L);
         when(financePaymentRepository.summarizeAdminFinance(eq(1L), any())).thenReturn(
                 new ClubAdminFinanceSummaryAggregate(
                         10,
@@ -122,7 +122,12 @@ class ClubMoreWorkQueueServiceTest {
                 10,
                 true,
                 "/user/" + featureKey,
-                "/admin/" + featureKey
+                "/admin/" + featureKey,
+                List.of(),
+                false,
+                null,
+                true,
+                null
         );
     }
 }

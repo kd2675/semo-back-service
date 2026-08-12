@@ -20,7 +20,6 @@ import semo.back.service.feature.club.vo.ClubAdminMembersResponse;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberRoleRequest;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberStatusRequest;
 import semo.back.service.feature.position.biz.ClubPositionService;
-import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 import semo.back.service.feature.position.vo.ClubPositionSummaryResponse;
 import semo.back.service.feature.position.vo.UpdateClubMemberPositionsRequest;
 
@@ -44,7 +43,7 @@ public class ClubAdminMemberService {
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_DORMANT = "DORMANT";
     private static final String STATUS_PENDING = "PENDING";
-    private static final Set<String> ALLOWED_ROLE_CODES = Set.of(ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER);
+    private static final Set<String> ALLOWED_ROLE_CODES = Set.of(ROLE_ADMIN, ROLE_MEMBER);
     private static final Set<String> ALLOWED_STATUS_CODES = Set.of(STATUS_ACTIVE, STATUS_DORMANT);
     private static final DateTimeFormatter DATE_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.KOREAN);
     private static final DateTimeFormatter DATE_TIME_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm", Locale.KOREAN);
@@ -55,14 +54,9 @@ public class ClubAdminMemberService {
     private final ProfileUserRepository profileUserRepository;
     private final ImageFileUrlResolver imageFileUrlResolver;
     private final ClubPositionService clubPositionService;
-    private final ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
 
     public ClubAdminMembersResponse getAdminMembers(Long clubId, String userKey) {
-        ClubAccessResolver.ClubAccess access = requireRolePermission(
-                clubId,
-                userKey,
-                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_VIEW
-        );
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         boolean roleManagementEnabled = clubPositionService.isRoleManagementEnabled(clubId);
         List<ClubPositionSummaryResponse> availablePositions = clubPositionService.getAvailablePositionSummaries(clubId);
         List<ClubAdminMemberResponse> members = loadMemberResponses(clubId, access);
@@ -87,7 +81,7 @@ public class ClubAdminMemberService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
         ClubMember target = requireManagedMember(clubId, clubMemberId, access);
         String normalizedRoleCode = normalizeRoleCode(request.roleCode());
-        validateRoleMutation(access, target, normalizedRoleCode);
+        validateRoleMutation(target);
         target.updateRoleCode(normalizedRoleCode);
         ClubAdminMemberResponse response = toResponse(
                 target,
@@ -97,8 +91,8 @@ public class ClubAdminMemberService {
                 loadAssignedPositions(clubId, target.getClubMemberId())
         );
         ClubActivityContextHolder.setDetails(
-                response.displayName() + "의 기본 권한을 " + toRoleDisplayName(normalizedRoleCode) + "로 변경했습니다.",
-                response.displayName() + "의 기본 권한을 변경하지 못했습니다."
+                response.displayName() + "의 클럽 접근 등급을 " + toRoleDisplayName(normalizedRoleCode) + "로 변경했습니다.",
+                response.displayName() + "의 클럽 접근 등급을 변경하지 못했습니다."
         );
         return response;
     }
@@ -164,12 +158,8 @@ public class ClubAdminMemberService {
             String userKey,
             UpdateClubMemberPositionsRequest request
     ) {
-        ClubAccessResolver.ClubAccess access = requireRolePermission(
-                clubId,
-                userKey,
-                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_ASSIGN
-        );
-        ClubMember target = requireManagedMember(clubId, clubMemberId, access);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
+        ClubMember target = requirePositionTarget(clubId, clubMemberId, access);
         clubPositionService.replaceMemberPositions(access, target, request == null ? null : request.clubPositionIds());
         ClubAdminMemberResponse response = toResponse(
                 target,
@@ -188,14 +178,6 @@ public class ClubAdminMemberService {
                 response.displayName() + "의 직책을 변경하지 못했습니다."
         );
         return response;
-    }
-
-    private ClubAccessResolver.ClubAccess requireRolePermission(Long clubId, String userKey, String permissionKey) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        if (!clubPositionPermissionEvaluator.hasPermission(access, permissionKey)) {
-            throw new SemoException.ForbiddenException("직책 관리 권한이 필요합니다.");
-        }
-        return access;
     }
 
     private List<ClubAdminMemberResponse> loadMemberResponses(Long clubId, ClubAccessResolver.ClubAccess access) {
@@ -267,7 +249,9 @@ public class ClubAdminMemberService {
         boolean self = access.membership().getClubMemberId().equals(member.getClubMemberId());
         boolean ownerActor = ROLE_OWNER.equals(access.membership().getRoleCode());
         boolean targetOwner = ROLE_OWNER.equals(member.getRoleCode());
-        boolean canManage = !self && (ownerActor || !targetOwner);
+        boolean canManage = !self && !targetOwner;
+        boolean canAssignPositions = STATUS_ACTIVE.equals(member.getMembershipStatus())
+                && (self || ownerActor || !targetOwner);
         boolean canApprove = canManage && STATUS_PENDING.equals(member.getMembershipStatus());
 
         return new ClubAdminMemberResponse(
@@ -282,6 +266,7 @@ public class ClubAdminMemberService {
                 member.getRoleCode(),
                 member.getMembershipStatus(),
                 canManage,
+                canAssignPositions,
                 canApprove,
                 self,
                 positions
@@ -300,16 +285,21 @@ public class ClubAdminMemberService {
         return target;
     }
 
-    private void validateRoleMutation(
-            ClubAccessResolver.ClubAccess access,
-            ClubMember target,
-            String normalizedRoleCode
-    ) {
+    private ClubMember requirePositionTarget(Long clubId, Long clubMemberId, ClubAccessResolver.ClubAccess access) {
+        ClubMember target = clubMemberRepository.findByClubMemberIdAndClubId(clubMemberId, clubId)
+                .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubMember", "clubMemberId", clubMemberId));
+        if (!STATUS_ACTIVE.equals(target.getMembershipStatus())) {
+            throw new SemoException.ValidationException("활동 중인 멤버에게만 직책을 배정할 수 있습니다.");
+        }
+        if (ROLE_OWNER.equals(target.getRoleCode()) && !ROLE_OWNER.equals(access.membership().getRoleCode())) {
+            throw new SemoException.ForbiddenException("OWNER 멤버의 직책은 OWNER만 관리할 수 있습니다.");
+        }
+        return target;
+    }
+
+    private void validateRoleMutation(ClubMember target) {
         if (ROLE_OWNER.equals(target.getRoleCode())) {
             throw new SemoException.ForbiddenException("OWNER 역할은 이 화면에서 변경할 수 없습니다.");
-        }
-        if (ROLE_OWNER.equals(normalizedRoleCode) && !ROLE_OWNER.equals(access.membership().getRoleCode())) {
-            throw new SemoException.ForbiddenException("OWNER 역할 지정은 OWNER만 할 수 있습니다.");
         }
     }
 
@@ -363,9 +353,9 @@ public class ClubAdminMemberService {
 
     private String toRoleDisplayName(String roleCode) {
         return switch (roleCode) {
-            case ROLE_OWNER -> "오너";
-            case ROLE_ADMIN -> "어드민";
-            default -> "유저";
+            case ROLE_OWNER -> "소유자";
+            case ROLE_ADMIN -> "관리자";
+            default -> "일반 회원";
         };
     }
 

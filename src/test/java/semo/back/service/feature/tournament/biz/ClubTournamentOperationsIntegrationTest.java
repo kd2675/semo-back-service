@@ -34,6 +34,7 @@ import semo.back.service.feature.clubfeature.vo.UpdateClubFeaturesRequest;
 import semo.back.service.feature.profile.biz.ProfileUserService;
 import semo.back.service.feature.tournament.vo.ReviewTournamentApplicationRequest;
 import semo.back.service.feature.tournament.vo.ReviewTournamentRecordRequest;
+import semo.back.service.feature.tournament.vo.CancelTournamentRequest;
 import semo.back.service.feature.tournament.vo.SubmitTournamentApplicationRequest;
 import semo.back.service.feature.tournament.vo.UpdateTournamentApplicationOperationsRequest;
 import semo.back.service.feature.tournament.vo.UpsertTournamentRequest;
@@ -278,6 +279,106 @@ class ClubTournamentOperationsIntegrationTest {
                 .isEqualTo("WAIVED");
     }
 
+    @Test
+    void paidTournament_withoutFinanceFeature_keepsExternalFeeWorkflowAvailable() {
+        TestClub club = createClub("tournament-owner-standalone", "대회장", "독립 대회", false);
+        addActiveMember(club.clubId(), "tournament-player-standalone", "참가자");
+        Long tournamentId = createApprovedTournament(club, "SINGLE", null, 8, true);
+        clubTournamentService.applyToTournament(
+                club.clubId(), tournamentId, "tournament-player-standalone", new SubmitTournamentApplicationRequest(null)
+        );
+        Long applicationId = tournamentApplicationRepository
+                .findByTournamentRecordIdAndClubProfileId(
+                        tournamentId,
+                        clubProfileId(club.clubId(), "tournament-player-standalone")
+                )
+                .orElseThrow()
+                .getTournamentApplicationId();
+
+        var approved = clubTournamentService.reviewApplication(
+                club.clubId(), tournamentId, applicationId, club.ownerUserKey(),
+                new ReviewTournamentApplicationRequest("APPROVED", "외부 납부 안내")
+        );
+
+        assertThat(approved.applications())
+                .singleElement()
+                .satisfies(application -> {
+                    assertThat(application.applicationStatus()).isEqualTo("APPROVED");
+                    assertThat(application.financePaymentId()).isNull();
+                    assertThat(application.feePaymentStatusCode()).isNull();
+                });
+        assertThat(approved.financeIntegrationEnabled()).isFalse();
+        assertThat(financePaymentRepository.findAll()).isEmpty();
+        assertThat(financeObligationRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void updateTournament_resubmitsRejectedAndMateriallyChangedApprovedTournament() {
+        TestClub club = createClub("tournament-owner-004", "대회장", "재검토 테스트", false);
+        var rejected = clubTournamentService.createTournament(
+                club.clubId(), club.ownerUserKey(), tournamentRequest("반려 대회", false)
+        );
+        clubTournamentService.reviewTournament(
+                club.clubId(), rejected.tournamentRecordId(), club.ownerUserKey(),
+                new ReviewTournamentRecordRequest("REJECTED", "장소를 보완해 주세요.")
+        );
+
+        var resubmitted = clubTournamentService.updateTournament(
+                club.clubId(), rejected.tournamentRecordId(), club.ownerUserKey(),
+                tournamentRequest("반려 대회", true)
+        );
+
+        assertThat(resubmitted.approvalStatus()).isEqualTo("PENDING");
+
+        Long approvedId = createApprovedTournament(club, "SINGLE", null, 8, false);
+        var minorUpdated = clubTournamentService.updateTournament(
+                club.clubId(), approvedId, club.ownerUserKey(), tournamentRequest("통합 운영 대회", true)
+        );
+        assertThat(minorUpdated.approvalStatus()).isEqualTo("APPROVED");
+
+        var materialUpdated = clubTournamentService.updateTournament(
+                club.clubId(), approvedId, club.ownerUserKey(), tournamentRequest("변경된 운영 대회", true)
+        );
+        assertThat(materialUpdated.approvalStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void reviewAndCancelTournament_onlyAllowCurrentStateAndNotifyApplicants() {
+        TestClub club = createClub("tournament-owner-005", "대회장", "취소 테스트", false);
+        addActiveMember(club.clubId(), "tournament-member-005", "참가자");
+        Long tournamentId = createApprovedTournament(club, "SINGLE", null, 8, false);
+        clubTournamentService.applyToTournament(
+                club.clubId(), tournamentId, "tournament-member-005", new SubmitTournamentApplicationRequest(null)
+        );
+
+        assertThatThrownBy(() -> clubTournamentService.reviewTournament(
+                club.clubId(), tournamentId, club.ownerUserKey(),
+                new ReviewTournamentRecordRequest("REJECTED", "다시 검토")
+        ))
+                .isInstanceOf(SemoException.ValidationException.class)
+                .hasMessage("승인 대기 중인 대회만 검토할 수 있습니다.");
+
+        var cancelled = clubTournamentService.cancelTournament(
+                club.clubId(), tournamentId, club.ownerUserKey(),
+                new CancelTournamentRequest("경기장 사용이 불가능해졌습니다.")
+        );
+
+        assertThat(cancelled)
+                .returns("CANCELLED", detail -> detail.tournamentStatus())
+                .returns("경기장 사용이 불가능해졌습니다.", detail -> detail.cancelReason())
+                .returns(false, detail -> detail.canEdit())
+                .returns(false, detail -> detail.canCancelTournament());
+        assertThat(clubNotificationRepository.findAll())
+                .anySatisfy(notification -> assertThat(notification.getNotificationType())
+                        .isEqualTo("TOURNAMENT_CANCELLED"));
+        assertThatThrownBy(() -> clubTournamentService.cancelTournament(
+                club.clubId(), tournamentId, club.ownerUserKey(),
+                new CancelTournamentRequest("다시 취소")
+        ))
+                .isInstanceOf(SemoException.ConflictException.class)
+                .hasMessage("이미 취소된 대회입니다.");
+    }
+
     private TestClub createClub(
             String ownerUserKey,
             String ownerDisplayName,
@@ -326,29 +427,11 @@ class ClubTournamentOperationsIntegrationTest {
             Integer participantLimit,
             boolean feeRequired
     ) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDate startDate = LocalDate.now().plusDays(2);
         var created = clubTournamentService.createTournament(
                 club.clubId(),
                 club.ownerUserKey(),
-                new UpsertTournamentRequest(
-                        "통합 운영 대회",
-                        "운영 흐름 검증",
-                        "팀과 참가비, 현장 운영을 검증합니다.",
-                        now.minusHours(1).withSecond(0).withNano(0).toString(),
-                        now.plusDays(1).withSecond(0).withNano(0).toString(),
-                        startDate.toString(),
-                        startDate.plusDays(1).toString(),
-                        "테스트 경기장",
-                        matchFormat,
-                        teamMemberLimit,
-                        participantLimit,
-                        feeRequired,
-                        feeRequired ? 20000 : null,
-                        "KRW",
-                        false,
-                        false,
-                        false
+                tournamentRequest(
+                        "통합 운영 대회", matchFormat, teamMemberLimit, participantLimit, feeRequired, false
                 )
         );
         clubTournamentService.reviewTournament(
@@ -358,6 +441,41 @@ class ClubTournamentOperationsIntegrationTest {
                 new ReviewTournamentRecordRequest("APPROVED", null)
         );
         return created.tournamentRecordId();
+    }
+
+    private UpsertTournamentRequest tournamentRequest(String title, boolean pinned) {
+        return tournamentRequest(title, "SINGLE", null, 8, false, pinned);
+    }
+
+    private UpsertTournamentRequest tournamentRequest(
+            String title,
+            String matchFormat,
+            Integer teamMemberLimit,
+            Integer participantLimit,
+            boolean feeRequired,
+            boolean pinned
+    ) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDate startDate = LocalDate.now().plusDays(2);
+        return new UpsertTournamentRequest(
+                title,
+                "운영 흐름 검증",
+                "팀과 참가비, 현장 운영을 검증합니다.",
+                now.minusHours(1).withSecond(0).withNano(0).toString(),
+                now.plusDays(1).withSecond(0).withNano(0).toString(),
+                startDate.toString(),
+                startDate.plusDays(1).toString(),
+                "테스트 경기장",
+                matchFormat,
+                teamMemberLimit,
+                participantLimit,
+                feeRequired,
+                feeRequired ? 20000 : null,
+                "KRW",
+                false,
+                false,
+                pinned
+        );
     }
 
     private record TestClub(Long clubId, String ownerUserKey, Long ownerClubProfileId) {

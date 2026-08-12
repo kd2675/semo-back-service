@@ -90,7 +90,12 @@ class ClubMorePreferenceServiceTest {
                 10,
                 true,
                 "/user/" + featureKey,
-                "/admin/" + featureKey
+                "/admin/" + featureKey,
+                List.of(),
+                false,
+                null,
+                true,
+                null
         );
     }
 }

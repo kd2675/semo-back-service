@@ -4,6 +4,7 @@ public record ClubPermissionItemResponse(
         String permissionKey,
         String displayName,
         String description,
-        String ownershipScope
+        String ownershipScope,
+        boolean sensitive
 ) {
 }

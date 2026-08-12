@@ -32,6 +32,7 @@ public record TournamentDetailResponse(
         boolean feeRequired,
         Integer feeAmount,
         String feeCurrencyCode,
+        boolean financeIntegrationEnabled,
         boolean postedToBoard,
         boolean postedToCalendar,
         boolean pinned,

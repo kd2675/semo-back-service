@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
+import semo.back.service.feature.position.biz.ClubCapability;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 
 @Service
@@ -12,11 +13,6 @@ import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 @Transactional(readOnly = true)
 public class ClubTournamentPermissionService {
     public static final String FEATURE_TOURNAMENT_RECORD = "TOURNAMENT_RECORD";
-    public static final String PERMISSION_TOURNAMENT_CREATE = "TOURNAMENT_RECORD_CREATE";
-    public static final String PERMISSION_TOURNAMENT_UPDATE_SELF = "TOURNAMENT_RECORD_UPDATE_SELF";
-    public static final String PERMISSION_TOURNAMENT_PIN = "TOURNAMENT_RECORD_PIN";
-    public static final String PERMISSION_TOURNAMENT_REVIEW = "TOURNAMENT_RECORD_REVIEW";
-    public static final String PERMISSION_TOURNAMENT_DELETE_ANY = "TOURNAMENT_RECORD_DELETE_ANY";
 
     private final ClubFeatureService clubFeatureService;
     private final ClubPositionPermissionEvaluator clubPositionPermissionEvaluator;
@@ -29,7 +25,7 @@ public class ClubTournamentPermissionService {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_TOURNAMENT_CREATE);
+        return hasRolePermission(access, ClubCapability.TOURNAMENT_RECORD_CREATE);
     }
 
     public TournamentActionPermission getActionPermission(
@@ -44,8 +40,8 @@ public class ClubTournamentPermissionService {
             return new TournamentActionPermission(false, false, false);
         }
         return new TournamentActionPermission(
-                hasRolePermission(access, PERMISSION_TOURNAMENT_UPDATE_SELF),
-                hasRolePermission(access, PERMISSION_TOURNAMENT_UPDATE_SELF),
+                hasRolePermission(access, ClubCapability.TOURNAMENT_RECORD_UPDATE_SELF),
+                hasRolePermission(access, ClubCapability.TOURNAMENT_RECORD_UPDATE_SELF),
                 false
         );
     }
@@ -54,26 +50,25 @@ public class ClubTournamentPermissionService {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_TOURNAMENT_PIN);
+        return hasRolePermission(access, ClubCapability.TOURNAMENT_RECORD_PIN);
     }
 
     public boolean canReviewTournament(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_TOURNAMENT_REVIEW);
+        return hasRolePermission(access, ClubCapability.TOURNAMENT_RECORD_REVIEW);
     }
 
     public boolean canDeleteTournament(ClubAccessResolver.ClubAccess access) {
         if (access.isAdmin()) {
             return true;
         }
-        return hasRolePermission(access, PERMISSION_TOURNAMENT_DELETE_ANY);
+        return hasRolePermission(access, ClubCapability.TOURNAMENT_RECORD_DELETE_ANY);
     }
 
-    private boolean hasRolePermission(ClubAccessResolver.ClubAccess access, String permissionKey) {
-        return clubPositionPermissionEvaluator.isRoleManagementEnabled(access.club().getClubId())
-                && clubPositionPermissionEvaluator.hasPermission(access, permissionKey);
+    private boolean hasRolePermission(ClubAccessResolver.ClubAccess access, ClubCapability capability) {
+        return clubPositionPermissionEvaluator.hasPermission(access, capability);
     }
 
     public record TournamentActionPermission(

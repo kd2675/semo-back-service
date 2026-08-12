@@ -1,5 +1,7 @@
 package semo.back.service.feature.clubfeature.vo;
 
+import java.util.List;
+
 public record ClubFeatureResponse(
         String featureKey,
         String displayName,
@@ -9,6 +11,11 @@ public record ClubFeatureResponse(
         int sortOrder,
         boolean enabled,
         String userPath,
-        String adminPath
+        String adminPath,
+        List<String> requiredFeatureKeys,
+        boolean mandatory,
+        String mandatoryReason,
+        boolean available,
+        String unavailableReason
 ) {
 }

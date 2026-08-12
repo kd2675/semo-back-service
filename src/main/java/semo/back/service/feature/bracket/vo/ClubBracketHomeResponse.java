@@ -7,6 +7,7 @@ public record ClubBracketHomeResponse(
         String clubName,
         boolean admin,
         boolean canCreate,
+        boolean tournamentIntegrationEnabled,
         int approvedBracketCount,
         int pendingBracketCount,
         BracketSummaryResponse featuredBracket,

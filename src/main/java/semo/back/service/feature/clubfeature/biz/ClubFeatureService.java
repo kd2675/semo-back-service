@@ -5,9 +5,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
+import semo.back.service.database.pub.entity.Club;
 import semo.back.service.database.pub.entity.ClubFeature;
 import semo.back.service.database.pub.entity.FeatureCatalog;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
+import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.FeatureCatalogRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
@@ -35,17 +37,22 @@ public class ClubFeatureService {
     private static final String NAVIGATION_SCOPE_USER_AND_ADMIN = "USER_AND_ADMIN";
     private static final String NAVIGATION_SCOPE_ADMIN_ONLY = "ADMIN_ONLY";
     private static final String FEATURE_JOIN_REQUEST = "JOIN_REQUEST";
+    private static final String FEATURE_SCHEDULE_MANAGE = "SCHEDULE_MANAGE";
+    private static final String FEATURE_ATTENDANCE = "ATTENDANCE";
+    private static final String FEATURE_ROLE_MANAGEMENT = "ROLE_MANAGEMENT";
     private static final String FEATURE_HANDOVER = "HANDOVER";
+    private static final String MEMBERSHIP_POLICY_APPROVAL = "APPROVAL";
 
     private final FeatureCatalogRepository featureCatalogRepository;
     private final ClubFeatureRepository clubFeatureRepository;
+    private final ClubRepository clubRepository;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubDashboardService clubDashboardService;
 
     @Transactional(transactionManager = "pubTransactionManager")
     public List<ClubFeatureResponse> getClubFeatures(Long clubId, String userKey) {
-        clubAccessResolver.requireActiveMember(clubId, userKey);
-        return getClubFeatureResponses(clubId);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
+        return getClubFeatureResponses(access.club());
     }
 
     @Transactional(transactionManager = "pubTransactionManager")
@@ -56,9 +63,15 @@ public class ClubFeatureService {
         Set<String> allowedFeatureKeys = catalogs.stream()
                 .map(FeatureCatalog::getFeatureKey)
                 .collect(Collectors.toSet());
-        List<String> enabledFeatureKeysInOrder = normalizeEnabledFeatureKeysInOrder(request, allowedFeatureKeys);
+        List<String> enabledFeatureKeysInOrder = includeRequiredFeatures(
+                access.club(),
+                normalizeEnabledFeatureKeysInOrder(request, allowedFeatureKeys)
+        );
         Set<String> enabledFeatureKeys = Set.copyOf(enabledFeatureKeysInOrder);
         Map<String, Integer> enabledSortOrderByKey = toEnabledSortOrderByKey(enabledFeatureKeysInOrder);
+        if (isApprovalClub(access.club())) {
+            enabledSortOrderByKey.put(FEATURE_JOIN_REQUEST, 5);
+        }
         Map<String, ClubFeature> existingByKey = clubFeatureRepository.findByClubId(clubId).stream()
                 .collect(Collectors.toMap(ClubFeature::getFeatureKey, Function.identity()));
         LocalDateTime now = LocalDateTime.now();
@@ -95,20 +108,31 @@ public class ClubFeatureService {
         }
         clubDashboardService.syncWidgetsForClub(clubId);
 
-        return getClubFeatureResponses(clubId);
+        return getClubFeatureResponses(access.club());
     }
 
     public boolean isFeatureEnabled(Long clubId, String featureKey) {
         String normalizedFeatureKey = normalizeFeatureKey(featureKey);
-        return clubFeatureRepository.findByClubIdAndFeatureKey(clubId, normalizedFeatureKey)
+        if (FEATURE_ROLE_MANAGEMENT.equals(normalizedFeatureKey)) {
+            return true;
+        }
+        if (FEATURE_JOIN_REQUEST.equals(normalizedFeatureKey)) {
+            return isApprovalClub(clubId);
+        }
+        boolean explicitlyEnabled = clubFeatureRepository.findByClubIdAndFeatureKey(clubId, normalizedFeatureKey)
                 .map(ClubFeature::isEnabled)
                 .orElse(false);
+        return explicitlyEnabled && requiredFeatureKeys(normalizedFeatureKey).stream()
+                .allMatch(requiredFeatureKey -> isFeatureEnabled(clubId, requiredFeatureKey));
     }
 
     public Set<String> getEnabledFeatureKeys(Long clubId) {
-        return clubFeatureRepository.findByClubId(clubId).stream()
-                .filter(ClubFeature::isEnabled)
-                .map(ClubFeature::getFeatureKey)
+        Club club = clubRepository.findById(clubId).orElse(null);
+        Map<String, ClubFeature> clubFeaturesByKey = clubFeatureRepository.findByClubId(clubId).stream()
+                .collect(Collectors.toMap(ClubFeature::getFeatureKey, Function.identity()));
+        return featureCatalogRepository.findByActiveTrueOrderBySortOrderAscFeatureKeyAsc().stream()
+                .map(FeatureCatalog::getFeatureKey)
+                .filter(featureKey -> resolveEnabled(featureKey, clubFeaturesByKey, club, new HashSet<>()))
                 .collect(Collectors.toUnmodifiableSet());
     }
 
@@ -144,6 +168,34 @@ public class ClubFeatureService {
         return deduplicated;
     }
 
+    private List<String> includeRequiredFeatures(Club club, List<String> requestedFeatureKeys) {
+        List<String> normalized = new ArrayList<>(requestedFeatureKeys);
+        insertBefore(normalized, FEATURE_ROLE_MANAGEMENT, null);
+        if (isApprovalClub(club)) {
+            insertBefore(normalized, FEATURE_JOIN_REQUEST, null);
+        } else {
+            normalized.remove(FEATURE_JOIN_REQUEST);
+        }
+        insertRequirementBeforeDependent(normalized, FEATURE_ATTENDANCE, FEATURE_SCHEDULE_MANAGE);
+        insertRequirementBeforeDependent(normalized, FEATURE_HANDOVER, FEATURE_ROLE_MANAGEMENT);
+        return List.copyOf(normalized);
+    }
+
+    private void insertRequirementBeforeDependent(List<String> featureKeys, String dependent, String requirement) {
+        if (!featureKeys.contains(dependent) || featureKeys.contains(requirement)) {
+            return;
+        }
+        insertBefore(featureKeys, requirement, dependent);
+    }
+
+    private void insertBefore(List<String> featureKeys, String featureKey, String beforeFeatureKey) {
+        if (featureKeys.contains(featureKey)) {
+            return;
+        }
+        int targetIndex = beforeFeatureKey == null ? -1 : featureKeys.indexOf(beforeFeatureKey);
+        featureKeys.add(targetIndex < 0 ? featureKeys.size() : targetIndex, featureKey);
+    }
+
     private Map<String, Integer> toEnabledSortOrderByKey(List<String> enabledFeatureKeysInOrder) {
         Map<String, Integer> sortOrderByKey = new HashMap<>();
         for (int index = 0; index < enabledFeatureKeysInOrder.size(); index++) {
@@ -163,8 +215,8 @@ public class ClubFeatureService {
         return 1000 + catalog.getSortOrder();
     }
 
-    private int resolveResponseSortOrder(FeatureCatalog catalog, ClubFeature clubFeature) {
-        if (clubFeature == null && isImplicitlyEnabled(catalog.getFeatureKey())) {
+    private int resolveResponseSortOrder(FeatureCatalog catalog, ClubFeature clubFeature, Club club) {
+        if (clubFeature == null && isMandatoryFeature(club, catalog.getFeatureKey())) {
             return catalog.getSortOrder();
         }
         if (clubFeature == null || clubFeature.getSortOrder() == null || clubFeature.getSortOrder() <= 0) {
@@ -173,7 +225,8 @@ public class ClubFeatureService {
         return clubFeature.getSortOrder();
     }
 
-    private List<ClubFeatureResponse> getClubFeatureResponses(Long clubId) {
+    private List<ClubFeatureResponse> getClubFeatureResponses(Club club) {
+        Long clubId = club.getClubId();
         List<FeatureCatalog> catalogs = featureCatalogRepository.findByActiveTrueOrderBySortOrderAscFeatureKeyAsc();
         Map<String, ClubFeature> clubFeaturesByKey = clubFeatureRepository.findByClubId(clubId).stream()
                 .collect(Collectors.toMap(ClubFeature::getFeatureKey, Function.identity()));
@@ -182,7 +235,7 @@ public class ClubFeatureService {
                 .sorted(
                         Comparator
                                 .comparingInt((FeatureCatalog catalog) ->
-                                        resolveResponseSortOrder(catalog, clubFeaturesByKey.get(catalog.getFeatureKey()))
+                                        resolveResponseSortOrder(catalog, clubFeaturesByKey.get(catalog.getFeatureKey()), club)
                                 )
                                 .thenComparingInt(FeatureCatalog::getSortOrder)
                                 .thenComparing(FeatureCatalog::getFeatureKey)
@@ -195,10 +248,15 @@ public class ClubFeatureService {
                             catalog.getDescription(),
                             catalog.getIconName(),
                             resolveNavigationScope(catalog),
-                            resolveResponseSortOrder(catalog, clubFeature),
-                            resolveEnabled(catalog, clubFeature),
+                            resolveResponseSortOrder(catalog, clubFeature, club),
+                            resolveEnabled(catalog.getFeatureKey(), clubFeaturesByKey, club, new HashSet<>()),
                             toUserPath(clubId, catalog.getFeatureKey()),
-                            toAdminPath(clubId, catalog.getFeatureKey())
+                            toAdminPath(clubId, catalog.getFeatureKey()),
+                            requiredFeatureKeys(catalog.getFeatureKey()),
+                            isMandatoryFeature(club, catalog.getFeatureKey()),
+                            mandatoryReason(club, catalog.getFeatureKey()),
+                            isFeatureAvailable(club, catalog.getFeatureKey()),
+                            unavailableReason(club, catalog.getFeatureKey())
                     );
                 })
                 .toList();
@@ -263,16 +321,75 @@ public class ClubFeatureService {
         return featureKey.trim().toUpperCase(Locale.ROOT);
     }
 
-    private boolean resolveEnabled(FeatureCatalog catalog, ClubFeature clubFeature) {
-        if (clubFeature != null) {
-            return clubFeature.isEnabled();
+    private boolean resolveEnabled(
+            String featureKey,
+            Map<String, ClubFeature> clubFeaturesByKey,
+            Club club,
+            Set<String> resolving
+    ) {
+        String normalizedFeatureKey = normalizeFeatureKey(featureKey);
+        if (!isFeatureAvailable(club, normalizedFeatureKey)) {
+            return false;
         }
-        return isImplicitlyEnabled(catalog.getFeatureKey());
+        if (!resolving.add(normalizedFeatureKey)) {
+            return false;
+        }
+        ClubFeature clubFeature = clubFeaturesByKey.get(normalizedFeatureKey);
+        boolean configured = isMandatoryFeature(club, normalizedFeatureKey)
+                || clubFeature != null && clubFeature.isEnabled();
+        boolean requirementsEnabled = requiredFeatureKeys(normalizedFeatureKey).stream()
+                .allMatch(requiredFeatureKey -> resolveEnabled(
+                        requiredFeatureKey,
+                        clubFeaturesByKey,
+                        club,
+                        new HashSet<>(resolving)
+                ));
+        return configured && requirementsEnabled;
     }
 
-    private boolean isImplicitlyEnabled(String featureKey) {
+    private List<String> requiredFeatureKeys(String featureKey) {
+        return switch (normalizeFeatureKey(featureKey)) {
+            case FEATURE_ATTENDANCE -> List.of(FEATURE_SCHEDULE_MANAGE);
+            case FEATURE_HANDOVER -> List.of(FEATURE_ROLE_MANAGEMENT);
+            default -> List.of();
+        };
+    }
+
+    private boolean isMandatoryFeature(Club club, String featureKey) {
         String normalizedFeatureKey = normalizeFeatureKey(featureKey);
-        return FEATURE_JOIN_REQUEST.equals(normalizedFeatureKey) || FEATURE_HANDOVER.equals(normalizedFeatureKey);
+        return FEATURE_ROLE_MANAGEMENT.equals(normalizedFeatureKey)
+                || FEATURE_JOIN_REQUEST.equals(normalizedFeatureKey) && isApprovalClub(club);
+    }
+
+    private String mandatoryReason(Club club, String featureKey) {
+        if (FEATURE_ROLE_MANAGEMENT.equals(normalizeFeatureKey(featureKey))) {
+            return "직책과 기능 권한은 클럽 운영을 위한 기본 관리자 도구입니다.";
+        }
+        if (isMandatoryFeature(club, featureKey)) {
+            return "가입 승인제 클럽에서 신청자를 검토하기 위한 필수 기능입니다.";
+        }
+        return null;
+    }
+
+    private boolean isFeatureAvailable(Club club, String featureKey) {
+        return !FEATURE_JOIN_REQUEST.equals(normalizeFeatureKey(featureKey)) || isApprovalClub(club);
+    }
+
+    private String unavailableReason(Club club, String featureKey) {
+        if (!isFeatureAvailable(club, featureKey)) {
+            return "가입 신청은 가입 승인제 클럽에서만 사용합니다.";
+        }
+        return null;
+    }
+
+    private boolean isApprovalClub(Long clubId) {
+        return clubRepository.findById(clubId)
+                .map(this::isApprovalClub)
+                .orElse(false);
+    }
+
+    private boolean isApprovalClub(Club club) {
+        return club != null && MEMBERSHIP_POLICY_APPROVAL.equals(club.getMembershipPolicy());
     }
 
     private String buildFeatureUpdateDetail(List<FeatureCatalog> catalogs, Set<String> enabledFeatureKeys) {

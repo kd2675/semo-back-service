@@ -9,6 +9,7 @@ public record MemberDirectoryMemberResponse(
         Long clubProfileId,
         String displayName,
         String avatarImageUrl,
+        String roleCode,
         String roleLabel,
         List<ClubPositionSummaryResponse> positions,
         String tagline,

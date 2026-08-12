@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS club_position (
     color_hex VARCHAR(20) NULL,
     active TINYINT(1) NOT NULL DEFAULT 1,
     created_by_club_profile_id BIGINT NULL,
+    version BIGINT NOT NULL DEFAULT 0,
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT uk_club_position_code UNIQUE (club_id, position_code),
@@ -168,6 +169,33 @@ CREATE TABLE IF NOT EXISTS club_position_permission (
 
 CREATE INDEX idx_club_position_permission_position
     ON club_position_permission (club_position_id, permission_key);
+
+CREATE TABLE IF NOT EXISTS club_position_feature_grant (
+    club_position_feature_grant_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_position_id BIGINT NOT NULL,
+    feature_key VARCHAR(50) NOT NULL,
+    access_level VARCHAR(20) NOT NULL,
+    policy_version INT NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_position_feature_grant UNIQUE (club_position_id, feature_key),
+    CONSTRAINT fk_club_position_feature_grant_position FOREIGN KEY (club_position_id) REFERENCES club_position(club_position_id),
+    CONSTRAINT fk_club_position_feature_grant_feature FOREIGN KEY (feature_key) REFERENCES feature_catalog(feature_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS club_position_sensitive_grant (
+    club_position_sensitive_grant_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    club_position_id BIGINT NOT NULL,
+    permission_key VARCHAR(80) NOT NULL,
+    granted_by_club_profile_id BIGINT NULL,
+    granted_at DATETIME NOT NULL,
+    create_date DATETIME NOT NULL,
+    update_date DATETIME NOT NULL,
+    CONSTRAINT uk_club_position_sensitive_grant UNIQUE (club_position_id, permission_key),
+    CONSTRAINT fk_club_position_sensitive_grant_position FOREIGN KEY (club_position_id) REFERENCES club_position(club_position_id),
+    CONSTRAINT fk_club_position_sensitive_grant_permission FOREIGN KEY (permission_key) REFERENCES feature_permission_catalog(permission_key),
+    CONSTRAINT fk_club_position_sensitive_grant_granted_by FOREIGN KEY (granted_by_club_profile_id) REFERENCES club_profile(club_profile_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS club_member_position (
     club_member_position_id BIGINT AUTO_INCREMENT PRIMARY KEY,

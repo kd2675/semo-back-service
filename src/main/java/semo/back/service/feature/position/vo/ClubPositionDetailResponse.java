@@ -11,6 +11,7 @@ public record ClubPositionDetailResponse(
         boolean canDelete,
         boolean canAssign,
         ClubPositionSummaryResponse position,
-        List<ClubPermissionGroupResponse> permissionGroups
+        List<ClubPermissionGroupResponse> permissionGroups,
+        List<ClubPositionTemplateResponse> positionTemplates
 ) {
 }

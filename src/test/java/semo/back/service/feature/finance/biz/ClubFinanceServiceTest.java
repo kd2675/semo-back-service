@@ -470,6 +470,31 @@ class ClubFinanceServiceTest {
     }
 
     @Test
+    void reviewFinanceRequest_ownRequest_rejectsSelfReview() {
+        Long clubId = createEnabledClub("finance-owner-self-review", "Finance Owner Self", "Finance Self Review Club");
+        var created = clubFinanceService.createFinanceRequest(
+                clubId,
+                "finance-owner-self-review",
+                new CreateFinanceRequestRequest(
+                        "SETTLEMENT_REQUEST",
+                        "본인 정산 요청",
+                        new BigDecimal("19000"),
+                        "내부 행사",
+                        "다른 관리자의 검토가 필요합니다."
+                )
+        );
+
+        assertThatThrownBy(() -> clubFinanceService.reviewFinanceRequest(
+                clubId,
+                created.requestId(),
+                "finance-owner-self-review",
+                new ReviewFinanceRequestRequest("APPROVED", "본인 승인")
+        ))
+                .isInstanceOf(semo.back.service.common.exception.SemoException.ForbiddenException.class)
+                .hasMessageContaining("본인이 제출한 재정 요청");
+    }
+
+    @Test
     void adminCanCreateExpenseEntry() {
         Long clubId = createEnabledClub("finance-owner-008", "Finance Owner 8", "Finance Club 8");
         addActiveMember(clubId, "finance-member-008", "Finance Member 8");

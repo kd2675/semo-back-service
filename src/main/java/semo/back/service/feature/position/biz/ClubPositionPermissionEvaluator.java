@@ -3,15 +3,10 @@ package semo.back.service.feature.position.biz;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import semo.back.service.database.pub.entity.ClubPosition;
-import semo.back.service.database.pub.entity.ClubPositionPermission;
-import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubPositionPermissionRepository;
-import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
-import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 
-import java.util.List;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -20,94 +15,89 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ClubPositionPermissionEvaluator {
     public static final String FEATURE_ROLE_MANAGEMENT = "ROLE_MANAGEMENT";
-    public static final String PERMISSION_NOTICE_CREATE = "NOTICE_CREATE";
-    public static final String PERMISSION_NOTICE_UPDATE_SELF = "NOTICE_UPDATE_SELF";
-    public static final String PERMISSION_NOTICE_DELETE_SELF = "NOTICE_DELETE_SELF";
-    public static final String PERMISSION_SCHEDULE_CREATE = "SCHEDULE_CREATE";
-    public static final String PERMISSION_SCHEDULE_UPDATE_SELF = "SCHEDULE_UPDATE_SELF";
-    public static final String PERMISSION_SCHEDULE_DELETE_SELF = "SCHEDULE_DELETE_SELF";
-    public static final String PERMISSION_ATTENDANCE_MANAGE = "ATTENDANCE_MANAGE";
-    public static final String PERMISSION_POLL_CREATE = "POLL_CREATE";
-    public static final String PERMISSION_POLL_UPDATE_SELF = "POLL_UPDATE_SELF";
-    public static final String PERMISSION_POLL_DELETE_SELF = "POLL_DELETE_SELF";
-    public static final String PERMISSION_TOURNAMENT_CREATE = "TOURNAMENT_RECORD_CREATE";
-    public static final String PERMISSION_TOURNAMENT_UPDATE_SELF = "TOURNAMENT_RECORD_UPDATE_SELF";
-    public static final String PERMISSION_TOURNAMENT_PIN = "TOURNAMENT_RECORD_PIN";
-    public static final String PERMISSION_TOURNAMENT_REVIEW = "TOURNAMENT_RECORD_REVIEW";
-    public static final String PERMISSION_TOURNAMENT_DELETE_ANY = "TOURNAMENT_RECORD_DELETE_ANY";
-    public static final String PERMISSION_BRACKET_CREATE = "BRACKET_CREATE";
-    public static final String PERMISSION_BRACKET_UPDATE_SELF = "BRACKET_UPDATE_SELF";
-    public static final String PERMISSION_BRACKET_REVIEW = "BRACKET_REVIEW";
-    public static final String PERMISSION_BRACKET_DELETE_ANY = "BRACKET_DELETE_ANY";
-    public static final String PERMISSION_FINANCE_VIEW = "FINANCE_VIEW";
-    public static final String PERMISSION_FINANCE_BILLING_ISSUE = "FINANCE_BILLING_ISSUE";
-    public static final String PERMISSION_FINANCE_REQUEST_REVIEW = "FINANCE_REQUEST_REVIEW";
-    public static final String PERMISSION_FINANCE_EXPENSE_CREATE = "FINANCE_EXPENSE_CREATE";
-    public static final String PERMISSION_FINANCE_PAYMENT_UPDATE = "FINANCE_PAYMENT_UPDATE";
-    public static final String PERMISSION_FINANCE_EXPORT = "FINANCE_EXPORT";
-    public static final String PERMISSION_FINANCE_PERIOD_CLOSE = "FINANCE_PERIOD_CLOSE";
-    public static final String PERMISSION_TODO_VIEW = "TODO_VIEW";
-    public static final String PERMISSION_TODO_CREATE = "TODO_CREATE";
-    public static final String PERMISSION_TODO_ASSIGN = "TODO_ASSIGN";
-    public static final String PERMISSION_TODO_MANAGE_STATUS = "TODO_MANAGE_STATUS";
-    public static final String PERMISSION_TODO_DELETE_ANY = "TODO_DELETE_ANY";
-    public static final String PERMISSION_ROLE_MANAGEMENT_VIEW = "ROLE_MANAGEMENT_VIEW";
-    public static final String PERMISSION_ROLE_MANAGEMENT_CREATE = "ROLE_MANAGEMENT_CREATE";
-    public static final String PERMISSION_ROLE_MANAGEMENT_UPDATE = "ROLE_MANAGEMENT_UPDATE";
-    public static final String PERMISSION_ROLE_MANAGEMENT_DELETE = "ROLE_MANAGEMENT_DELETE";
-    public static final String PERMISSION_ROLE_MANAGEMENT_ASSIGN = "ROLE_MANAGEMENT_ASSIGN";
-    public static final String PERMISSION_HANDOVER_VIEW = "HANDOVER_VIEW";
-    public static final String PERMISSION_HANDOVER_MANAGE = "HANDOVER_MANAGE";
-    public static final String PERMISSION_DECISION_VIEW = "DECISION_VIEW";
-    public static final String PERMISSION_DECISION_MANAGE = "DECISION_MANAGE";
+    public static final ClubCapability PERMISSION_NOTICE_CREATE = ClubCapability.NOTICE_CREATE;
+    public static final ClubCapability PERMISSION_NOTICE_UPDATE_SELF = ClubCapability.NOTICE_UPDATE_SELF;
+    public static final ClubCapability PERMISSION_NOTICE_DELETE_SELF = ClubCapability.NOTICE_DELETE_SELF;
+    public static final ClubCapability PERMISSION_SCHEDULE_CREATE = ClubCapability.SCHEDULE_CREATE;
+    public static final ClubCapability PERMISSION_SCHEDULE_UPDATE_SELF = ClubCapability.SCHEDULE_UPDATE_SELF;
+    public static final ClubCapability PERMISSION_SCHEDULE_DELETE_SELF = ClubCapability.SCHEDULE_DELETE_SELF;
+    public static final ClubCapability PERMISSION_ATTENDANCE_MANAGE = ClubCapability.ATTENDANCE_MANAGE;
+    public static final ClubCapability PERMISSION_POLL_CREATE = ClubCapability.POLL_CREATE;
+    public static final ClubCapability PERMISSION_POLL_UPDATE_SELF = ClubCapability.POLL_UPDATE_SELF;
+    public static final ClubCapability PERMISSION_POLL_DELETE_SELF = ClubCapability.POLL_DELETE_SELF;
+    public static final ClubCapability PERMISSION_TOURNAMENT_CREATE = ClubCapability.TOURNAMENT_RECORD_CREATE;
+    public static final ClubCapability PERMISSION_TOURNAMENT_UPDATE_SELF = ClubCapability.TOURNAMENT_RECORD_UPDATE_SELF;
+    public static final ClubCapability PERMISSION_TOURNAMENT_PIN = ClubCapability.TOURNAMENT_RECORD_PIN;
+    public static final ClubCapability PERMISSION_TOURNAMENT_REVIEW = ClubCapability.TOURNAMENT_RECORD_REVIEW;
+    public static final ClubCapability PERMISSION_TOURNAMENT_DELETE_ANY = ClubCapability.TOURNAMENT_RECORD_DELETE_ANY;
+    public static final ClubCapability PERMISSION_BRACKET_CREATE = ClubCapability.BRACKET_CREATE;
+    public static final ClubCapability PERMISSION_BRACKET_UPDATE_SELF = ClubCapability.BRACKET_UPDATE_SELF;
+    public static final ClubCapability PERMISSION_BRACKET_REVIEW = ClubCapability.BRACKET_REVIEW;
+    public static final ClubCapability PERMISSION_BRACKET_DELETE_ANY = ClubCapability.BRACKET_DELETE_ANY;
+    public static final ClubCapability PERMISSION_FINANCE_VIEW = ClubCapability.FINANCE_VIEW;
+    public static final ClubCapability PERMISSION_FINANCE_BILLING_ISSUE = ClubCapability.FINANCE_BILLING_ISSUE;
+    public static final ClubCapability PERMISSION_FINANCE_REQUEST_REVIEW = ClubCapability.FINANCE_REQUEST_REVIEW;
+    public static final ClubCapability PERMISSION_FINANCE_EXPENSE_CREATE = ClubCapability.FINANCE_EXPENSE_CREATE;
+    public static final ClubCapability PERMISSION_FINANCE_PAYMENT_UPDATE = ClubCapability.FINANCE_PAYMENT_UPDATE;
+    public static final ClubCapability PERMISSION_FINANCE_EXPORT = ClubCapability.FINANCE_EXPORT;
+    public static final ClubCapability PERMISSION_FINANCE_PERIOD_CLOSE = ClubCapability.FINANCE_PERIOD_CLOSE;
+    public static final ClubCapability PERMISSION_TODO_VIEW = ClubCapability.TODO_VIEW;
+    public static final ClubCapability PERMISSION_TODO_CREATE = ClubCapability.TODO_CREATE;
+    public static final ClubCapability PERMISSION_TODO_ASSIGN = ClubCapability.TODO_ASSIGN;
+    public static final ClubCapability PERMISSION_TODO_MANAGE_STATUS = ClubCapability.TODO_MANAGE_STATUS;
+    public static final ClubCapability PERMISSION_TODO_DELETE_ANY = ClubCapability.TODO_DELETE_ANY;
+    public static final ClubCapability PERMISSION_HANDOVER_VIEW = ClubCapability.HANDOVER_VIEW;
+    public static final ClubCapability PERMISSION_HANDOVER_MANAGE = ClubCapability.HANDOVER_MANAGE;
+    public static final ClubCapability PERMISSION_DECISION_VIEW = ClubCapability.DECISION_VIEW;
+    public static final ClubCapability PERMISSION_DECISION_MANAGE = ClubCapability.DECISION_MANAGE;
 
-    private final ClubFeatureService clubFeatureService;
-    private final ClubPositionRepository clubPositionRepository;
     private final ClubPositionPermissionRepository clubPositionPermissionRepository;
-    private final ClubMemberPositionRepository clubMemberPositionRepository;
 
     public boolean isRoleManagementEnabled(Long clubId) {
-        return clubFeatureService.isFeatureEnabled(clubId, FEATURE_ROLE_MANAGEMENT);
+        return clubId != null && clubId > 0;
     }
 
-    public boolean hasPermission(ClubAccessResolver.ClubAccess access, String permissionKey) {
+    public boolean hasPermission(
+            ClubAccessResolver.ClubAccess access,
+            ClubCapability capability
+    ) {
         if (access.isAdmin()) {
             return true;
         }
-        if (!isRoleManagementEnabled(access.club().getClubId())) {
-            return false;
+        return getCapabilitiesForMember(
+                access.club().getClubId(),
+                access.membership().getClubMemberId()
+        ).contains(capability);
+    }
+
+    public boolean hasAnyPermission(
+            ClubAccessResolver.ClubAccess access,
+            ClubCapability... capabilities
+    ) {
+        if (access.isAdmin()) {
+            return true;
         }
-        Set<String> permissionKeys = getPermissionKeysForMember(
+        Set<ClubCapability> granted = getCapabilitiesForMember(
                 access.club().getClubId(),
                 access.membership().getClubMemberId()
         );
-        return permissionKeys.contains(permissionKey);
+        return Arrays.stream(capabilities).anyMatch(granted::contains);
     }
 
+    public Set<ClubCapability> getCapabilitiesForMember(Long clubId, Long clubMemberId) {
+        return clubPositionPermissionRepository.findEffectivePermissionKeys(clubId, clubMemberId).stream()
+                .map(ClubCapability::fromPermissionKey)
+                .flatMap(java.util.Optional::stream)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Read-only compatibility view for response composition and migration tests.
+     * Authorization decisions should use the typed capability methods above.
+     */
     public Set<String> getPermissionKeysForMember(Long clubId, Long clubMemberId) {
-        if (!isRoleManagementEnabled(clubId)) {
-            return Set.of();
-        }
-
-        List<Long> positionIds = clubMemberPositionRepository.findByClubMemberId(clubMemberId).stream()
-                .map(item -> item.getClubPositionId())
-                .distinct()
-                .toList();
-        if (positionIds.isEmpty()) {
-            return Set.of();
-        }
-
-        Set<Long> activePositionIds = clubPositionRepository.findAllById(positionIds).stream()
-                .filter(position -> position.getClubId().equals(clubId))
-                .filter(ClubPosition::isActive)
-                .map(ClubPosition::getClubPositionId)
-                .collect(Collectors.toSet());
-        if (activePositionIds.isEmpty()) {
-            return Set.of();
-        }
-
-        return clubPositionPermissionRepository.findByClubPositionIdIn(activePositionIds.stream().toList()).stream()
-                .map(ClubPositionPermission::getPermissionKey)
-                .collect(Collectors.toSet());
+        return getCapabilitiesForMember(clubId, clubMemberId).stream()
+                .map(ClubCapability::permissionKey)
+                .collect(Collectors.toUnmodifiableSet());
     }
 }

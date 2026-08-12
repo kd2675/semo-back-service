@@ -16,6 +16,7 @@ public record ClubAdminMemberResponse(
         String roleCode,
         String membershipStatus,
         boolean canManage,
+        boolean canAssignPositions,
         boolean canApprove,
         boolean self,
         List<ClubPositionSummaryResponse> positions

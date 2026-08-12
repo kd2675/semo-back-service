@@ -97,7 +97,7 @@
 ## Related Docs
 
 - `AGENTS.md`
-- `../semo-front-service/AGENTS_SEMO_MORE_FEATURE_CHECKLIST.md`
+- `../semo-front-service/SEMO_MORE_FEATURE_GUIDE.md`
 
 ## Package Map
 
@@ -168,6 +168,18 @@
 - `PUT /api/semo/v1/clubs/{clubId}/admin/members/{clubMemberId}/status`
 - `POST /api/semo/v1/clubs/{clubId}/admin/members/{clubMemberId}/approve`
 - `PUT /api/semo/v1/clubs/{clubId}/admin/members/{clubMemberId}/positions`
+
+회원·직책·임기 집행부 경계:
+
+- `club_member.role_code`는 `OWNER`/`ADMIN`/`MEMBER` 클럽 접근 등급입니다. 일반 변경 API는 `ADMIN`과 `MEMBER`만 전환하며 OWNER 이전은 지원하지 않습니다.
+- `club_position`과 `club_member_position`은 현재 업무 직책과 배정입니다. 직책 구성과 배정 자체는 OWNER/ADMIN만 관리하며 `ROLE_MANAGEMENT`는 꺼서 인가가 사라질 수 없는 핵심 운영 기능입니다.
+- 직책 설정 API의 쓰기 계약은 원자 권한 배열이 아니라 기능별 운영 수준과 추가 승인 권한입니다. 이 사용자 의도는 `club_position_feature_grant`와 `club_position_sensitive_grant`에 저장하고, 서버가 실제 액션 권한을 `club_position_permission`으로 투영합니다.
+- 인가 코드는 타입이 있는 `ClubCapability`와 한 번의 배정-직책-권한 조인 조회를 사용합니다. 기존 `club_position_permission`은 런타임 인가와 감사 호환을 위한 투영 테이블이며 프론트 쓰기 모델이 아닙니다.
+- `ClubPositionAccessPolicy.policyVersion`이 바뀌어도 기존 투영 권한은 자동 확대하지 않습니다. 화면에 정책 업데이트를 알리고 관리자가 명시적으로 적용할 때만 새 조합으로 다시 투영합니다.
+- 기존 비표준 원자 권한 조합은 `LEGACY_CUSTOM`으로 읽고 관리자가 표준 운영 수준을 선택하기 전까지 그대로 보존합니다. 정책에 등록되지 않은 신규 액션 권한도 자동 위임하지 않습니다.
+- 직책 수정은 `club_position.version`의 낙관적 잠금 값을 요구하여 두 관리자의 덮어쓰기를 막습니다.
+- 직책 사용 종료는 물리 삭제가 아니라 비활성화이며 현재 배정과 열린 이력을 종료합니다. 과거 이력, 권한 구성, 인수인계 FK는 보존합니다.
+- `club_term_executive_assignment`는 임기별 집행부 스냅샷이며 현재 권한을 부여하지 않습니다.
 
 ### Feature activation / dashboard
 - `GET /api/semo/v1/clubs/{clubId}/features`
@@ -327,7 +339,7 @@
   - `FEEDBACK`
   - `ROLE_MANAGEMENT`
 - `feature_permission_catalog`
-  - 공지, 투표, 일정 출석, 대회, 대진표, 재정, 직책관리 권한
+  - 공지, 투표, 일정 출석, 대회, 대진표, 재정 권한
 - `dashboard_widget_catalog`
   - 공지, 보드 스트립, 일정 개요, 일정 인사이트, 투표 상태, 투표 펄스, 프로필, 출석 상태, 최근 출석, 재정 상태, 재정 요약, 대회 센터, 내 대회, 대진표 보드, 대진표 워크벤치 위젯
 
@@ -349,7 +361,7 @@
 ./gradlew :semo-back-service:test --rerun-tasks
 ```
 
-2026-08-07 현재 루트 wrapper 기준으로 `compileJava`와 전체 테스트를 검증합니다.
+2026-08-12 현재 루트 wrapper 기준으로 `compileJava`와 전체 222개 테스트를 검증했습니다.
 
 ## Test Coverage Snapshot
 
@@ -358,10 +370,14 @@
 - `profile`
 - `club`
 - `clubfeature`
+- `attachment`
+- `notification`
 - `contentread`
 - `dashboard`
 - `feedback`
 - `finance`
+- `handover`
+- `decision`
 - `memberdirectory`
 - `notice` 일부(permission/feed)
 - `poll` 일부(permission)

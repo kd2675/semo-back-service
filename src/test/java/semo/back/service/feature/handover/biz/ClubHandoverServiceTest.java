@@ -118,6 +118,9 @@ class ClubHandoverServiceTest {
         when(clubOperatingTermRepository
                 .findFirstByClubIdAndStatusCodeOrderByStartDateDescClubOperatingTermIdDesc(1L, "ACTIVE"))
                 .thenReturn(Optional.of(current));
+        when(clubFeatureService.isFeatureEnabled(1L, "TODO")).thenReturn(true);
+        when(clubFeatureService.isFeatureEnabled(1L, "FINANCE")).thenReturn(true);
+        when(clubFeatureService.isFeatureEnabled(1L, "FEEDBACK")).thenReturn(true);
         when(todoItemRepository.findAllByStatusCodes(1L, Set.of("OPEN", "IN_PROGRESS"))).thenReturn(List.of(
                 TodoItem.builder()
                         .todoItemId(11L)

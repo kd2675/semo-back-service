@@ -63,10 +63,9 @@ class ClubMoreSummaryServiceTest {
                 feature("BRACKET", 50),
                 feature("ATTENDANCE", 60)
         ));
-        when(clubPositionPermissionEvaluator.getPermissionKeysForMember(1L, 10L)).thenReturn(Set.of(
+        when(clubPositionPermissionEvaluator.getCapabilitiesForMember(1L, 10L)).thenReturn(Set.of(
                 ClubPositionPermissionEvaluator.PERMISSION_FINANCE_VIEW,
                 ClubPositionPermissionEvaluator.PERMISSION_TODO_VIEW,
-                ClubPositionPermissionEvaluator.PERMISSION_ROLE_MANAGEMENT_VIEW,
                 ClubPositionPermissionEvaluator.PERMISSION_TOURNAMENT_REVIEW,
                 ClubPositionPermissionEvaluator.PERMISSION_BRACKET_DELETE_ANY,
                 ClubPositionPermissionEvaluator.PERMISSION_ATTENDANCE_MANAGE
@@ -84,7 +83,6 @@ class ClubMoreSummaryServiceTest {
         assertThat(response.adminToolFeatureKeys()).containsExactly(
                 "FINANCE",
                 "TODO",
-                "ROLE_MANAGEMENT",
                 "TOURNAMENT_RECORD",
                 "BRACKET",
                 "ATTENDANCE"
@@ -101,7 +99,12 @@ class ClubMoreSummaryServiceTest {
                 sortOrder,
                 true,
                 "/user/" + featureKey,
-                "/admin/" + featureKey
+                "/admin/" + featureKey,
+                List.of(),
+                false,
+                null,
+                true,
+                null
         );
     }
 }

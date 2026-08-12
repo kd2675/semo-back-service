@@ -1342,6 +1342,11 @@ class ClubTodoServiceTest {
     @Test
     void createTodo_linkedMemberDecision_returnsDecisionTitle() {
         Long clubId = createEnabledClub("todo-owner-decision", "Todo Owner Decision", "Todo Club Decision");
+        clubFeatureService.updateClubFeatures(
+                clubId,
+                "todo-owner-decision",
+                new UpdateClubFeaturesRequest(List.of("TODO", "DECISION_LOG"))
+        );
         Long assigneeId = addActiveMember(clubId, "todo-member-decision", "Todo Member Decision");
         Long ownerClubProfileId = findClubProfileId(clubId, "todo-owner-decision");
         DecisionRecord decision = decisionRecordRepository.save(DecisionRecord.builder()

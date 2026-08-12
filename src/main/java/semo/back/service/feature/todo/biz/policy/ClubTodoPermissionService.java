@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
+import semo.back.service.feature.position.biz.ClubCapability;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
 
 @Service
@@ -55,8 +56,7 @@ public class ClubTodoPermissionService {
         return hasRolePermission(access, ClubPositionPermissionEvaluator.PERMISSION_TODO_DELETE_ANY);
     }
 
-    private boolean hasRolePermission(ClubAccessResolver.ClubAccess access, String permissionKey) {
-        return clubPositionPermissionEvaluator.isRoleManagementEnabled(access.club().getClubId())
-                && clubPositionPermissionEvaluator.hasPermission(access, permissionKey);
+    private boolean hasRolePermission(ClubAccessResolver.ClubAccess access, ClubCapability capability) {
+        return clubPositionPermissionEvaluator.hasPermission(access, capability);
     }
 }

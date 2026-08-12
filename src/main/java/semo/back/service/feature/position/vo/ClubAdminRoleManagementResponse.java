@@ -11,7 +11,9 @@ public record ClubAdminRoleManagementResponse(
         boolean canUpdate,
         boolean canDelete,
         boolean canAssign,
+        int assignedMemberCount,
         List<ClubPositionSummaryResponse> positions,
-        List<ClubPermissionGroupResponse> permissionGroups
+        List<ClubPermissionGroupResponse> permissionGroups,
+        List<ClubPositionTemplateResponse> positionTemplates
 ) {
 }

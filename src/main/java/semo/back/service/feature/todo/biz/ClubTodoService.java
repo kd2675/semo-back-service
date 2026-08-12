@@ -23,6 +23,7 @@ import semo.back.service.database.pub.repository.TodoItemRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
 import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 import semo.back.service.feature.todo.biz.policy.ClubTodoPermissionService;
@@ -86,6 +87,7 @@ public class ClubTodoService {
     private static final DateTimeFormatter SCHEDULE_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm");
 
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubFeatureService clubFeatureService;
     private final ClubTodoPermissionService clubTodoPermissionService;
     private final TodoItemRepository todoItemRepository;
     private final TodoItemApplicationRepository todoItemApplicationRepository;
@@ -172,10 +174,10 @@ public class ClubTodoService {
                 List.of(visibleApplications),
                 List.of(visibleAssignees)
         );
-        Map<Long, ClubScheduleEvent> scheduleById = resolveScheduleById(
+        Map<Long, ClubScheduleEvent> scheduleById = resolveScheduleById(clubId,
                 List.of(myItems, prioritizedClaimableItems, recentCompletedItems)
         );
-        Map<Long, DecisionRecord> decisionById = resolveDecisionById(
+        Map<Long, DecisionRecord> decisionById = resolveDecisionById(clubId,
                 List.of(myItems, prioritizedClaimableItems, recentCompletedItems)
         );
         Map<Long, Integer> applicationCountByTodoItemId =
@@ -449,8 +451,8 @@ public class ClubTodoService {
                 List.of(pageApplications),
                 List.of(pageAssignees)
         );
-        Map<Long, ClubScheduleEvent> scheduleById = resolveScheduleById(List.of(pageItems));
-        Map<Long, DecisionRecord> decisionById = resolveDecisionById(List.of(pageItems));
+        Map<Long, ClubScheduleEvent> scheduleById = resolveScheduleById(clubId, List.of(pageItems));
+        Map<Long, DecisionRecord> decisionById = resolveDecisionById(clubId, List.of(pageItems));
         Map<Long, Integer> applicationCountByTodoItemId =
                 clubTodoViewSupport.resolveApplicationCountByTodoItemId(pageApplications);
 
@@ -760,8 +762,8 @@ public class ClubTodoService {
                 Map.of(),
                 Map.of(),
                 resolveAssigneeIdsByTodoItemId(List.of(List.of(saved)), assignees),
-                resolveScheduleById(List.of(List.of(saved))),
-                resolveDecisionById(List.of(List.of(saved)))
+                resolveScheduleById(clubId, List.of(List.of(saved))),
+                resolveDecisionById(clubId, List.of(List.of(saved)))
         );
     }
 
@@ -930,8 +932,8 @@ public class ClubTodoService {
                 applicationCountByTodoItemId,
                 Map.of(),
                 resolveAssigneeIdsByTodoItemId(List.of(List.of(updated)), updatedAssignees),
-                resolveScheduleById(List.of(List.of(updated))),
-                resolveDecisionById(List.of(List.of(updated)))
+                resolveScheduleById(clubId, List.of(List.of(updated))),
+                resolveDecisionById(clubId, List.of(List.of(updated)))
         );
     }
 
@@ -1349,7 +1351,10 @@ public class ClubTodoService {
         return assigneeIdsByTodoItemId;
     }
 
-    private Map<Long, ClubScheduleEvent> resolveScheduleById(List<List<TodoItem>> itemGroups) {
+    private Map<Long, ClubScheduleEvent> resolveScheduleById(Long clubId, List<List<TodoItem>> itemGroups) {
+        if (!clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")) {
+            return Map.of();
+        }
         List<Long> eventIds = itemGroups.stream()
                 .filter(Objects::nonNull)
                 .flatMap(Collection::stream)
@@ -1364,7 +1369,10 @@ public class ClubTodoService {
                 .collect(Collectors.toMap(ClubScheduleEvent::getEventId, Function.identity()));
     }
 
-    private Map<Long, DecisionRecord> resolveDecisionById(List<List<TodoItem>> itemGroups) {
+    private Map<Long, DecisionRecord> resolveDecisionById(Long clubId, List<List<TodoItem>> itemGroups) {
+        if (!clubFeatureService.isFeatureEnabled(clubId, "DECISION_LOG")) {
+            return Map.of();
+        }
         List<Long> decisionRecordIds = itemGroups.stream()
                 .filter(Objects::nonNull)
                 .flatMap(Collection::stream)
@@ -1384,6 +1392,9 @@ public class ClubTodoService {
         if (eventId == null) {
             return;
         }
+        if (!clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")) {
+            throw new SemoException.ValidationException("일정 기능이 비활성화되어 업무에 일정을 연결할 수 없습니다.");
+        }
         ClubScheduleEvent event = clubScheduleEventRepository.findByEventIdAndClubId(eventId, clubId)
                 .orElseThrow(() -> new SemoException.ValidationException("같은 클럽의 일정만 업무에 연결할 수 있습니다."));
         if ("CANCELLED".equals(event.getEventStatus())) {
@@ -1394,6 +1405,9 @@ public class ClubTodoService {
     private void validateLinkedDecisionRecord(Long clubId, Long decisionRecordId) {
         if (decisionRecordId == null) {
             return;
+        }
+        if (!clubFeatureService.isFeatureEnabled(clubId, "DECISION_LOG")) {
+            throw new SemoException.ValidationException("회의록·결정 기능이 비활성화되어 업무에 결정을 연결할 수 없습니다.");
         }
         DecisionRecord decision = decisionRecordRepository
                 .findByDecisionRecordIdAndClubIdAndDeletedFalse(decisionRecordId, clubId)
@@ -1429,6 +1443,9 @@ public class ClubTodoService {
     }
 
     private List<TodoScheduleOptionResponse> buildScheduleOptions(Long clubId) {
+        if (!clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")) {
+            return List.of();
+        }
         LocalDateTime lowerBound = LocalDateTime.now().minusDays(30);
         return clubScheduleEventRepository.findAllActiveEvents(clubId).stream()
                 .filter(event -> event.getEndAt() == null
@@ -1445,6 +1462,9 @@ public class ClubTodoService {
     }
 
     private List<TodoDecisionOptionResponse> buildDecisionOptions(Long clubId) {
+        if (!clubFeatureService.isFeatureEnabled(clubId, "DECISION_LOG")) {
+            return List.of();
+        }
         return decisionRecordRepository.findTodoLinkOptions(clubId, PageRequest.of(0, 40)).stream()
                 .map(decision -> new TodoDecisionOptionResponse(
                         decision.getDecisionRecordId(),

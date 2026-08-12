@@ -21,11 +21,11 @@ class MonotonicDateTimeProviderTest {
     }
 
     @Test
-    void now_sameClockInstant_advancesByOneMicrosecond() {
+    void now_sameClockInstant_advancesByOneMillisecond() {
         MonotonicDateTimeProvider provider = provider();
         LocalDateTime first = provider.now();
 
-        assertThat(provider.now()).isEqualTo(first.plusNanos(1_000));
+        assertThat(provider.now()).isEqualTo(first.plusNanos(1_000_000));
     }
 
     private MonotonicDateTimeProvider provider() {

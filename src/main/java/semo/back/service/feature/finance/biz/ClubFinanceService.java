@@ -507,6 +507,9 @@ public class ClubFinanceService {
 
         FinanceRequest financeRequest = financeRequestRepository.findForUpdate(requestId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("FinanceRequest", "requestId", requestId));
+        if (financeRequest.getRequesterClubProfileId().equals(access.clubProfile().getClubProfileId())) {
+            throw new SemoException.ForbiddenException("본인이 제출한 재정 요청은 직접 검토할 수 없습니다.");
+        }
         if (!REQUEST_STATUS_SUBMITTED.equals(financeRequest.getStatusCode())) {
             throw new SemoException.ValidationException("이미 검토가 완료된 재정 요청입니다.");
         }

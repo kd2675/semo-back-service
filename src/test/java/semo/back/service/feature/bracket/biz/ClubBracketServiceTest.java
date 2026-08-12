@@ -15,6 +15,7 @@ import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.TournamentApplicationRepository;
 import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 
 import java.util.List;
 
@@ -50,6 +51,9 @@ class ClubBracketServiceTest {
 
     @Mock
     private ClubBracketPermissionService clubBracketPermissionService;
+
+    @Mock
+    private ClubFeatureService clubFeatureService;
 
     @Mock
     private ImageFileUrlResolver imageFileUrlResolver;

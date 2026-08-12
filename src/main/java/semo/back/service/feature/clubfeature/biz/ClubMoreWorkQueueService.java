@@ -32,6 +32,7 @@ import semo.back.service.feature.finance.vo.ClubAdminFinanceSummaryAggregate;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClubMoreWorkQueueService {
+    private static final String FINANCE_REQUEST_STATUS_SUBMITTED = "SUBMITTED";
     private static final Set<String> FEEDBACK_IN_PROGRESS_STATUSES = Set.of("RECEIVED", "IN_REVIEW");
 
     private final TodoItemRepository todoItemRepository;
@@ -143,14 +144,14 @@ public class ClubMoreWorkQueueService {
         if (adminAccessible) {
             ClubAdminFinanceSummaryAggregate summary = financePaymentRepository.summarizeAdminFinance(clubId, now);
             adminPendingCount = summary.pendingPaymentCount()
-                    + financeRequestRepository.countByClubIdAndStatusCode(clubId, "PENDING");
+                    + financeRequestRepository.countByClubIdAndStatusCode(clubId, FINANCE_REQUEST_STATUS_SUBMITTED);
             adminOverdueCount = summary.overduePaymentCount();
         }
         long userPendingCount = financePaymentRepository.countPendingForMember(clubId, clubProfileId)
                 + financeRequestRepository.countByClubIdAndRequesterClubProfileIdAndStatusCode(
                         clubId,
                         clubProfileId,
-                        "PENDING"
+                        FINANCE_REQUEST_STATUS_SUBMITTED
                 );
         return FeatureQueueCounts.of(
                 userPendingCount,

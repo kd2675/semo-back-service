@@ -756,40 +756,45 @@ public class ClubHandoverService {
 
     private QueueSnapshot buildQueue(Long clubId) {
         LocalDateTime now = LocalDateTime.now();
-        List<TodoItem> openTodos = todoItemRepository.findByStatusCodes(
-                clubId,
-                OPEN_TODO_STATUSES,
-                PageRequest.of(0, 5)
-        );
-        List<FinanceRequest> pendingFinanceRequests = financeRequestRepository
+        boolean todoEnabled = clubFeatureService.isFeatureEnabled(clubId, "TODO");
+        boolean financeEnabled = clubFeatureService.isFeatureEnabled(clubId, "FINANCE");
+        boolean scheduleEnabled = clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE");
+        boolean feedbackEnabled = clubFeatureService.isFeatureEnabled(clubId, "FEEDBACK");
+        boolean joinRequestEnabled = clubFeatureService.isFeatureEnabled(clubId, "JOIN_REQUEST");
+        List<TodoItem> openTodos = todoEnabled
+                ? todoItemRepository.findByStatusCodes(clubId, OPEN_TODO_STATUSES, PageRequest.of(0, 5))
+                : List.of();
+        List<FinanceRequest> pendingFinanceRequests = financeEnabled ? financeRequestRepository
                 .findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(
                         clubId,
                         REQUEST_STATUS_SUBMITTED,
                         PageRequest.of(0, 3)
-                );
-        List<ClubScheduleEvent> upcomingSchedules = clubScheduleEventRepository.findUpcomingActiveEvents(
-                clubId,
-                now,
-                PageRequest.of(0, 3)
-        );
-        List<ClubFeedback> openFeedback = clubFeedbackRepository.findOpenFeedback(
-                clubId,
-                OPEN_FEEDBACK_STATUSES,
-                PageRequest.of(0, 2)
-        );
-        int openTodoCount = safeCount(todoItemRepository.countByClubIdAndStatusCodeIn(clubId, OPEN_TODO_STATUSES));
-        int overdueTodoCount = safeCount(todoItemRepository.countOverdueForAdmin(clubId, now));
-        int pendingFinanceRequestCount = safeCount(
+                ) : List.of();
+        List<ClubScheduleEvent> upcomingSchedules = scheduleEnabled
+                ? clubScheduleEventRepository.findUpcomingActiveEvents(clubId, now, PageRequest.of(0, 3))
+                : List.of();
+        List<ClubFeedback> openFeedback = feedbackEnabled
+                ? clubFeedbackRepository.findOpenFeedback(clubId, OPEN_FEEDBACK_STATUSES, PageRequest.of(0, 2))
+                : List.of();
+        int openTodoCount = todoEnabled
+                ? safeCount(todoItemRepository.countByClubIdAndStatusCodeIn(clubId, OPEN_TODO_STATUSES))
+                : 0;
+        int overdueTodoCount = todoEnabled ? safeCount(todoItemRepository.countOverdueForAdmin(clubId, now)) : 0;
+        int pendingFinanceRequestCount = financeEnabled ? safeCount(
                 financeRequestRepository.countByClubIdAndStatusCode(clubId, REQUEST_STATUS_SUBMITTED)
-        );
-        int upcomingScheduleCount = safeCount(clubScheduleEventRepository.countUpcomingActiveEvents(clubId, now));
-        int openFeedbackCount = safeCount(
+        ) : 0;
+        int upcomingScheduleCount = scheduleEnabled
+                ? safeCount(clubScheduleEventRepository.countUpcomingActiveEvents(clubId, now))
+                : 0;
+        int openFeedbackCount = feedbackEnabled ? safeCount(
                 clubFeedbackRepository.countByClubIdAndDeletedFalseAndStatusCodeIn(clubId, OPEN_FEEDBACK_STATUSES)
-        );
-        int pendingJoinRequestCount = safeCount(
+        ) : 0;
+        int pendingJoinRequestCount = joinRequestEnabled ? safeCount(
                 clubJoinRequestRepository.countByClubIdAndRequestStatus(clubId, "PENDING")
-        );
-        ClubAdminFinanceSummaryAggregate financeSummary = financePaymentRepository.summarizeAdminFinance(clubId, now);
+        ) : 0;
+        ClubAdminFinanceSummaryAggregate financeSummary = financeEnabled
+                ? financePaymentRepository.summarizeAdminFinance(clubId, now)
+                : null;
         int unpaidPaymentCount = financeSummary == null ? 0 : safeCount(financeSummary.pendingPaymentCount());
         int openNoteCount = safeCount(clubHandoverNoteRepository.countByClubIdAndDeletedFalseAndStatusCodeIn(
                 clubId,
@@ -885,42 +890,48 @@ public class ClubHandoverService {
     private List<HandoverQueueItemResponse> buildCarryoverCandidates(Long clubId) {
         LocalDateTime now = LocalDateTime.now();
         List<HandoverQueueItemResponse> items = new ArrayList<>();
-        todoItemRepository.findAllByStatusCodes(clubId, OPEN_TODO_STATUSES).stream()
-                .map(item -> new HandoverQueueItemResponse(
-                        "TODO_ITEM",
-                        item.getTodoItemId(),
-                        item.getTitle(),
-                        "IN_PROGRESS".equals(item.getStatusCode()) ? "진행 중" : "대기",
-                        item.getDueAt(),
-                        "/clubs/%d/admin/more/todos".formatted(clubId),
-                        item.getDueAt() != null && item.getDueAt().isBefore(now)
-                ))
-                .forEach(items::add);
-        financeRequestRepository.findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(
-                        clubId,
-                        REQUEST_STATUS_SUBMITTED
-                ).stream()
-                .map(item -> new HandoverQueueItemResponse(
-                        "FINANCE_REQUEST",
-                        item.getFinanceRequestId(),
-                        item.getTitle(),
-                        "정산 검토 대기",
-                        null,
-                        "/clubs/%d/admin/more/finance?tab=settlements".formatted(clubId),
-                        false
-                ))
-                .forEach(items::add);
-        clubFeedbackRepository.findAllOpenFeedback(clubId, OPEN_FEEDBACK_STATUSES).stream()
-                .map(item -> new HandoverQueueItemResponse(
-                        "FEEDBACK",
-                        item.getFeedbackId(),
-                        item.getTitle(),
-                        "IN_REVIEW".equals(item.getStatusCode()) ? "검토 중" : "접수",
-                        null,
-                        "/clubs/%d/admin/more/feedback".formatted(clubId),
-                        false
-                ))
-                .forEach(items::add);
+        if (clubFeatureService.isFeatureEnabled(clubId, "TODO")) {
+            todoItemRepository.findAllByStatusCodes(clubId, OPEN_TODO_STATUSES).stream()
+                    .map(item -> new HandoverQueueItemResponse(
+                            "TODO_ITEM",
+                            item.getTodoItemId(),
+                            item.getTitle(),
+                            "IN_PROGRESS".equals(item.getStatusCode()) ? "진행 중" : "대기",
+                            item.getDueAt(),
+                            "/clubs/%d/admin/more/todos".formatted(clubId),
+                            item.getDueAt() != null && item.getDueAt().isBefore(now)
+                    ))
+                    .forEach(items::add);
+        }
+        if (clubFeatureService.isFeatureEnabled(clubId, "FINANCE")) {
+            financeRequestRepository.findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(
+                            clubId,
+                            REQUEST_STATUS_SUBMITTED
+                    ).stream()
+                    .map(item -> new HandoverQueueItemResponse(
+                            "FINANCE_REQUEST",
+                            item.getFinanceRequestId(),
+                            item.getTitle(),
+                            "정산 검토 대기",
+                            null,
+                            "/clubs/%d/admin/more/finance?tab=settlements".formatted(clubId),
+                            false
+                    ))
+                    .forEach(items::add);
+        }
+        if (clubFeatureService.isFeatureEnabled(clubId, "FEEDBACK")) {
+            clubFeedbackRepository.findAllOpenFeedback(clubId, OPEN_FEEDBACK_STATUSES).stream()
+                    .map(item -> new HandoverQueueItemResponse(
+                            "FEEDBACK",
+                            item.getFeedbackId(),
+                            item.getTitle(),
+                            "IN_REVIEW".equals(item.getStatusCode()) ? "검토 중" : "접수",
+                            null,
+                            "/clubs/%d/admin/more/feedback".formatted(clubId),
+                            false
+                    ))
+                    .forEach(items::add);
+        }
         return List.copyOf(items);
     }
 

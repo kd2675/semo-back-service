@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ProfileUser;
@@ -26,6 +27,7 @@ import semo.back.service.feature.club.vo.UpdateClubAdminMemberStatusRequest;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -97,7 +99,8 @@ class ClubAdminMemberServiceTest {
 
         assertThat(response.members()).hasSize(3);
         assertThat(response.members()).noneMatch(member -> "PENDING".equals(member.membershipStatus()));
-        assertThat(response.members().stream().filter(member -> member.self()).findFirst()).isPresent();
+        assertThat(response.members().stream().filter(member -> member.self()).findFirst())
+                .hasValueSatisfying(member -> assertThat(member.canAssignPositions()).isTrue());
     }
 
     @Test
@@ -142,6 +145,30 @@ class ClubAdminMemberServiceTest {
 
         assertThat(clubMemberRepository.findById(member.getClubMemberId()).orElseThrow().getRoleCode()).isEqualTo("ADMIN");
         assertThat(response.roleCode()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    void updateMemberRole_rejectsOwnerPromotionWithoutOwnershipTransferFlow() {
+        Long clubId = clubService.createClub(
+                "owner-members-owner-guard",
+                "Owner Member",
+                new CreateClubRequest("Owner Guard Club", null, "OTHER", "PUBLIC", "APPROVAL", null)
+        ).clubId();
+        ClubMember member = createMember(
+                clubId,
+                "member-owner-guard",
+                "소유자 승격 대상",
+                "MEMBER",
+                "ACTIVE",
+                LocalDateTime.now().minusDays(3)
+        );
+
+        assertThatThrownBy(() -> clubAdminMemberService.updateMemberRole(
+                clubId,
+                member.getClubMemberId(),
+                "owner-members-owner-guard",
+                new UpdateClubAdminMemberRoleRequest("OWNER")
+        )).isInstanceOf(SemoException.ValidationException.class);
     }
 
     @Test
