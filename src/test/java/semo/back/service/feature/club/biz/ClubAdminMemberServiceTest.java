@@ -192,6 +192,35 @@ class ClubAdminMemberServiceTest {
         assertThat(response.membershipStatus()).isEqualTo("DORMANT");
     }
 
+    @Test
+    void updateMemberStatus_missingClubProfile_provisionsProfileInWriteTransaction() {
+        Long clubId = clubService.createClub(
+                "owner-members-profile-repair",
+                "Owner Member",
+                new CreateClubRequest("Profile Repair Club", null, "OTHER", "PUBLIC", "APPROVAL", null)
+        ).clubId();
+        ClubMember member = createMember(
+                clubId,
+                "member-profile-repair",
+                "프로필 복구 회원",
+                "MEMBER",
+                "PENDING",
+                null
+        );
+        member.updateMembershipStatus("DORMANT");
+        clubMemberRepository.save(member);
+
+        clubAdminMemberService.updateMemberStatus(
+                clubId,
+                member.getClubMemberId(),
+                "owner-members-profile-repair",
+                new UpdateClubAdminMemberStatusRequest("ACTIVE")
+        );
+
+        assertThat(clubProfileRepository.findByClubMemberId(member.getClubMemberId()))
+                .hasValueSatisfying(profile -> assertThat(profile.getDisplayName()).isEqualTo("프로필 복구 회원"));
+    }
+
     private ClubMember createMember(
             Long clubId,
             String userKey,

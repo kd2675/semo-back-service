@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.database.pub.entity.ClubMember;
+import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
@@ -780,7 +781,7 @@ class ClubFinanceServiceTest {
 
     private Long addActiveMember(Long clubId, String userKey, String displayName) {
         Long profileId = profileUserService.resolveProfileId(userKey, displayName);
-        clubMemberRepository.save(ClubMember.builder()
+        ClubMember member = clubMemberRepository.save(ClubMember.builder()
                 .clubId(clubId)
                 .profileId(profileId)
                 .roleCode("MEMBER")
@@ -788,7 +789,11 @@ class ClubFinanceServiceTest {
                 .joinedAt(LocalDateTime.now())
                 .lastActivityAt(LocalDateTime.now())
                 .build());
-        return profileId;
+        return clubProfileRepository.save(ClubProfile.builder()
+                .clubMemberId(member.getClubMemberId())
+                .displayName(displayName)
+                .build())
+                .getClubProfileId();
     }
 
     private semo.back.service.feature.finance.vo.ClubAdminFinanceObligationFeedResponse getAdminObligationFeed(Long clubId, String userKey) {

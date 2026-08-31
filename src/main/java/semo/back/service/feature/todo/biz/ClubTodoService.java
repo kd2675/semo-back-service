@@ -9,14 +9,12 @@ import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.entity.DecisionRecord;
-import semo.back.service.database.pub.entity.TodoChecklistItem;
 import semo.back.service.database.pub.entity.TodoItem;
 import semo.back.service.database.pub.entity.TodoItemApplication;
 import semo.back.service.database.pub.entity.TodoItemAssignee;
 import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.DecisionRecordRepository;
-import semo.back.service.database.pub.repository.TodoChecklistItemRepository;
 import semo.back.service.database.pub.repository.TodoItemApplicationRepository;
 import semo.back.service.database.pub.repository.TodoItemAssigneeRepository;
 import semo.back.service.database.pub.repository.TodoItemRepository;
@@ -24,10 +22,10 @@ import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
-import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
-import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 import semo.back.service.feature.todo.biz.policy.ClubTodoPermissionService;
+import semo.back.service.feature.todo.biz.policy.ClubTodoAssignmentPolicy;
 import semo.back.service.feature.todo.biz.support.ClubTodoCommandSupport;
+import semo.back.service.feature.todo.biz.support.ClubTodoRecurrenceService;
 import semo.back.service.feature.todo.biz.support.ClubTodoViewSupport;
 import semo.back.service.feature.todo.vo.ClubAdminTodoResponse;
 import semo.back.service.feature.todo.vo.ClubTodoResponse;
@@ -75,13 +73,6 @@ public class ClubTodoService {
     private static final String STATUS_REOPEN = "REOPEN";
 
     private static final String APPLICATION_STATUS_APPLIED = "APPLIED";
-    private static final String APPLICATION_STATUS_SELECTED = "SELECTED";
-    private static final String APPLICATION_STATUS_REJECTED = "REJECTED";
-    private static final String APPLICATION_STATUS_WITHDRAWN = "WITHDRAWN";
-    private static final String RECURRENCE_NONE = "NONE";
-    private static final String RECURRENCE_WEEKLY = "WEEKLY";
-    private static final String RECURRENCE_MONTHLY = "MONTHLY";
-
     private static final int CLAIMABLE_PAGE_SIZE = 8;
     private static final int MAX_CLAIMABLE_PAGE_SIZE = 50;
     private static final DateTimeFormatter SCHEDULE_LABEL_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm");
@@ -89,16 +80,17 @@ public class ClubTodoService {
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
     private final ClubTodoPermissionService clubTodoPermissionService;
+    private final ClubTodoAssignmentPolicy clubTodoAssignmentPolicy;
+    private final ClubTodoApplicationService clubTodoApplicationService;
     private final TodoItemRepository todoItemRepository;
     private final TodoItemApplicationRepository todoItemApplicationRepository;
     private final TodoItemAssigneeRepository todoItemAssigneeRepository;
-    private final TodoChecklistItemRepository todoChecklistItemRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubScheduleEventRepository clubScheduleEventRepository;
     private final DecisionRecordRepository decisionRecordRepository;
     private final ClubTodoCommandSupport clubTodoCommandSupport;
+    private final ClubTodoRecurrenceService clubTodoRecurrenceService;
     private final ClubTodoViewSupport clubTodoViewSupport;
-    private final ClubNotificationPublisher clubNotificationPublisher;
 
     public ClubTodoResponse getTodos(Long clubId, String userKey) {
         return getTodos(clubId, userKey, CLAIMABLE_PAGE_SIZE);
@@ -141,7 +133,7 @@ public class ClubTodoService {
                                 .map(application -> appliedTodoById.get(application.getTodoItemId()))
                                 .filter(Objects::nonNull)
                                 .filter(item -> ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode()))
-                                .filter(this::isRecruitmentAvailable),
+                                .filter(clubTodoAssignmentPolicy::isRecruitmentAvailable),
                         claimableItems.stream()
                 )
                 .distinct()
@@ -243,7 +235,7 @@ public class ClubTodoService {
                             TodoItem item = appliedTodoById.get(application.getTodoItemId());
                             return item != null
                                     && ASSIGNMENT_MODE_OPEN_SUPPORT.equals(item.getAssignmentMode())
-                                    && isRecruitmentAvailable(item);
+                                    && clubTodoAssignmentPolicy.isRecruitmentAvailable(item);
                         })
                         .filter(application -> APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus()))
                         .count(),
@@ -276,93 +268,13 @@ public class ClubTodoService {
             String userKey,
             CreateTodoApplicationRequest request
     ) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        requireTodoFeature(clubId);
-        TodoItem current = requireTodoItem(clubId, todoItemId);
-        validateOpenSupportApplicationAvailable(current);
-
-        String applicationNote = clubTodoCommandSupport.trimToNull(
-                request == null ? null : request.applicationNote()
-        );
-        TodoItemApplication existing = todoItemApplicationRepository
-                .findByTodoItemIdAndClubProfileId(todoItemId, access.clubProfile().getClubProfileId())
-                .orElse(null);
-
-        TodoItemApplication saved;
-        if (existing == null) {
-            saved = todoItemApplicationRepository.save(TodoItemApplication.builder()
-                    .todoItemId(todoItemId)
-                    .clubProfileId(access.clubProfile().getClubProfileId())
-                    .applicationStatus(APPLICATION_STATUS_APPLIED)
-                    .applicationNote(applicationNote)
-                    .reviewNote(null)
-                    .reviewedByClubProfileId(null)
-                    .reviewedAt(null)
-                    .build());
-        } else {
-            if (APPLICATION_STATUS_APPLIED.equals(existing.getApplicationStatus())) {
-                throw new SemoException.ConflictException("이미 신청한 업무입니다.");
-            }
-            if (APPLICATION_STATUS_SELECTED.equals(existing.getApplicationStatus())) {
-                throw new SemoException.ConflictException("이미 선정된 업무입니다.");
-            }
-            existing.markApplied(applicationNote);
-            saved = todoItemApplicationRepository.save(existing);
-        }
-
-        ClubActivityContextHolder.setDetails(
-                "'" + current.getTitle() + "' 업무에 신청했습니다.",
-                "'" + current.getTitle() + "' 업무 신청에 실패했습니다."
-        );
-        Map<Long, ClubProfile> profileById = clubTodoViewSupport.resolveClubProfiles(
-                List.of(List.of(current)),
-                List.of(List.of(saved))
-        );
-        return clubTodoViewSupport.toApplicationResponse(
-                saved,
-                profileById,
-                access.clubProfile().getClubProfileId(),
-                false
-        );
+        return clubTodoApplicationService.apply(clubId, todoItemId, userKey, request);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     @RecordClubActivity(subject = "할 일")
     public TodoItemApplicationResponse cancelMyTodoApplication(Long clubId, Long todoItemId, String userKey) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        requireTodoFeature(clubId);
-        TodoItem current = requireTodoItem(clubId, todoItemId);
-        if (!ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())) {
-            throw new SemoException.ValidationException("신청형 업무만 취소할 수 있습니다.");
-        }
-        TodoItemApplication application = todoItemApplicationRepository
-                .findByTodoItemIdAndClubProfileId(todoItemId, access.clubProfile().getClubProfileId())
-                .orElseThrow(() -> new SemoException.ResourceNotFoundException(
-                        "TodoItemApplication",
-                        "todoItemId",
-                        todoItemId
-                ));
-        if (!APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus())) {
-            throw new SemoException.ValidationException("현재 취소할 수 없는 신청 상태입니다.");
-        }
-
-        application.withdraw();
-        TodoItemApplication saved = todoItemApplicationRepository.save(application);
-
-        ClubActivityContextHolder.setDetails(
-                "'" + current.getTitle() + "' 업무 신청을 취소했습니다.",
-                "'" + current.getTitle() + "' 업무 신청 취소에 실패했습니다."
-        );
-        Map<Long, ClubProfile> profileById = clubTodoViewSupport.resolveClubProfiles(
-                List.of(List.of(current)),
-                List.of(List.of(saved))
-        );
-        return clubTodoViewSupport.toApplicationResponse(
-                saved,
-                profileById,
-                access.clubProfile().getClubProfileId(),
-                false
-        );
+        return clubTodoApplicationService.cancel(clubId, todoItemId, userKey);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -371,7 +283,7 @@ public class ClubTodoService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         requireTodoFeature(clubId);
         TodoItem current = requireTodoItemForUpdate(clubId, todoItemId);
-        if (!isAssignee(current, access.clubProfile().getClubProfileId())) {
+        if (!clubTodoAssignmentPolicy.isAssignee(current, access.clubProfile().getClubProfileId())) {
             throw new SemoException.ForbiddenException("본인에게 배정된 업무만 완료 처리할 수 있습니다.");
         }
         if (STATUS_COMPLETED.equals(current.getStatusCode()) || STATUS_CANCELED.equals(current.getStatusCode())) {
@@ -383,7 +295,7 @@ public class ClubTodoService {
         }
 
         TodoItem updated = saveWithStatus(current, STATUS_COMPLETED, access.clubProfile().getClubProfileId());
-        createNextRecurringTodo(updated, access.clubProfile().getClubProfileId());
+        clubTodoRecurrenceService.createNextTodo(updated, access.clubProfile().getClubProfileId());
         ClubActivityContextHolder.setDetails(
                 "'" + current.getTitle() + "' 업무를 완료했습니다.",
                 "'" + current.getTitle() + "' 업무를 완료하지 못했습니다."
@@ -506,7 +418,7 @@ public class ClubTodoService {
                 List.of(applications),
                 List.of(assigneeEntities)
         );
-        List<Long> assigneeIds = resolveAssigneeIds(todoItem, assigneeEntities);
+        List<Long> assigneeIds = clubTodoAssignmentPolicy.resolveAssigneeIds(todoItem, assigneeEntities);
         List<TodoAssigneeResponse> assignees = assigneeIds.stream()
                 .map(profileId -> new TodoAssigneeResponse(
                         profileId,
@@ -529,7 +441,7 @@ public class ClubTodoService {
                         .filter(Objects::nonNull)
                         .collect(Collectors.joining(", ")),
                 assignees,
-                normalizedRecruitmentCapacity(todoItem),
+                clubTodoAssignmentPolicy.normalizedRecruitmentCapacity(todoItem),
                 applications.size(),
                 (int) applications.stream()
                         .filter(application -> APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus()))
@@ -555,100 +467,12 @@ public class ClubTodoService {
             String userKey,
             ReviewTodoItemApplicationRequest request
     ) {
-        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
-        requireTodoFeature(clubId);
-        if (!clubTodoPermissionService.canAssignTodo(access)) {
-            throw new SemoException.ForbiddenException("업무 신청을 검토할 권한이 없습니다.");
-        }
-
-        TodoItem todoItem = requireTodoItemForUpdate(clubId, todoItemId);
-        if (!ASSIGNMENT_MODE_OPEN_SUPPORT.equals(todoItem.getAssignmentMode())) {
-            throw new SemoException.ValidationException("신청형 업무만 신청을 검토할 수 있습니다.");
-        }
-
-        TodoItemApplication application = requireTodoItemApplicationForUpdate(todoItemId, todoItemApplicationId);
-        if (!APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus())) {
-            throw new SemoException.ValidationException("대기 중인 신청만 검토할 수 있습니다.");
-        }
-
-        String nextStatus = clubTodoCommandSupport.normalizeApplicationReviewStatus(
-                request.applicationStatus()
-        );
-        String reviewNote = clubTodoCommandSupport.trimToNull(request.reviewNote());
-        LocalDateTime reviewedAt = LocalDateTime.now();
-
-        List<TodoItemApplication> automaticallyRejectedApplications = List.of();
-        if (APPLICATION_STATUS_SELECTED.equals(nextStatus)) {
-            if (!isRecruitmentAvailable(todoItem)) {
-                throw new SemoException.ValidationException("현재 선정할 수 없는 업무 상태입니다.");
-            }
-            todoItemAssigneeRepository.save(TodoItemAssignee.builder()
-                    .todoItemId(todoItem.getTodoItemId())
-                    .clubProfileId(application.getClubProfileId())
-                    .assignedByClubProfileId(access.clubProfile().getClubProfileId())
-                    .build());
-            TodoItem updatedTodo = todoItemRepository.save(TodoItem.builder()
-                    .todoItemId(todoItem.getTodoItemId())
-                    .clubId(todoItem.getClubId())
-                    .createdByClubProfileId(todoItem.getCreatedByClubProfileId())
-                    .assignedClubProfileId(todoItem.getAssignedClubProfileId() == null
-                            ? application.getClubProfileId()
-                            : todoItem.getAssignedClubProfileId())
-                    .assignedByClubProfileId(access.clubProfile().getClubProfileId())
-                    .todoType(todoItem.getTodoType())
-                    .assignmentMode(todoItem.getAssignmentMode())
-                    .statusCode(STATUS_IN_PROGRESS)
-                    .priorityCode(todoItem.getPriorityCode())
-                    .recruitmentCapacity(todoItem.getRecruitmentCapacity())
-                    .title(todoItem.getTitle())
-                    .description(todoItem.getDescription())
-                    .dueAt(todoItem.getDueAt())
-                    .workStartAt(todoItem.getWorkStartAt())
-                    .workEndAt(todoItem.getWorkEndAt())
-                    .linkedScheduleEventId(todoItem.getLinkedScheduleEventId())
-                    .linkedDecisionRecordId(todoItem.getLinkedDecisionRecordId())
-                    .recurrenceFrequency(todoItem.getRecurrenceFrequency())
-                    .recurrenceInterval(todoItem.getRecurrenceInterval())
-                    .recurrenceEndDate(todoItem.getRecurrenceEndDate())
-                    .recurrenceSourceTodoItemId(todoItem.getRecurrenceSourceTodoItemId())
-                    .completedByClubProfileId(null)
-                    .completedAt(null)
-                    .build());
-            long selectedCount = todoItemAssigneeRepository.countByTodoItemId(todoItemId);
-            if (selectedCount >= normalizedRecruitmentCapacity(updatedTodo)) {
-                automaticallyRejectedApplications = rejectOtherPendingApplications(
-                        todoItemId,
-                        todoItemApplicationId,
-                        access.clubProfile().getClubProfileId(),
-                        "모집 인원이 모두 선정되었습니다."
-                );
-            }
-        }
-
-        application.review(nextStatus, reviewNote, access.clubProfile().getClubProfileId(), reviewedAt);
-        TodoItemApplication saved = todoItemApplicationRepository.save(application);
-        notifyTodoApplicationReview(clubId, todoItem, saved, nextStatus, reviewNote);
-        automaticallyRejectedApplications.forEach(rejectedApplication -> notifyTodoApplicationReview(
+        return clubTodoApplicationService.review(
                 clubId,
-                todoItem,
-                rejectedApplication,
-                APPLICATION_STATUS_REJECTED,
-                rejectedApplication.getReviewNote()
-        ));
-
-        ClubActivityContextHolder.setDetails(
-                "'" + todoItem.getTitle() + "' 업무 신청을 처리했습니다.",
-                "'" + todoItem.getTitle() + "' 업무 신청 처리에 실패했습니다."
-        );
-        Map<Long, ClubProfile> profileById = clubTodoViewSupport.resolveClubProfiles(
-                List.of(List.of(todoItem)),
-                List.of(List.of(saved))
-        );
-        return clubTodoViewSupport.toApplicationResponse(
-                saved,
-                profileById,
-                access.clubProfile().getClubProfileId(),
-                true
+                todoItemId,
+                todoItemApplicationId,
+                userKey,
+                request
         );
     }
 
@@ -692,7 +516,7 @@ public class ClubTodoService {
                 request.recurrenceEndDate(),
                 "반복 종료일 형식이 잘못되었습니다."
         );
-        validateRecurrence(
+        clubTodoRecurrenceService.validateRecurrence(
                 recurrenceFrequency,
                 recurrenceEndDate,
                 dueAt,
@@ -811,7 +635,7 @@ public class ClubTodoService {
                 request.recurrenceEndDate(),
                 "반복 종료일 형식이 잘못되었습니다."
         );
-        validateRecurrence(
+        clubTodoRecurrenceService.validateRecurrence(
                 recurrenceFrequency,
                 recurrenceEndDate,
                 dueAt,
@@ -822,7 +646,7 @@ public class ClubTodoService {
         Map<Long, ClubAccessResolver.ClubMemberSnapshot> activeMemberByProfileId = resolveActiveMembersByProfileId(clubId);
         List<TodoItemAssignee> currentAssignees = todoItemAssigneeRepository
                 .findByTodoItemIdOrderByTodoItemAssigneeIdAsc(todoItemId);
-        List<Long> currentAssigneeIds = resolveAssigneeIds(current, currentAssignees);
+        List<Long> currentAssigneeIds = clubTodoAssignmentPolicy.resolveAssigneeIds(current, currentAssignees);
         List<Long> assignedClubProfileIds = resolveUpdatedAssignedClubProfileIds(
                 current,
                 assignmentMode,
@@ -847,12 +671,15 @@ public class ClubTodoService {
                 || !Objects.equals(current.getWorkEndAt(), workEndAt)
                 || !Objects.equals(current.getLinkedScheduleEventId(), request.linkedScheduleEventId())
                 || !Objects.equals(current.getLinkedDecisionRecordId(), request.linkedDecisionRecordId())
-                || !Objects.equals(normalizedRecurrenceFrequency(current), recurrenceFrequency)
-                || normalizedRecurrenceInterval(current) != recurrenceInterval
-                || !Objects.equals(current.getRecurrenceEndDate(), recurrenceEndDate);
+                || clubTodoRecurrenceService.hasConfigurationChanged(
+                        current,
+                        recurrenceFrequency,
+                        recurrenceInterval,
+                        recurrenceEndDate
+                );
         boolean assignmentChanged = !Objects.equals(current.getAssignmentMode(), assignmentMode)
                 || !Objects.equals(currentAssigneeIds, assignedClubProfileIds)
-                || normalizedRecruitmentCapacity(current) != recruitmentCapacity;
+                || clubTodoAssignmentPolicy.normalizedRecruitmentCapacity(current) != recruitmentCapacity;
         if (metadataChanged && !canCreate) {
             throw new SemoException.ForbiddenException("업무 기본 정보를 수정할 권한이 없습니다.");
         }
@@ -905,7 +732,7 @@ public class ClubTodoService {
 
         if (ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())
                 && ASSIGNMENT_MODE_DIRECT_ASSIGN.equals(assignmentMode)) {
-            rejectActiveApplications(
+            clubTodoApplicationService.rejectActive(
                     current.getTodoItemId(),
                     access.clubProfile().getClubProfileId(),
                     "직접 배정으로 전환되었습니다."
@@ -964,7 +791,7 @@ public class ClubTodoService {
         if (STATUS_REOPEN.equals(nextStatus)) {
             updated = saveAsOpen(current);
             if (ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())) {
-                rejectSelectedApplications(
+                clubTodoApplicationService.rejectSelected(
                         current.getTodoItemId(),
                         access.clubProfile().getClubProfileId(),
                         "업무가 다시 모집 상태로 돌아갔습니다."
@@ -977,7 +804,7 @@ public class ClubTodoService {
         } else if (STATUS_OPEN.equals(nextStatus)) {
             updated = saveAsOpen(current);
             if (ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())) {
-                rejectSelectedApplications(
+                clubTodoApplicationService.rejectSelected(
                         current.getTodoItemId(),
                         access.clubProfile().getClubProfileId(),
                         "업무가 다시 모집 상태로 돌아갔습니다."
@@ -990,7 +817,7 @@ public class ClubTodoService {
         } else {
             updated = saveWithStatus(current, nextStatus, access.clubProfile().getClubProfileId());
             if (STATUS_COMPLETED.equals(nextStatus)) {
-                createNextRecurringTodo(updated, access.clubProfile().getClubProfileId());
+                clubTodoRecurrenceService.createNextTodo(updated, access.clubProfile().getClubProfileId());
             }
             ClubActivityContextHolder.setDetails(
                     "'" + current.getTitle() + "' 상태를 "
@@ -1017,7 +844,7 @@ public class ClubTodoService {
 
         TodoItem current = requireTodoItem(clubId, todoItemId);
         saveWithStatus(current, STATUS_CANCELED, access.clubProfile().getClubProfileId());
-        rejectActiveApplications(
+        clubTodoApplicationService.rejectActive(
                 current.getTodoItemId(),
                 access.clubProfile().getClubProfileId(),
                 "업무가 보관되었습니다."
@@ -1048,122 +875,6 @@ public class ClubTodoService {
     private TodoItem requireTodoItemForUpdate(Long clubId, Long todoItemId) {
         return todoItemRepository.findForUpdate(todoItemId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TodoItem", "todoItemId", todoItemId));
-    }
-
-    private TodoItemApplication requireTodoItemApplication(Long todoItemId, Long todoItemApplicationId) {
-        return todoItemApplicationRepository.findById(todoItemApplicationId)
-                .filter(application -> Objects.equals(application.getTodoItemId(), todoItemId))
-                .orElseThrow(() -> new SemoException.ResourceNotFoundException(
-                        "TodoItemApplication",
-                        "todoItemApplicationId",
-                        todoItemApplicationId
-                ));
-    }
-
-    private TodoItemApplication requireTodoItemApplicationForUpdate(Long todoItemId, Long todoItemApplicationId) {
-        return todoItemApplicationRepository.findForUpdate(todoItemId, todoItemApplicationId)
-                .orElseThrow(() -> new SemoException.ResourceNotFoundException(
-                        "TodoItemApplication",
-                        "todoItemApplicationId",
-                        todoItemApplicationId
-                ));
-    }
-
-    private void validateOpenSupportApplicationAvailable(TodoItem current) {
-        if (!ASSIGNMENT_MODE_OPEN_SUPPORT.equals(current.getAssignmentMode())) {
-            throw new SemoException.ValidationException("신청 가능한 업무만 지원할 수 있습니다.");
-        }
-        if (!isRecruitmentAvailable(current)) {
-            throw new SemoException.ValidationException("현재 신청할 수 없는 상태의 업무입니다.");
-        }
-    }
-
-    private List<TodoItemApplication> rejectOtherPendingApplications(
-            Long todoItemId,
-            Long selectedApplicationId,
-            Long actorClubProfileId,
-            String reviewNote
-    ) {
-        List<TodoItemApplication> pendingApplications = todoItemApplicationRepository
-                .findByTodoItemIdAndApplicationStatusOrderByCreateDateAscTodoItemApplicationIdAsc(
-                        todoItemId,
-                        APPLICATION_STATUS_APPLIED
-                );
-        List<TodoItemApplication> rejectedApplications = pendingApplications.stream()
-                .filter(application -> !Objects.equals(application.getTodoItemApplicationId(), selectedApplicationId))
-                .toList();
-        LocalDateTime reviewedAt = LocalDateTime.now();
-        rejectedApplications.forEach(application -> application.review(
-                APPLICATION_STATUS_REJECTED,
-                reviewNote,
-                actorClubProfileId,
-                reviewedAt
-        ));
-        if (!rejectedApplications.isEmpty()) {
-            todoItemApplicationRepository.saveAll(rejectedApplications);
-        }
-        return rejectedApplications;
-    }
-
-    private void notifyTodoApplicationReview(
-            Long clubId,
-            TodoItem todoItem,
-            TodoItemApplication application,
-            String status,
-            String reviewNote
-    ) {
-        boolean selected = APPLICATION_STATUS_SELECTED.equals(status);
-        String resultLabel = selected ? "선정" : "미선정";
-        String message = "'" + todoItem.getTitle() + "' 업무 신청 결과: " + resultLabel;
-        if (reviewNote != null && !reviewNote.isBlank()) {
-            message += " · " + reviewNote;
-        }
-        clubNotificationPublisher.notifyClubProfile(
-                application.getClubProfileId(),
-                new NotificationCommand(
-                        clubId,
-                        "TODO_APPLICATION_REVIEW",
-                        "업무 신청 결과가 도착했습니다",
-                        message,
-                        "TODO_APPLICATION",
-                        application.getTodoItemApplicationId(),
-                        "/clubs/" + clubId + "/more/todos",
-                        "todo-application:" + application.getTodoItemApplicationId() + ":" + status
-                )
-        );
-    }
-
-    private void rejectActiveApplications(Long todoItemId, Long actorClubProfileId, String reviewNote) {
-        List<TodoItemApplication> applications = todoItemApplicationRepository
-                .findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId);
-        applications.stream()
-                .filter(application -> APPLICATION_STATUS_APPLIED.equals(application.getApplicationStatus())
-                        || APPLICATION_STATUS_SELECTED.equals(application.getApplicationStatus()))
-                .forEach(application -> application.review(
-                        APPLICATION_STATUS_REJECTED,
-                        reviewNote,
-                        actorClubProfileId,
-                        LocalDateTime.now()
-                ));
-        if (!applications.isEmpty()) {
-            todoItemApplicationRepository.saveAll(applications);
-        }
-    }
-
-    private void rejectSelectedApplications(Long todoItemId, Long actorClubProfileId, String reviewNote) {
-        List<TodoItemApplication> applications = todoItemApplicationRepository
-                .findByTodoItemIdOrderByCreateDateAscTodoItemApplicationIdAsc(todoItemId);
-        applications.stream()
-                .filter(application -> APPLICATION_STATUS_SELECTED.equals(application.getApplicationStatus()))
-                .forEach(application -> application.review(
-                        APPLICATION_STATUS_REJECTED,
-                        reviewNote,
-                        actorClubProfileId,
-                        LocalDateTime.now()
-                ));
-        if (!applications.isEmpty()) {
-            todoItemApplicationRepository.saveAll(applications);
-        }
     }
 
     private Map<Long, ClubAccessResolver.ClubMemberSnapshot> resolveActiveMembersByProfileId(Long clubId) {
@@ -1285,51 +996,6 @@ public class ClubTodoService {
                 .toList());
     }
 
-    private boolean isAssignee(TodoItem todoItem, Long clubProfileId) {
-        return Objects.equals(todoItem.getAssignedClubProfileId(), clubProfileId)
-                || todoItemAssigneeRepository.existsByTodoItemIdAndClubProfileId(
-                        todoItem.getTodoItemId(),
-                        clubProfileId
-                );
-    }
-
-    private boolean isRecruitmentAvailable(TodoItem todoItem) {
-        if (!ASSIGNMENT_MODE_OPEN_SUPPORT.equals(todoItem.getAssignmentMode())) {
-            return false;
-        }
-        if (!STATUS_OPEN.equals(todoItem.getStatusCode())
-                && !STATUS_IN_PROGRESS.equals(todoItem.getStatusCode())) {
-            return false;
-        }
-        long assigneeCount = todoItemAssigneeRepository.countByTodoItemId(todoItem.getTodoItemId());
-        if (assigneeCount == 0 && todoItem.getAssignedClubProfileId() != null) {
-            assigneeCount = 1;
-        }
-        return assigneeCount < normalizedRecruitmentCapacity(todoItem);
-    }
-
-    private int normalizedRecruitmentCapacity(TodoItem todoItem) {
-        return todoItem.getRecruitmentCapacity() == null
-                ? 1
-                : Math.max(1, todoItem.getRecruitmentCapacity());
-    }
-
-    private List<Long> resolveAssigneeIds(
-            TodoItem todoItem,
-            List<TodoItemAssignee> assignees
-    ) {
-        List<Long> ids = assignees.stream()
-                .map(TodoItemAssignee::getClubProfileId)
-                .distinct()
-                .toList();
-        if (!ids.isEmpty()) {
-            return ids;
-        }
-        return todoItem.getAssignedClubProfileId() == null
-                ? List.of()
-                : List.of(todoItem.getAssignedClubProfileId());
-    }
-
     private Map<Long, List<Long>> resolveAssigneeIdsByTodoItemId(
             List<List<TodoItem>> itemGroups,
             List<TodoItemAssignee> assignees
@@ -1421,27 +1087,6 @@ public class ClubTodoService {
         }
     }
 
-    private void validateRecurrence(
-            String recurrenceFrequency,
-            LocalDate recurrenceEndDate,
-            LocalDateTime dueAt,
-            LocalDateTime workStartAt
-    ) {
-        if (RECURRENCE_NONE.equals(recurrenceFrequency)) {
-            if (recurrenceEndDate != null) {
-                throw new SemoException.ValidationException("반복 종료일을 사용하려면 반복 주기를 선택해야 합니다.");
-            }
-            return;
-        }
-        LocalDate anchorDate = recurrenceAnchorDate(dueAt, workStartAt);
-        if (anchorDate == null) {
-            throw new SemoException.ValidationException("반복 업무는 마감일 또는 업무 시작 시간이 필요합니다.");
-        }
-        if (recurrenceEndDate != null && recurrenceEndDate.isBefore(anchorDate)) {
-            throw new SemoException.ValidationException("반복 종료일은 첫 업무 기준일보다 빠를 수 없습니다.");
-        }
-    }
-
     private List<TodoScheduleOptionResponse> buildScheduleOptions(Long clubId) {
         if (!clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE")) {
             return List.of();
@@ -1475,144 +1120,6 @@ public class ClubTodoService {
                                 : decision.getConfirmedAt().format(SCHEDULE_LABEL_FORMATTER)
                 ))
                 .toList();
-    }
-
-    private TodoItem createNextRecurringTodo(TodoItem completed, Long actorClubProfileId) {
-        String recurrenceFrequency = normalizedRecurrenceFrequency(completed);
-        if (!STATUS_COMPLETED.equals(completed.getStatusCode()) || RECURRENCE_NONE.equals(recurrenceFrequency)) {
-            return null;
-        }
-        TodoItem existing = todoItemRepository.findByRecurrenceSourceTodoItemId(completed.getTodoItemId())
-                .orElse(null);
-        if (existing != null) {
-            return existing;
-        }
-
-        int recurrenceInterval = normalizedRecurrenceInterval(completed);
-        LocalDateTime nextDueAt = shiftRecurringDateTime(
-                completed.getDueAt(),
-                recurrenceFrequency,
-                recurrenceInterval
-        );
-        LocalDateTime nextWorkStartAt = shiftRecurringDateTime(
-                completed.getWorkStartAt(),
-                recurrenceFrequency,
-                recurrenceInterval
-        );
-        LocalDateTime nextWorkEndAt = shiftRecurringDateTime(
-                completed.getWorkEndAt(),
-                recurrenceFrequency,
-                recurrenceInterval
-        );
-        LocalDate nextAnchorDate = recurrenceAnchorDate(nextDueAt, nextWorkStartAt);
-        if (nextAnchorDate == null
-                || completed.getRecurrenceEndDate() != null
-                && nextAnchorDate.isAfter(completed.getRecurrenceEndDate())) {
-            return null;
-        }
-
-        List<TodoItemAssignee> currentAssignees = todoItemAssigneeRepository
-                .findByTodoItemIdOrderByTodoItemAssigneeIdAsc(completed.getTodoItemId());
-        List<Long> nextAssigneeIds = ASSIGNMENT_MODE_DIRECT_ASSIGN.equals(completed.getAssignmentMode())
-                ? resolveAssigneeIds(completed, currentAssignees)
-                : List.of();
-        Long primaryAssigneeId = nextAssigneeIds.isEmpty() ? null : nextAssigneeIds.getFirst();
-        TodoItem next = todoItemRepository.save(TodoItem.builder()
-                .clubId(completed.getClubId())
-                .createdByClubProfileId(completed.getCreatedByClubProfileId())
-                .assignedClubProfileId(primaryAssigneeId)
-                .assignedByClubProfileId(primaryAssigneeId == null ? null : actorClubProfileId)
-                .todoType(completed.getTodoType())
-                .assignmentMode(completed.getAssignmentMode())
-                .statusCode(STATUS_OPEN)
-                .priorityCode(completed.getPriorityCode())
-                .recruitmentCapacity(completed.getRecruitmentCapacity())
-                .title(completed.getTitle())
-                .description(completed.getDescription())
-                .dueAt(nextDueAt)
-                .workStartAt(nextWorkStartAt)
-                .workEndAt(nextWorkEndAt)
-                .linkedScheduleEventId(null)
-                .linkedDecisionRecordId(completed.getLinkedDecisionRecordId())
-                .recurrenceFrequency(recurrenceFrequency)
-                .recurrenceInterval(recurrenceInterval)
-                .recurrenceEndDate(completed.getRecurrenceEndDate())
-                .recurrenceSourceTodoItemId(completed.getTodoItemId())
-                .completedByClubProfileId(null)
-                .completedAt(null)
-                .build());
-        replaceAssignees(next.getTodoItemId(), nextAssigneeIds, actorClubProfileId);
-        cloneChecklistForRecurringTodo(completed.getTodoItemId(), next.getTodoItemId());
-        notifyRecurringTodoAssignees(next, nextAssigneeIds);
-        return next;
-    }
-
-    private void cloneChecklistForRecurringTodo(Long sourceTodoItemId, Long nextTodoItemId) {
-        List<TodoChecklistItem> sourceItems = todoChecklistItemRepository
-                .findByTodoItemIdOrderBySortOrderAscTodoChecklistItemIdAsc(sourceTodoItemId);
-        if (sourceItems.isEmpty()) {
-            return;
-        }
-        todoChecklistItemRepository.saveAll(sourceItems.stream()
-                .map(item -> TodoChecklistItem.builder()
-                        .todoItemId(nextTodoItemId)
-                        .content(item.getContent())
-                        .sortOrder(item.getSortOrder())
-                        .completed(false)
-                        .completedByClubProfileId(null)
-                        .completedAt(null)
-                        .build())
-                .toList());
-    }
-
-    private void notifyRecurringTodoAssignees(TodoItem todoItem, List<Long> assigneeIds) {
-        assigneeIds.forEach(assigneeId -> clubNotificationPublisher.notifyClubProfile(
-                assigneeId,
-                new NotificationCommand(
-                        todoItem.getClubId(),
-                        "TODO_RECURRING_CREATED",
-                        "다음 반복 업무가 열렸습니다",
-                        "'" + todoItem.getTitle() + "' 다음 회차 업무를 확인해주세요.",
-                        "TODO_ITEM",
-                        todoItem.getTodoItemId(),
-                        "/clubs/" + todoItem.getClubId() + "/more/todos",
-                        "todo-recurring:" + todoItem.getTodoItemId()
-                )
-        ));
-    }
-
-    private LocalDate recurrenceAnchorDate(LocalDateTime dueAt, LocalDateTime workStartAt) {
-        if (workStartAt != null) {
-            return workStartAt.toLocalDate();
-        }
-        return dueAt == null ? null : dueAt.toLocalDate();
-    }
-
-    private LocalDateTime shiftRecurringDateTime(
-            LocalDateTime value,
-            String recurrenceFrequency,
-            int recurrenceInterval
-    ) {
-        if (value == null) {
-            return null;
-        }
-        return switch (recurrenceFrequency) {
-            case RECURRENCE_WEEKLY -> value.plusWeeks(recurrenceInterval);
-            case RECURRENCE_MONTHLY -> value.plusMonths(recurrenceInterval);
-            default -> value;
-        };
-    }
-
-    private String normalizedRecurrenceFrequency(TodoItem todoItem) {
-        return todoItem.getRecurrenceFrequency() == null || todoItem.getRecurrenceFrequency().isBlank()
-                ? RECURRENCE_NONE
-                : todoItem.getRecurrenceFrequency();
-    }
-
-    private int normalizedRecurrenceInterval(TodoItem todoItem) {
-        return todoItem.getRecurrenceInterval() == null
-                ? 1
-                : Math.max(1, todoItem.getRecurrenceInterval());
     }
 
     private TodoItem saveWithStatus(TodoItem current, String nextStatus, Long actorClubProfileId) {

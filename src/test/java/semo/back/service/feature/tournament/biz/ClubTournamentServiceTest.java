@@ -15,6 +15,7 @@ import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.share.biz.ClubContentShareService;
 import semo.back.service.feature.tournament.biz.policy.ClubTournamentPermissionService;
 import semo.back.service.feature.tournament.biz.support.ClubTournamentSupport;
+import semo.back.service.feature.tournament.biz.support.ClubTournamentViewAssembler;
 
 import java.util.List;
 
@@ -51,6 +52,9 @@ class ClubTournamentServiceTest {
     @Mock
     private ClubTournamentSupport clubTournamentSupport;
 
+    @Mock
+    private ClubTournamentViewAssembler clubTournamentViewAssembler;
+
     @InjectMocks
     private ClubTournamentService clubTournamentService;
 
@@ -64,6 +68,7 @@ class ClubTournamentServiceTest {
         when(tournamentRecordRepository
                 .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(1L))
                 .thenReturn(List.of());
+        when(clubTournamentViewAssembler.toSummaries(access, List.of())).thenReturn(List.of());
 
         var response = clubTournamentService.getAdminTournamentHome(1L, "delegated-reviewer");
 

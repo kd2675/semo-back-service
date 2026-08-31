@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ClubMember;
-import semo.back.service.database.pub.entity.FinancePayment;
 import semo.back.service.database.pub.entity.TournamentApplication;
 import semo.back.service.database.pub.entity.TournamentRecord;
 import semo.back.service.database.pub.entity.TournamentRosterMember;
@@ -25,19 +24,16 @@ import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
 import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 import semo.back.service.feature.share.biz.ClubContentShareService;
 import semo.back.service.feature.tournament.biz.policy.ClubTournamentPermissionService;
+import semo.back.service.feature.tournament.biz.policy.ClubTournamentStatusPolicy;
 import semo.back.service.feature.tournament.biz.support.ClubTournamentSupport;
+import semo.back.service.feature.tournament.biz.support.ClubTournamentViewAssembler;
 import semo.back.service.feature.tournament.vo.CancelTournamentRequest;
 import semo.back.service.feature.tournament.vo.ClubAdminTournamentHomeResponse;
 import semo.back.service.feature.tournament.vo.ClubTournamentHomeResponse;
 import semo.back.service.feature.tournament.vo.ReviewTournamentApplicationRequest;
 import semo.back.service.feature.tournament.vo.ReviewTournamentRecordRequest;
 import semo.back.service.feature.tournament.vo.SubmitTournamentApplicationRequest;
-import semo.back.service.feature.tournament.vo.TournamentApplicationSummaryResponse;
 import semo.back.service.feature.tournament.vo.TournamentDetailResponse;
-import semo.back.service.feature.tournament.vo.TournamentParticipantSummaryResponse;
-import semo.back.service.feature.tournament.vo.TournamentRosterMemberResponse;
-import semo.back.service.feature.tournament.vo.TournamentRosterOptionResponse;
-import semo.back.service.feature.tournament.vo.TournamentScheduleSlotResponse;
 import semo.back.service.feature.tournament.vo.TournamentSummaryResponse;
 import semo.back.service.feature.tournament.vo.TournamentUpsertResponse;
 import semo.back.service.feature.tournament.vo.UpdateTournamentApplicationOperationsRequest;
@@ -47,10 +43,7 @@ import semo.back.service.feature.tournament.vo.UpsertTournamentScheduleSlotReque
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -92,24 +85,26 @@ public class ClubTournamentService {
     private final ClubTournamentSupport clubTournamentSupport;
     private final ClubNotificationPublisher clubNotificationPublisher;
     private final TournamentFinanceLinkService tournamentFinanceLinkService;
+    private final ClubTournamentStatusPolicy clubTournamentStatusPolicy;
+    private final ClubTournamentViewAssembler clubTournamentViewAssembler;
 
     public ClubTournamentHomeResponse getTournamentHome(Long clubId, String userKey) {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         List<TournamentRecord> tournaments = tournamentRecordRepository
                 .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(clubId);
-        TournamentContext context = buildTournamentContext(access, tournaments);
+        List<TournamentSummaryResponse> summaries = clubTournamentViewAssembler.toSummaries(access, tournaments);
 
-        List<TournamentSummaryResponse> approvedVisible = context.summaries().stream()
+        List<TournamentSummaryResponse> approvedVisible = summaries.stream()
                 .filter(summary -> APPROVAL_APPROVED.equals(summary.approvalStatus()))
                 .toList();
         List<TournamentSummaryResponse> archived = approvedVisible.stream()
-                .filter(summary -> isArchived(summary.tournamentStatus()))
+                .filter(summary -> clubTournamentStatusPolicy.isArchived(summary.tournamentStatus()))
                 .toList();
         List<TournamentSummaryResponse> visible = approvedVisible.stream()
-                .filter(summary -> !isArchived(summary.tournamentStatus()))
+                .filter(summary -> !clubTournamentStatusPolicy.isArchived(summary.tournamentStatus()))
                 .toList();
-        List<TournamentSummaryResponse> myTournaments = context.summaries().stream()
+        List<TournamentSummaryResponse> myTournaments = summaries.stream()
                 .filter(summary -> summary.participating() || summary.mine())
                 .toList();
         TournamentSummaryResponse featured = visible.stream()
@@ -141,7 +136,7 @@ public class ClubTournamentService {
         requireTournamentAdminToolAccess(canReview, canDelete);
         List<TournamentRecord> tournaments = tournamentRecordRepository
                 .findByClubIdAndDeletedFalseOrderByPinnedDescStartDateAscTournamentRecordIdDesc(clubId);
-        TournamentContext context = buildTournamentContext(access, tournaments);
+        List<TournamentSummaryResponse> summaries = clubTournamentViewAssembler.toSummaries(access, tournaments);
 
         return new ClubAdminTournamentHomeResponse(
                 access.club().getClubId(),
@@ -149,11 +144,11 @@ public class ClubTournamentService {
                 access.isAdmin(),
                 canReview,
                 canDelete,
-                context.summaries().size(),
-                (int) context.summaries().stream().filter(summary -> APPROVAL_PENDING.equals(summary.approvalStatus())).count(),
-                (int) context.summaries().stream().filter(summary -> APPROVAL_APPROVED.equals(summary.approvalStatus())).count(),
-                (int) context.summaries().stream().filter(summary -> APPROVAL_REJECTED.equals(summary.approvalStatus())).count(),
-                context.summaries()
+                summaries.size(),
+                (int) summaries.stream().filter(summary -> APPROVAL_PENDING.equals(summary.approvalStatus())).count(),
+                (int) summaries.stream().filter(summary -> APPROVAL_APPROVED.equals(summary.approvalStatus())).count(),
+                (int) summaries.stream().filter(summary -> APPROVAL_REJECTED.equals(summary.approvalStatus())).count(),
+                summaries
         );
     }
 
@@ -162,14 +157,14 @@ public class ClubTournamentService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         TournamentRecord tournament = getTournament(clubId, tournamentRecordId);
         validateTournamentVisible(access, tournament);
-        return buildTournamentDetail(access, tournament);
+        return clubTournamentViewAssembler.toDetail(access, tournament);
     }
 
     public List<TournamentSummaryResponse> getTournamentSummariesForDisplay(
             ClubAccessResolver.ClubAccess access,
             List<TournamentRecord> tournaments
     ) {
-        return buildTournamentContext(access, tournaments).summaries();
+        return clubTournamentViewAssembler.toSummaries(access, tournaments);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -195,7 +190,13 @@ public class ClubTournamentService {
                 .title(draft.title())
                 .summaryText(draft.summaryText())
                 .detailText(draft.detailText())
-                .tournamentStatus(resolveTournamentStatus(draft.applicationStartAt(), draft.applicationEndAt(), draft.startDate(), draft.endDate(), null))
+                .tournamentStatus(clubTournamentStatusPolicy.resolveStatus(
+                        draft.applicationStartAt(),
+                        draft.applicationEndAt(),
+                        draft.startDate(),
+                        draft.endDate(),
+                        null
+                ))
                 .approvalStatus(APPROVAL_PENDING)
                 .reviewedByClubProfileId(null)
                 .reviewedAt(null)
@@ -219,7 +220,7 @@ public class ClubTournamentService {
                 .deleted(false)
                 .build());
         syncTournamentShares(saved);
-        return toUpsertResponse(saved);
+        return clubTournamentViewAssembler.toUpsertResponse(saved);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -233,7 +234,8 @@ public class ClubTournamentService {
         requireTournamentFeature(clubId);
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         TournamentRecord current = getTournamentForUpdate(clubId, tournamentRecordId);
-        if (current.getCancelledAt() != null || STATUS_COMPLETED.equals(resolveTournamentStatus(current))) {
+        if (current.getCancelledAt() != null
+                || STATUS_COMPLETED.equals(clubTournamentStatusPolicy.resolveStatus(current))) {
             throw new SemoException.ValidationException("취소되었거나 종료된 대회는 수정할 수 없습니다.");
         }
         ClubTournamentPermissionService.TournamentActionPermission permission =
@@ -259,7 +261,13 @@ public class ClubTournamentService {
                 .title(draft.title())
                 .summaryText(draft.summaryText())
                 .detailText(draft.detailText())
-                .tournamentStatus(resolveTournamentStatus(draft.applicationStartAt(), draft.applicationEndAt(), draft.startDate(), draft.endDate(), current.getCancelledAt()))
+                .tournamentStatus(clubTournamentStatusPolicy.resolveStatus(
+                        draft.applicationStartAt(),
+                        draft.applicationEndAt(),
+                        draft.startDate(),
+                        draft.endDate(),
+                        current.getCancelledAt()
+                ))
                 .approvalStatus(resubmitRequired ? APPROVAL_PENDING : current.getApprovalStatus())
                 .reviewedByClubProfileId(resubmitRequired ? null : current.getReviewedByClubProfileId())
                 .reviewedAt(resubmitRequired ? null : current.getReviewedAt())
@@ -283,7 +291,7 @@ public class ClubTournamentService {
                 .deleted(false)
                 .build());
         syncTournamentShares(saved);
-        return toUpsertResponse(saved);
+        return clubTournamentViewAssembler.toUpsertResponse(saved);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -364,7 +372,7 @@ public class ClubTournamentService {
                         "tournament:" + saved.getTournamentRecordId() + ":" + approvalStatus
                 )
         );
-        return buildTournamentDetail(access, saved);
+        return clubTournamentViewAssembler.toDetail(access, saved);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -386,7 +394,7 @@ public class ClubTournamentService {
         if (current.getCancelledAt() != null) {
             throw new SemoException.ConflictException("이미 취소된 대회입니다.");
         }
-        if (STATUS_COMPLETED.equals(resolveTournamentStatus(current))) {
+        if (STATUS_COMPLETED.equals(clubTournamentStatusPolicy.resolveStatus(current))) {
             throw new SemoException.ValidationException("이미 종료된 대회는 취소할 수 없습니다.");
         }
         String cancelReason = clubTournamentSupport.trimToNull(request == null ? null : request.cancelReason());
@@ -432,7 +440,9 @@ public class ClubTournamentService {
                 .findByTournamentRecordIdOrderByCreateDateAscTournamentApplicationIdAsc(tournamentRecordId);
         applications.forEach(tournamentFinanceLinkService::waivePendingTournamentFee);
         applications.stream()
-                .filter(application -> isActiveApplicationStatus(application.getApplicationStatus()))
+                .filter(application -> clubTournamentStatusPolicy.isActiveApplicationStatus(
+                        application.getApplicationStatus()
+                ))
                 .forEach(application -> clubNotificationPublisher.notifyClubProfile(
                         application.getClubProfileId(),
                         new NotificationCommand(
@@ -447,7 +457,7 @@ public class ClubTournamentService {
                                         + application.getTournamentApplicationId()
                         )
                 ));
-        return buildTournamentDetail(access, saved);
+        return clubTournamentViewAssembler.toDetail(access, saved);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -508,10 +518,10 @@ public class ClubTournamentService {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         TournamentRecord tournament = getTournamentForUpdate(clubId, tournamentRecordId);
         validateTournamentVisible(access, tournament);
-        if (!isTournamentApproved(tournament)) {
+        if (!clubTournamentStatusPolicy.isApproved(tournament)) {
             throw new SemoException.ValidationException("아직 승인되지 않은 대회입니다.");
         }
-        if (!isApplicationOpen(tournament)) {
+        if (!clubTournamentStatusPolicy.isApplicationOpen(tournament)) {
             throw new SemoException.ValidationException("현재 참가 신청을 받을 수 없습니다.");
         }
         List<TournamentApplication> applications = tournamentApplicationRepository
@@ -519,7 +529,8 @@ public class ClubTournamentService {
         TournamentApplication current = tournamentApplicationRepository
                 .findByTournamentRecordIdAndClubProfileId(tournamentRecordId, access.clubProfile().getClubProfileId())
                 .orElse(null);
-        if (current != null && isActiveApplicationStatus(current.getApplicationStatus())) {
+        if (current != null
+                && clubTournamentStatusPolicy.isActiveApplicationStatus(current.getApplicationStatus())) {
             throw new SemoException.ValidationException("이미 참가 신청한 대회입니다.");
         }
 
@@ -551,7 +562,7 @@ public class ClubTournamentService {
             saved = tournamentApplicationRepository.save(current);
         }
         replaceRoster(saved, rosterDraft.clubProfileIds());
-        return buildTournamentDetail(access, tournament);
+        return clubTournamentViewAssembler.toDetail(access, tournament);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -564,7 +575,7 @@ public class ClubTournamentService {
         TournamentApplication current = tournamentApplicationRepository
                 .findByTournamentRecordIdAndClubProfileId(tournamentRecordId, access.clubProfile().getClubProfileId())
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("TournamentApplication", "tournamentRecordId", tournamentRecordId));
-        if (!isActiveApplicationStatus(current.getApplicationStatus())) {
+        if (!clubTournamentStatusPolicy.isActiveApplicationStatus(current.getApplicationStatus())) {
             throw new SemoException.ValidationException("취소할 수 있는 참가 신청이 없습니다.");
         }
         ClubActivityContextHolder.setDetails(
@@ -575,7 +586,7 @@ public class ClubTournamentService {
         tournamentApplicationRepository.save(current);
         tournamentFinanceLinkService.waivePendingTournamentFee(current);
         promoteWaitlist(tournament, access.clubProfile().getClubProfileId());
-        return buildTournamentDetail(access, tournament);
+        return clubTournamentViewAssembler.toDetail(access, tournament);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -594,7 +605,7 @@ public class ClubTournamentService {
         if (!canManageApplications(access, tournament)) {
             throw new SemoException.ForbiddenException("참가 신청을 검토할 권한이 없습니다.");
         }
-        if (!isTournamentApproved(tournament)) {
+        if (!clubTournamentStatusPolicy.isApproved(tournament)) {
             throw new SemoException.ValidationException("승인된 대회만 참가 신청을 검토할 수 있습니다.");
         }
         TournamentApplication current = tournamentApplicationRepository.findForUpdate(
@@ -662,7 +673,7 @@ public class ClubTournamentService {
                         "tournament-application:" + current.getTournamentApplicationId() + ":" + nextStatus
                 )
         );
-        return buildTournamentDetail(access, tournament);
+        return clubTournamentViewAssembler.toDetail(access, tournament);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -691,7 +702,7 @@ public class ClubTournamentService {
                 .note(draft.note())
                 .createdByClubProfileId(access.clubProfile().getClubProfileId())
                 .build());
-        return buildTournamentDetail(access, tournament);
+        return clubTournamentViewAssembler.toDetail(access, tournament);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -720,7 +731,7 @@ public class ClubTournamentService {
         );
         current.update(draft.title(), draft.courtLabel(), draft.startAt(), draft.endAt(), draft.note());
         tournamentScheduleSlotRepository.save(current);
-        return buildTournamentDetail(access, tournament);
+        return clubTournamentViewAssembler.toDetail(access, tournament);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -746,7 +757,7 @@ public class ClubTournamentService {
                 "대회 일정 삭제에 실패했습니다."
         );
         tournamentScheduleSlotRepository.delete(current);
-        return buildTournamentDetail(access, tournament);
+        return clubTournamentViewAssembler.toDetail(access, tournament);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
@@ -795,275 +806,7 @@ public class ClubTournamentService {
                 clubTournamentSupport.trimToNull(request.resultNote())
         );
         tournamentApplicationRepository.save(current);
-        return buildTournamentDetail(access, tournament);
-    }
-
-    private TournamentDetailResponse buildTournamentDetail(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
-        List<TournamentApplication> applications = tournamentApplicationRepository
-                .findByTournamentRecordIdOrderByCreateDateAscTournamentApplicationIdAsc(tournament.getTournamentRecordId());
-        List<Long> applicationIds = applications.stream()
-                .map(TournamentApplication::getTournamentApplicationId)
-                .toList();
-        List<TournamentRosterMember> rosterMembers = applicationIds.isEmpty()
-                ? List.of()
-                : tournamentRosterMemberRepository
-                        .findByTournamentApplicationIdInOrderBySortOrderAscTournamentRosterMemberIdAsc(applicationIds);
-        Map<Long, List<TournamentRosterMember>> rosterByApplicationId = rosterMembers.stream()
-                .collect(Collectors.groupingBy(
-                        TournamentRosterMember::getTournamentApplicationId,
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
-
-        Set<Long> clubProfileIds = new HashSet<>();
-        clubProfileIds.add(tournament.getAuthorClubProfileId());
-        if (tournament.getReviewedByClubProfileId() != null) {
-            clubProfileIds.add(tournament.getReviewedByClubProfileId());
-        }
-        applications.forEach(application -> {
-            clubProfileIds.add(application.getClubProfileId());
-            if (application.getReviewedByClubProfileId() != null) {
-                clubProfileIds.add(application.getReviewedByClubProfileId());
-            }
-        });
-        rosterMembers.forEach(member -> clubProfileIds.add(member.getClubProfileId()));
-        Map<Long, ClubProfile> profileById = loadClubProfiles(clubProfileIds);
-
-        ClubTournamentPermissionService.TournamentActionPermission actionPermission =
-                clubTournamentPermissionService.getActionPermission(access, tournament.getAuthorClubProfileId());
-        TournamentViewerState viewerState = resolveViewerState(access, tournament, applications);
-        boolean canReviewTournament = clubTournamentPermissionService.canReviewTournament(access);
-        boolean canManageApplications = canManageApplications(access, tournament);
-        List<TournamentApplication> approvedApplications = applications.stream()
-                .filter(application -> APPLICATION_APPROVED.equals(application.getApplicationStatus()))
-                .toList();
-        List<TournamentScheduleSlotResponse> scheduleSlots = tournamentScheduleSlotRepository
-                .findByTournamentRecordIdOrderByStartAtAscTournamentScheduleSlotIdAsc(tournament.getTournamentRecordId())
-                .stream()
-                .map(this::toScheduleSlotResponse)
-                .toList();
-        List<TournamentRosterOptionResponse> availableRosterMembers = loadAvailableRosterMembers(access.club().getClubId());
-        int activeApplicantCount = (int) applications.stream()
-                .filter(application -> isActiveApplicationStatus(application.getApplicationStatus()))
-                .count();
-
-        return new TournamentDetailResponse(
-                access.club().getClubId(),
-                access.club().getName(),
-                access.isAdmin(),
-                access.clubProfile().getClubProfileId(),
-                tournament.getTournamentRecordId(),
-                tournament.getTitle(),
-                tournament.getSummaryText(),
-                tournament.getDetailText(),
-                tournament.getApprovalStatus(),
-                resolveTournamentStatus(tournament),
-                clubTournamentSupport.resolveDisplayName(profileById.get(tournament.getAuthorClubProfileId())),
-                clubTournamentSupport.resolveAvatarImageUrl(profileById.get(tournament.getAuthorClubProfileId())),
-                clubTournamentSupport.resolveAvatarThumbnailUrl(profileById.get(tournament.getAuthorClubProfileId())),
-                clubTournamentSupport.resolveDisplayName(profileById.get(tournament.getReviewedByClubProfileId())),
-                clubTournamentSupport.formatDateTimeLabel(tournament.getReviewedAt()),
-                tournament.getRejectionReason(),
-                clubTournamentSupport.formatDateTime(tournament.getApplicationStartAt()),
-                clubTournamentSupport.formatDateTime(tournament.getApplicationEndAt()),
-                clubTournamentSupport.formatApplicationWindowLabel(tournament),
-                clubTournamentSupport.formatDate(tournament.getStartDate()),
-                clubTournamentSupport.formatDate(tournament.getEndDate()),
-                clubTournamentSupport.formatTournamentPeriodLabel(tournament),
-                tournament.getLocationLabel(),
-                tournament.getMatchFormat(),
-                tournament.getTeamMemberLimit(),
-                tournament.getParticipantLimit(),
-                tournament.isFeeRequired(),
-                tournament.getFeeAmount(),
-                tournament.getFeeCurrencyCode(),
-                tournamentFinanceLinkService.isFinanceIntegrationEnabled(tournament.getClubId()),
-                tournament.isSharedToBoard(),
-                tournament.isSharedToCalendar(),
-                tournament.isPinned(),
-                clubTournamentSupport.formatDateTimeLabel(tournament.getCancelledAt()),
-                tournament.getCancelReason(),
-                activeApplicantCount,
-                approvedApplications.size(),
-                approvedApplications.size(),
-                isApplicationOpen(tournament),
-                !viewerState.applied() && isApplicationOpen(tournament),
-                viewerState.applied(),
-                viewerState.applicationStatus(),
-                viewerState.participating(),
-                canReviewTournament,
-                actionPermission.canEdit() && canModifyTournament(tournament),
-                actionPermission.canCancel() && canModifyTournament(tournament),
-                clubTournamentPermissionService.canDeleteTournament(access),
-                canManageApplications,
-                (canManageApplications ? applications : List.<TournamentApplication>of()).stream()
-                        .map(application -> toApplicationSummary(
-                                access,
-                                application,
-                                profileById.get(application.getClubProfileId()),
-                                canManageApplications,
-                                toRosterResponses(rosterByApplicationId.getOrDefault(
-                                        application.getTournamentApplicationId(),
-                                        List.of()
-                                ), profileById)
-                        ))
-                        .toList(),
-                approvedApplications.stream()
-                        .map(application -> toParticipantSummary(
-                                application,
-                                profileById.get(application.getClubProfileId()),
-                                toRosterResponses(rosterByApplicationId.getOrDefault(
-                                        application.getTournamentApplicationId(),
-                                        List.of()
-                                ), profileById)
-                        ))
-                        .toList(),
-                scheduleSlots,
-                availableRosterMembers
-        );
-    }
-
-    private TournamentContext buildTournamentContext(ClubAccessResolver.ClubAccess access, List<TournamentRecord> tournaments) {
-        List<TournamentRecord> visibleTournaments = tournaments.stream()
-                .filter(tournament -> canViewTournament(access, tournament))
-                .toList();
-        List<TournamentApplication> applications = visibleTournaments.isEmpty()
-                ? List.of()
-                : tournamentApplicationRepository.findByTournamentRecordIdIn(visibleTournaments.stream().map(TournamentRecord::getTournamentRecordId).toList());
-        Map<Long, List<TournamentApplication>> applicationsByTournamentId = applications.stream()
-                .collect(Collectors.groupingBy(TournamentApplication::getTournamentRecordId));
-        Set<Long> profileIds = new HashSet<>();
-        visibleTournaments.forEach(tournament -> {
-            profileIds.add(tournament.getAuthorClubProfileId());
-            if (tournament.getReviewedByClubProfileId() != null) {
-                profileIds.add(tournament.getReviewedByClubProfileId());
-            }
-        });
-        applications.forEach(application -> profileIds.add(application.getClubProfileId()));
-        Map<Long, ClubProfile> profileById = loadClubProfiles(profileIds);
-
-        List<TournamentSummaryResponse> summaries = visibleTournaments.stream()
-                .map(tournament -> {
-                    List<TournamentApplication> tournamentApplications = applicationsByTournamentId.getOrDefault(tournament.getTournamentRecordId(), List.of());
-                    ClubTournamentPermissionService.TournamentActionPermission permission =
-                            clubTournamentPermissionService.getActionPermission(access, tournament.getAuthorClubProfileId());
-                    TournamentViewerState viewerState = resolveViewerState(access, tournament, tournamentApplications);
-                    int approvedApplicationCount = (int) tournamentApplications.stream()
-                            .filter(application -> APPLICATION_APPROVED.equals(application.getApplicationStatus()))
-                            .count();
-                    return new TournamentSummaryResponse(
-                            tournament.getTournamentRecordId(),
-                            tournament.getTitle(),
-                            tournament.getSummaryText(),
-                            tournament.getApprovalStatus(),
-                            resolveTournamentStatus(tournament),
-                            clubTournamentSupport.resolveDisplayName(profileById.get(tournament.getAuthorClubProfileId())),
-                            clubTournamentSupport.resolveAvatarImageUrl(profileById.get(tournament.getAuthorClubProfileId())),
-                            clubTournamentSupport.resolveAvatarThumbnailUrl(profileById.get(tournament.getAuthorClubProfileId())),
-                            clubTournamentSupport.formatApplicationWindowLabel(tournament),
-                            clubTournamentSupport.formatTournamentPeriodLabel(tournament),
-                            clubTournamentSupport.formatDate(tournament.getStartDate()),
-                            clubTournamentSupport.formatDate(tournament.getEndDate()),
-                            tournament.getLocationLabel(),
-                            tournament.getMatchFormat(),
-                            tournament.getTeamMemberLimit(),
-                            tournament.getParticipantLimit(),
-                            approvedApplicationCount,
-                            approvedApplicationCount,
-                            tournament.isFeeRequired(),
-                            tournament.getFeeAmount(),
-                            tournament.getFeeCurrencyCode(),
-                            tournament.isSharedToBoard(),
-                            tournament.isSharedToCalendar(),
-                            tournament.isPinned(),
-                            viewerState.mine(),
-                            viewerState.participating(),
-                            permission.canEdit() && canModifyTournament(tournament),
-                            permission.canCancel() && canModifyTournament(tournament),
-                            clubTournamentPermissionService.canDeleteTournament(access)
-                    );
-                })
-                .toList();
-
-        return new TournamentContext(summaries);
-    }
-
-    private TournamentApplicationSummaryResponse toApplicationSummary(
-            ClubAccessResolver.ClubAccess access,
-            TournamentApplication application,
-            ClubProfile profile,
-            boolean canManageApplications,
-            List<TournamentRosterMemberResponse> rosterMembers
-    ) {
-        boolean mine = access.clubProfile().getClubProfileId().equals(application.getClubProfileId());
-        FinancePayment payment = tournamentFinanceLinkService.findPayment(application.getFinancePaymentId());
-        return new TournamentApplicationSummaryResponse(
-                application.getTournamentApplicationId(),
-                application.getClubProfileId(),
-                clubTournamentSupport.resolveDisplayName(profile),
-                clubTournamentSupport.resolveAvatarImageUrl(profile),
-                clubTournamentSupport.resolveAvatarThumbnailUrl(profile),
-                application.getApplicationStatus(),
-                application.getApplicationNote(),
-                application.getTeamName(),
-                application.getWaitlistPosition(),
-                application.getFinancePaymentId(),
-                payment == null ? null : payment.getPaymentStatusCode(),
-                resolvePaymentStatusLabel(payment),
-                clubTournamentSupport.formatDateTimeLabel(application.getCheckedInAt()),
-                application.getPlacement(),
-                application.getResultNote(),
-                rosterMembers,
-                clubTournamentSupport.formatDateTimeLabel(application.getCreateDate()),
-                mine,
-                canManageApplications,
-                mine && isActiveApplicationStatus(application.getApplicationStatus())
-        );
-    }
-
-    private TournamentParticipantSummaryResponse toParticipantSummary(
-            TournamentApplication application,
-            ClubProfile profile,
-            List<TournamentRosterMemberResponse> rosterMembers
-    ) {
-        FinancePayment payment = tournamentFinanceLinkService.findPayment(application.getFinancePaymentId());
-        return new TournamentParticipantSummaryResponse(
-                application.getClubProfileId(),
-                clubTournamentSupport.resolveDisplayName(profile),
-                clubTournamentSupport.resolveAvatarImageUrl(profile),
-                clubTournamentSupport.resolveAvatarThumbnailUrl(profile),
-                clubTournamentSupport.formatDateTimeLabel(application.getReviewedAt()),
-                application.getTeamName(),
-                application.getFinancePaymentId(),
-                payment == null ? null : payment.getPaymentStatusCode(),
-                resolvePaymentStatusLabel(payment),
-                clubTournamentSupport.formatDateTimeLabel(application.getCheckedInAt()),
-                application.getPlacement(),
-                application.getResultNote(),
-                rosterMembers
-        );
-    }
-
-    private TournamentViewerState resolveViewerState(
-            ClubAccessResolver.ClubAccess access,
-            TournamentRecord tournament,
-            List<TournamentApplication> applications
-    ) {
-        Long viewerClubProfileId = access.clubProfile().getClubProfileId();
-        TournamentApplication myApplication = applications.stream()
-                .filter(application -> application.getClubProfileId().equals(viewerClubProfileId))
-                .findFirst()
-                .orElse(null);
-        boolean participating = myApplication != null
-                && APPLICATION_APPROVED.equals(myApplication.getApplicationStatus());
-        boolean applied = myApplication != null
-                && isActiveApplicationStatus(myApplication.getApplicationStatus());
-        return new TournamentViewerState(
-                access.clubProfile().getClubProfileId().equals(tournament.getAuthorClubProfileId()),
-                applied,
-                myApplication == null ? null : myApplication.getApplicationStatus(),
-                participating
-        );
+        return clubTournamentViewAssembler.toDetail(access, tournament);
     }
 
     private RosterDraft validateRosterDraft(
@@ -1141,7 +884,9 @@ public class ClubTournamentService {
         List<TournamentApplication> otherActiveApplications = applications.stream()
                 .filter(application -> current == null
                         || !application.getTournamentApplicationId().equals(current.getTournamentApplicationId()))
-                .filter(application -> isActiveApplicationStatus(application.getApplicationStatus()))
+                .filter(application -> clubTournamentStatusPolicy.isActiveApplicationStatus(
+                        application.getApplicationStatus()
+                ))
                 .toList();
         Set<Long> occupiedProfileIds = otherActiveApplications.stream()
                 .map(TournamentApplication::getClubProfileId)
@@ -1252,11 +997,6 @@ public class ClubTournamentService {
         }
     }
 
-    private boolean isActiveApplicationStatus(String applicationStatus) {
-        return Set.of(APPLICATION_APPLIED, APPLICATION_WAITLISTED, APPLICATION_APPROVED)
-                .contains(applicationStatus);
-    }
-
     private void requireApplicationManager(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
         validateTournamentVisible(access, tournament);
         if (!canManageApplications(access, tournament)) {
@@ -1294,73 +1034,8 @@ public class ClubTournamentService {
         );
     }
 
-    private List<TournamentRosterMemberResponse> toRosterResponses(
-            List<TournamentRosterMember> rosterMembers,
-            Map<Long, ClubProfile> profileById
-    ) {
-        return rosterMembers.stream()
-                .map(member -> {
-                    ClubProfile profile = profileById.get(member.getClubProfileId());
-                    return new TournamentRosterMemberResponse(
-                            member.getClubProfileId(),
-                            clubTournamentSupport.resolveDisplayName(profile),
-                            clubTournamentSupport.resolveAvatarImageUrl(profile),
-                            clubTournamentSupport.resolveAvatarThumbnailUrl(profile),
-                            member.getRosterRoleCode()
-                    );
-                })
-                .toList();
-    }
-
-    private List<TournamentRosterOptionResponse> loadAvailableRosterMembers(Long clubId) {
-        return clubAccessResolver.getActiveMemberSnapshots(clubId).stream()
-                .map(snapshot -> new TournamentRosterOptionResponse(
-                        snapshot.clubProfile().getClubProfileId(),
-                        snapshot.clubProfile().getDisplayName(),
-                        clubTournamentSupport.resolveAvatarImageUrl(snapshot.clubProfile()),
-                        clubTournamentSupport.resolveAvatarThumbnailUrl(snapshot.clubProfile())
-                ))
-                .toList();
-    }
-
-    private TournamentScheduleSlotResponse toScheduleSlotResponse(TournamentScheduleSlot slot) {
-        return new TournamentScheduleSlotResponse(
-                slot.getTournamentScheduleSlotId(),
-                slot.getTitle(),
-                slot.getCourtLabel(),
-                clubTournamentSupport.formatDateTime(slot.getStartAt()),
-                clubTournamentSupport.formatDateTimeLabel(slot.getStartAt()),
-                clubTournamentSupport.formatDateTime(slot.getEndAt()),
-                clubTournamentSupport.formatDateTimeLabel(slot.getEndAt()),
-                slot.getNote()
-        );
-    }
-
-    private String resolvePaymentStatusLabel(FinancePayment payment) {
-        if (payment == null) {
-            return null;
-        }
-        return switch (payment.getPaymentStatusCode()) {
-            case "PENDING" -> "납부 대기";
-            case "PAID" -> "납부 완료";
-            case "WAIVED" -> "면제";
-            default -> payment.getPaymentStatusCode();
-        };
-    }
-
-    private TournamentUpsertResponse toUpsertResponse(TournamentRecord tournament) {
-        return new TournamentUpsertResponse(
-                tournament.getTournamentRecordId(),
-                tournament.getTitle(),
-                clubTournamentSupport.formatDate(tournament.getStartDate()),
-                clubTournamentSupport.formatDate(tournament.getEndDate()),
-                tournament.getApprovalStatus(),
-                resolveTournamentStatus(tournament)
-        );
-    }
-
     private void syncTournamentShares(TournamentRecord tournament) {
-        boolean visible = isTournamentApproved(tournament) && !tournament.isDeleted();
+        boolean visible = clubTournamentStatusPolicy.isApproved(tournament) && !tournament.isDeleted();
         clubContentShareService.syncBoardShare(
                 tournament.getClubId(),
                 CONTENT_TOURNAMENT,
@@ -1405,88 +1080,10 @@ public class ClubTournamentService {
                 || !Objects.equals(current.getFeeCurrencyCode(), draft.feeCurrencyCode());
     }
 
-    private Map<Long, ClubProfile> loadClubProfiles(Collection<Long> clubProfileIds) {
-        if (clubProfileIds == null || clubProfileIds.isEmpty()) {
-            return Map.of();
-        }
-        Map<Long, ClubProfile> result = new HashMap<>();
-        clubProfileRepository.findAllById(clubProfileIds).forEach(profile -> result.put(profile.getClubProfileId(), profile));
-        return result;
-    }
-
     private void requireTournamentFeature(Long clubId) {
         if (!clubTournamentPermissionService.isTournamentEnabled(clubId)) {
             throw new SemoException.ValidationException("대회 기능이 활성화되지 않았습니다.");
         }
-    }
-
-    private boolean isApplicationOpen(TournamentRecord tournament) {
-        if (!isTournamentApproved(tournament)) {
-            return false;
-        }
-        String status = resolveTournamentStatus(tournament);
-        return STATUS_APPLICATION_OPEN.equals(status);
-    }
-
-    private boolean isArchived(String status) {
-        return STATUS_COMPLETED.equals(status) || STATUS_CANCELLED.equals(status);
-    }
-
-    private boolean canModifyTournament(TournamentRecord tournament) {
-        String status = resolveTournamentStatus(tournament);
-        return !STATUS_COMPLETED.equals(status) && !STATUS_CANCELLED.equals(status);
-    }
-
-    private String resolveTournamentStatus(TournamentRecord tournament) {
-        if (!isTournamentApproved(tournament) && tournament.getCancelledAt() == null) {
-            return STATUS_DRAFT;
-        }
-        return resolveTournamentStatus(
-                tournament.getApplicationStartAt(),
-                tournament.getApplicationEndAt(),
-                tournament.getStartDate(),
-                tournament.getEndDate(),
-                tournament.getCancelledAt()
-        );
-    }
-
-    private String resolveTournamentStatus(
-            LocalDateTime applicationStartAt,
-            LocalDateTime applicationEndAt,
-            LocalDate startDate,
-            LocalDate endDate,
-            LocalDateTime cancelledAt
-    ) {
-        if (cancelledAt != null) {
-            return STATUS_CANCELLED;
-        }
-        LocalDate today = LocalDate.now();
-        LocalDateTime now = LocalDateTime.now();
-        if (today.isAfter(endDate)) {
-            return STATUS_COMPLETED;
-        }
-        if (!today.isBefore(startDate) && !today.isAfter(endDate)) {
-            return STATUS_ONGOING;
-        }
-        if (!now.isBefore(applicationStartAt) && !now.isAfter(applicationEndAt)) {
-            return STATUS_APPLICATION_OPEN;
-        }
-        if (today.isBefore(startDate)) {
-            return STATUS_ENTRY_CONFIRMED;
-        }
-        return STATUS_DRAFT;
-    }
-
-    private boolean isTournamentApproved(TournamentRecord tournament) {
-        return tournament != null && APPROVAL_APPROVED.equals(tournament.getApprovalStatus());
-    }
-
-    private boolean canViewTournament(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
-        return isTournamentApproved(tournament)
-                || access.isAdmin()
-                || clubTournamentPermissionService.canReviewTournament(access)
-                || clubTournamentPermissionService.canDeleteTournament(access)
-                || access.clubProfile().getClubProfileId().equals(tournament.getAuthorClubProfileId());
     }
 
     private void requireTournamentAdminToolAccess(boolean canReview, boolean canDelete) {
@@ -1496,7 +1093,7 @@ public class ClubTournamentService {
     }
 
     private void validateTournamentVisible(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
-        if (!canViewTournament(access, tournament)) {
+        if (!clubTournamentStatusPolicy.canView(access, tournament)) {
             throw new SemoException.ForbiddenException("해당 대회를 조회할 수 없습니다.");
         }
     }
@@ -1504,19 +1101,6 @@ public class ClubTournamentService {
     private boolean canManageApplications(ClubAccessResolver.ClubAccess access, TournamentRecord tournament) {
         return access.isAdmin()
                 || access.clubProfile().getClubProfileId().equals(tournament.getAuthorClubProfileId());
-    }
-
-    private record TournamentViewerState(
-            boolean mine,
-            boolean applied,
-            String applicationStatus,
-            boolean participating
-    ) {
-    }
-
-    private record TournamentContext(
-            List<TournamentSummaryResponse> summaries
-    ) {
     }
 
     private record RosterDraft(

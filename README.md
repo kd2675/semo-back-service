@@ -225,7 +225,7 @@
 - `POST /api/semo/v1/clubs/{clubId}/more/preferences/{featureKey}/usage`
   - 기능 진입 시 개인 최근 사용 시각 저장
 
-선호 설정은 `club_more_preference`의 `(club_id, club_profile_id, feature_key)` 유일 키로 관리합니다. 최초 생성 경쟁도 같은 클럽 프로필 행을 잠근 뒤 처리해 중복 삽입을 방지합니다. 운영 DB에는 `db/ops/semo_more_preference_apply.sql`을 별도로 적용해야 하며 전체 DDL을 운영 DB에 직접 실행하지 않습니다.
+선호 설정은 `club_more_preference`의 `(club_id, club_profile_id, feature_key)` 유일 키로 관리합니다. 최초 생성 경쟁도 같은 클럽 프로필 행을 잠근 뒤 처리해 중복 삽입을 방지합니다. 테이블 정의는 기준 DDL에 포함되어 있지만 현재 저장소에는 별도 `db/ops` 운영 반영 파일이 없습니다. 운영 DB 반영 시에는 기준 DDL 전체를 실행하지 말고 배포 대상 버전 간 스키마 차이로 검토된 마이그레이션을 별도로 준비합니다.
 
 ### Activity
 - `GET /api/semo/v1/clubs/{clubId}/profile/activity`
@@ -305,23 +305,21 @@
 
 - DDL source of truth
   - `src/main/resources/db/ddl/semo_ddl_all.sql`
+  - 신규 환경과 전체 스키마 검증을 위한 기준 파일이며 운영 DB에 그대로 실행하는 배포 묶음이 아닙니다.
+  - 활성·휴면 `club_member`에 `club_profile`이 반드시 존재하도록 레거시 누락 행을 보정하는 idempotent `INSERT ... LEFT JOIN` 구문을 포함합니다.
 - Seed source of truth
   - `src/main/resources/db/seed/semo_seed_all.sql`
-- 운영 DB 단건 반영 SQL
-  - `src/main/resources/db/ops/semo_finance_request_expense_apply.sql`
-  - 승인된 정산 요청과 지출 원장을 연결하는 nullable FK/unique 컬럼을 추가하며, 배포 전 백업 후 1회 적용
-  - `src/main/resources/db/ops/semo_finance_operations_apply.sql`
-  - 재정 계좌·기간·예산·반복 청구·정정 전표와 세분화된 재정 권한을 추가하는 1회 운영 마이그레이션
-  - `src/main/resources/db/ops/semo_tournament_operations_apply.sql`
-  - 대회 팀 로스터·대기열·참가비 연결·시간표·체크인·결과 컬럼과 테이블을 추가하고 기존 신청자를 주장 로스터로 이관하는 1회 운영 마이그레이션
-  - `src/main/resources/db/ops/semo_todo_decision_operations_apply.sql`
-  - 인수인계 마이그레이션 이후 적용하며 업무 체크리스트·복수 담당자·댓글·반복·우선순위·일정/결정 연결과 결정 기록·참여자·관련 리소스·홈 위젯을 추가
+- 현재 유지되는 목적별 DDL
+  - `src/main/resources/db/ddl/semo_club_profile_backfill.sql`
+  - 가입·가입 승인·멤버 상태 변경 쓰기를 일시 중지한 상태에서 실행하는 운영 데이터 보정입니다. 적용 전 누락 건수를 기록하고 적용 후 누락 건수가 0인지 확인한 뒤 애플리케이션을 배포하고 쓰기를 재개합니다.
   - `src/main/resources/db/ddl/semo_timeline_feature_remove.sql`
   - 폐기된 `TIMELINE` 카탈로그·활성화·권한 데이터만 외래 키 순서대로 제거
   - `src/main/resources/db/ddl/semo_schedule_attendance_integration.sql`
   - 일정 참가자 원장에 실제 출석 필드를 추가하고 event 연결이 있는 레거시 출석을 이관
   - 날짜만 가진 `attendance_session`/`attendance_checkin`은 임의로 일정에 연결하지 않고, 운영자가 임시 `semo_attendance_session_event_mapping`에 세션-일정 관계를 명시한 건만 이관
   - `invalid_session_event_mapping_count`, `unmapped_daily_checkin_count`, `unmapped_legacy_attendance_count`가 모두 0이고 백업·이관 행을 검증한 뒤에만 주석 처리된 레거시 테이블/컬럼 제거문을 별도로 실행
+
+과거 문서에서 안내하던 `src/main/resources/db/ops/*.sql` 파일은 현재 저장소에 존재하지 않습니다. 재정·대회·할 일·결정 기능의 현재 스키마 계약은 기준 DDL에 통합되어 있으며, 운영 반영 파일명이나 적용 순서를 존재하지 않는 경로에서 추정하지 않습니다.
 
 현재 seed에는 아래 카탈로그 성격의 데이터가 포함됩니다.
 
@@ -361,7 +359,7 @@
 ./gradlew :semo-back-service:test --rerun-tasks
 ```
 
-2026-08-12 현재 루트 wrapper 기준으로 `compileJava`와 전체 222개 테스트를 검증했습니다.
+2026-08-31 현재 루트 wrapper 기준으로 `compileJava`와 전체 230개 테스트를 검증했습니다.
 
 ## Test Coverage Snapshot
 

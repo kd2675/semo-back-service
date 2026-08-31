@@ -26,6 +26,7 @@ import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.catalog.ClubRegionCatalog;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.club.biz.support.ClubProfileProvisioner;
 import semo.back.service.feature.club.biz.support.ClubClassificationSupport;
 import semo.back.service.feature.club.vo.ClubCreateResponse;
 import semo.back.service.feature.club.vo.ClubBoardNoticeResponse;
@@ -83,6 +84,7 @@ public class ClubService {
     private final ClubClassificationSupport clubClassificationSupport;
     private final ClubRegionCatalog clubRegionCatalog;
     private final ClubAccessResolver clubAccessResolver;
+    private final ClubProfileProvisioner clubProfileProvisioner;
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ClubCreateResponse createClub(String userKey, String userName, CreateClubRequest request) {
@@ -134,7 +136,7 @@ public class ClubService {
                 .lastActivityAt(now)
                 .build());
 
-        ensureClubProfile(membership, userName, null, null);
+        clubProfileProvisioner.ensureProfile(membership, userName, null, null);
 
         return new ClubCreateResponse(
                 club.getClubId(),
@@ -299,22 +301,16 @@ public class ClubService {
         );
     }
 
-    @Transactional(transactionManager = "pubTransactionManager")
     public ClubProfileResponse getClubProfile(Long clubId, String userKey) {
-        MembershipClubPair pair = getMembershipClubPair(clubId, userKey);
+        ClubAccessResolver.ClubAccess access = clubAccessResolver.requireActiveMember(clubId, userKey);
         ProfileSummaryResponse appProfile = profileUserService.getProfileSummary(userKey);
-        ClubMember membership = pair.membership();
-        ClubProfile clubProfile = ensureClubProfile(
-                membership,
-                appProfile.displayName(),
-                appProfile.tagline(),
-                null
-        );
-        ClubRegionCatalog.ResolvedClubRegion resolvedRegion = resolveStoredRegion(pair.club());
+        ClubMember membership = access.membership();
+        ClubProfile clubProfile = access.clubProfile();
+        ClubRegionCatalog.ResolvedClubRegion resolvedRegion = resolveStoredRegion(access.club());
 
         return new ClubProfileResponse(
-                pair.club().getClubId(),
-                pair.club().getName(),
+                access.club().getClubId(),
+                access.club().getName(),
                 isAdminRole(membership.getRoleCode()),
                 appProfile,
                 new ClubProfileDetailResponse(
@@ -330,7 +326,7 @@ public class ClubService {
                         formatJoinedLabel(membership.getJoinedAt())
                 ),
                 List.of(
-                        new ClubProfileRecordResponse("club-name", "Club Name", pair.club().getName(), "현재 활동 중인 모임"),
+                        new ClubProfileRecordResponse("club-name", "Club Name", access.club().getName(), "현재 활동 중인 모임"),
                         new ClubProfileRecordResponse("club-region", "Region", resolvedRegion.regionLabel(), "대표 활동 권역"),
                         new ClubProfileRecordResponse("club-status", "Membership", membership.getMembershipStatus(), "가입 상태"),
                         new ClubProfileRecordResponse("club-role", "Club Role", membership.getRoleCode(), "현재 클럽에서의 역할"),
@@ -345,7 +341,7 @@ public class ClubService {
         MembershipClubPair pair = getMembershipClubPair(clubId, userKey);
         ProfileSummaryResponse appProfile = profileUserService.getProfileSummary(userKey);
         ClubMember membership = pair.membership();
-        ClubProfile current = ensureClubProfile(
+        ClubProfile current = clubProfileProvisioner.ensureProfile(
                 membership,
                 appProfile.displayName(),
                 appProfile.tagline(),
@@ -458,22 +454,6 @@ public class ClubService {
             throw new SemoException.ValidationException("닉네임은 100자 이하여야 합니다.");
         }
         return normalized;
-    }
-
-    private ClubProfile ensureClubProfile(
-            ClubMember membership,
-            String fallbackDisplayName,
-            String fallbackTagline,
-            String fallbackIntroText
-    ) {
-        return clubProfileRepository.findByClubMemberId(membership.getClubMemberId())
-                .orElseGet(() -> clubProfileRepository.save(ClubProfile.builder()
-                        .clubMemberId(membership.getClubMemberId())
-                        .displayName(StringUtils.hasText(fallbackDisplayName) ? fallbackDisplayName.trim() : "SEMO Member")
-                        .tagline(trimToNull(fallbackTagline))
-                        .introText(trimToNull(fallbackIntroText))
-                        .avatarFileName(null)
-                        .build()));
     }
 
     private MyClubSummaryResponse toMyClubSummary(ClubMember membership, Club club, List<String> storedActivityTags) {

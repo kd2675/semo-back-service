@@ -405,7 +405,7 @@ class ClubTournamentOperationsIntegrationTest {
 
     private void addActiveMember(Long clubId, String userKey, String displayName) {
         Long profileId = profileUserService.resolveProfileId(userKey, displayName);
-        clubMemberRepository.save(ClubMember.builder()
+        ClubMember member = clubMemberRepository.save(ClubMember.builder()
                 .clubId(clubId)
                 .profileId(profileId)
                 .roleCode("MEMBER")
@@ -413,7 +413,10 @@ class ClubTournamentOperationsIntegrationTest {
                 .joinedAt(LocalDateTime.now())
                 .lastActivityAt(LocalDateTime.now())
                 .build());
-        clubAccessResolver.requireActiveMember(clubId, userKey);
+        clubProfileRepository.save(semo.back.service.database.pub.entity.ClubProfile.builder()
+                .clubMemberId(member.getClubMemberId())
+                .displayName(displayName)
+                .build());
     }
 
     private Long clubProfileId(Long clubId, String userKey) {

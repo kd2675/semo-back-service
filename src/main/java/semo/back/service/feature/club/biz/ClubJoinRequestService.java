@@ -22,6 +22,7 @@ import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.club.biz.support.ClubProfileProvisioner;
 import semo.back.service.feature.club.biz.support.ClubClassificationSupport;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.club.vo.ClubDiscoverResponse;
@@ -67,6 +68,7 @@ public class ClubJoinRequestService {
     private final ClubActivityTagRepository clubActivityTagRepository;
     private final ClubMemberRepository clubMemberRepository;
     private final ClubProfileRepository clubProfileRepository;
+    private final ClubProfileProvisioner clubProfileProvisioner;
     private final ClubJoinRequestRepository clubJoinRequestRepository;
     private final ProfileUserRepository profileUserRepository;
     private final ImageFileUrlResolver imageFileUrlResolver;
@@ -538,14 +540,7 @@ public class ClubJoinRequestService {
                 .joinedAt(now)
                 .lastActivityAt(now)
                 .build());
-        clubProfileRepository.findByClubMemberId(membership.getClubMemberId())
-                .orElseGet(() -> clubProfileRepository.save(ClubProfile.builder()
-                        .clubMemberId(membership.getClubMemberId())
-                        .displayName(StringUtils.hasText(profileUser.getDisplayName()) ? profileUser.getDisplayName().trim() : "SEMO Member")
-                        .tagline(trimToNull(profileUser.getTagline()))
-                        .introText(null)
-                        .avatarFileName(null)
-                        .build()));
+        clubProfileProvisioner.ensureProfile(membership, profileUser);
         return membership;
     }
 

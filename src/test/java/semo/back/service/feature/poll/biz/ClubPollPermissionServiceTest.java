@@ -246,7 +246,7 @@ class ClubPollPermissionServiceTest {
                 .profileColor("#135bec")
                 .build());
 
-        return clubMemberRepository.save(ClubMember.builder()
+        ClubMember member = clubMemberRepository.save(ClubMember.builder()
                 .clubId(clubId)
                 .profileId(profileUser.getProfileId())
                 .roleCode("MEMBER")
@@ -254,6 +254,11 @@ class ClubPollPermissionServiceTest {
                 .joinedAt(LocalDateTime.now())
                 .lastActivityAt(LocalDateTime.now())
                 .build());
+        clubProfileRepository.save(semo.back.service.database.pub.entity.ClubProfile.builder()
+                .clubMemberId(member.getClubMemberId())
+                .displayName(displayName)
+                .build());
+        return member;
     }
 
     private void assignPositionPermissions(Long clubId, ClubMember member, ClubCapability... capabilities) {

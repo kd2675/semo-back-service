@@ -15,6 +15,7 @@ import semo.back.service.database.pub.repository.ProfileUserRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
+import semo.back.service.feature.club.biz.support.ClubProfileProvisioner;
 import semo.back.service.feature.club.vo.ClubAdminMemberResponse;
 import semo.back.service.feature.club.vo.ClubAdminMembersResponse;
 import semo.back.service.feature.club.vo.UpdateClubAdminMemberRoleRequest;
@@ -54,6 +55,7 @@ public class ClubAdminMemberService {
     private final ProfileUserRepository profileUserRepository;
     private final ImageFileUrlResolver imageFileUrlResolver;
     private final ClubPositionService clubPositionService;
+    private final ClubProfileProvisioner clubProfileProvisioner;
 
     public ClubAdminMembersResponse getAdminMembers(Long clubId, String userKey) {
         ClubAccessResolver.ClubAccess access = clubAccessResolver.requireAdmin(clubId, userKey);
@@ -110,11 +112,13 @@ public class ClubAdminMemberService {
         String normalizedStatus = normalizeStatus(request.membershipStatus());
         validateStatusMutation(target, normalizedStatus);
         target.updateMembershipStatus(normalizedStatus);
+        ProfileUser profileUser = loadProfileUser(target);
+        ClubProfile clubProfile = clubProfileProvisioner.ensureProfile(target, profileUser);
         ClubAdminMemberResponse response = toResponse(
                 target,
                 access,
-                loadClubProfile(target),
-                loadProfileUser(target),
+                clubProfile,
+                profileUser,
                 loadAssignedPositions(clubId, target.getClubMemberId())
         );
         ClubActivityContextHolder.setDetails(
@@ -134,14 +138,7 @@ public class ClubAdminMemberService {
         }
         target.markApproved(LocalDateTime.now());
         ProfileUser profileUser = loadProfileUser(target);
-        ClubProfile clubProfile = clubProfileRepository.findByClubMemberId(target.getClubMemberId())
-                .orElseGet(() -> clubProfileRepository.save(ClubProfile.builder()
-                        .clubMemberId(target.getClubMemberId())
-                        .displayName(StringUtils.hasText(profileUser.getDisplayName()) ? profileUser.getDisplayName().trim() : "SEMO Member")
-                        .tagline(trimToNull(profileUser.getTagline()))
-                        .introText(null)
-                        .avatarFileName(null)
-                        .build()));
+        ClubProfile clubProfile = clubProfileProvisioner.ensureProfile(target, profileUser);
         ClubAdminMemberResponse response = toResponse(target, access, clubProfile, profileUser, List.of());
         ClubActivityContextHolder.setDetails(
                 response.displayName() + "을 승인했습니다.",

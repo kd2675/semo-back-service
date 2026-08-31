@@ -31,7 +31,6 @@ public class ClubAccessResolver {
     private final ClubProfileRepository clubProfileRepository;
     private final ProfileUserRepository profileUserRepository;
 
-    @Transactional(transactionManager = "pubTransactionManager")
     public ClubAccess requireActiveMember(Long clubId, String userKey) {
         ProfileUser profileUser = profileUserRepository.findByUserKey(userKey)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ProfileUser", "userKey", userKey));
@@ -41,14 +40,7 @@ public class ClubAccessResolver {
         ClubMember membership = clubMemberRepository.findByClubIdAndProfileId(clubId, profileUser.getProfileId())
                 .filter(member -> STATUS_ACTIVE.equals(member.getMembershipStatus()))
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException("ClubMember", "clubId", clubId));
-        ClubProfile clubProfile = clubProfileRepository.findByClubMemberId(membership.getClubMemberId())
-                .orElseGet(() -> clubProfileRepository.save(ClubProfile.builder()
-                        .clubMemberId(membership.getClubMemberId())
-                        .displayName(profileUser.getDisplayName())
-                        .tagline(profileUser.getTagline())
-                        .introText(null)
-                        .avatarFileName(null)
-                        .build()));
+        ClubProfile clubProfile = requireClubProfile(membership.getClubMemberId());
         return new ClubAccess(club, membership, clubProfile, profileUser);
     }
 
@@ -60,7 +52,6 @@ public class ClubAccessResolver {
         return access;
     }
 
-    @Transactional(transactionManager = "pubTransactionManager")
     public List<ClubMemberSnapshot> getActiveMemberSnapshots(Long clubId) {
         List<ClubMember> memberships = clubMemberRepository
                 .findByClubIdAndMembershipStatusOrderByJoinedAtAscClubMemberIdAsc(clubId, STATUS_ACTIVE);
@@ -80,26 +71,43 @@ public class ClubAccessResolver {
 
         return memberships.stream()
                 .map(membership -> {
-                    ProfileUser profileUser = profileUserById.get(membership.getProfileId());
-                    ClubProfile clubProfile = clubProfileByMemberId.get(membership.getClubMemberId());
-                    if (clubProfile == null && profileUser != null) {
-                        clubProfile = clubProfileRepository.save(ClubProfile.builder()
-                                .clubMemberId(membership.getClubMemberId())
-                                .displayName(profileUser.getDisplayName())
-                                .tagline(profileUser.getTagline())
-                                .introText(null)
-                                .avatarFileName(null)
-                                .build());
-                    }
+                    ProfileUser profileUser = requireProfileUser(
+                            membership.getProfileId(),
+                            profileUserById.get(membership.getProfileId())
+                    );
+                    ClubProfile clubProfile = requireClubProfile(
+                            membership.getClubMemberId(),
+                            clubProfileByMemberId.get(membership.getClubMemberId())
+                    );
                     return new ClubMemberSnapshot(
                             membership,
                             clubProfile,
                             profileUser
                     );
                 })
-                .filter(snapshot -> snapshot.clubProfile() != null && snapshot.profileUser() != null)
                 .sorted(Comparator.comparing(snapshot -> snapshot.clubProfile().getDisplayName()))
                 .toList();
+    }
+
+    private ClubProfile requireClubProfile(Long clubMemberId) {
+        return requireClubProfile(
+                clubMemberId,
+                clubProfileRepository.findByClubMemberId(clubMemberId).orElse(null)
+        );
+    }
+
+    private ClubProfile requireClubProfile(Long clubMemberId, ClubProfile clubProfile) {
+        if (clubProfile == null) {
+            throw new IllegalStateException("Active club member profile is missing: clubMemberId=" + clubMemberId);
+        }
+        return clubProfile;
+    }
+
+    private ProfileUser requireProfileUser(Long profileId, ProfileUser profileUser) {
+        if (profileUser == null) {
+            throw new IllegalStateException("Active club member user profile is missing: profileId=" + profileId);
+        }
+        return profileUser;
     }
 
     public record ClubAccess(Club club, ClubMember membership, ClubProfile clubProfile, ProfileUser profileUser) {

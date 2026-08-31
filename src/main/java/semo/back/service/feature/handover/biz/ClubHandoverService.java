@@ -1,9 +1,7 @@
 package semo.back.service.feature.handover.biz;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -22,42 +20,30 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import semo.back.service.common.exception.SemoException;
-import semo.back.service.database.pub.entity.ClubFeedback;
 import semo.back.service.database.pub.entity.ClubHandoverNote;
 import semo.back.service.database.pub.entity.ClubMemberPosition;
 import semo.back.service.database.pub.entity.ClubOperatingTerm;
 import semo.back.service.database.pub.entity.ClubPosition;
 import semo.back.service.database.pub.entity.ClubProfile;
-import semo.back.service.database.pub.entity.ClubScheduleEvent;
 import semo.back.service.database.pub.entity.ClubTermExecutiveAssignment;
 import semo.back.service.database.pub.entity.ClubTermCarryoverItem;
-import semo.back.service.database.pub.entity.FinanceRequest;
 import semo.back.service.database.pub.entity.DecisionRecord;
-import semo.back.service.database.pub.entity.TodoItem;
-import semo.back.service.database.pub.repository.ClubFeedbackRepository;
 import semo.back.service.database.pub.repository.ClubHandoverNoteRepository;
-import semo.back.service.database.pub.repository.ClubJoinRequestRepository;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubOperatingTermRepository;
 import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
-import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubTermExecutiveAssignmentRepository;
 import semo.back.service.database.pub.repository.ClubTermCarryoverItemRepository;
-import semo.back.service.database.pub.repository.FinanceExpenseRepository;
-import semo.back.service.database.pub.repository.FinanceObligationRepository;
-import semo.back.service.database.pub.repository.FinancePaymentRepository;
-import semo.back.service.database.pub.repository.FinanceRequestRepository;
 import semo.back.service.database.pub.repository.DecisionRecordRepository;
-import semo.back.service.database.pub.repository.TodoItemRepository;
-import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.activity.biz.ClubActivityContextHolder;
 import semo.back.service.feature.activity.biz.RecordClubActivity;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
-import semo.back.service.feature.finance.vo.ClubAdminFinanceSummaryAggregate;
+import semo.back.service.feature.handover.biz.support.ClubHandoverReadProjectionService;
+import semo.back.service.feature.handover.biz.support.ClubHandoverReadProjectionService.QueueSnapshot;
 import semo.back.service.feature.handover.vo.ClubExecutiveAssignmentResponse;
 import semo.back.service.feature.handover.vo.ClubHandoverCenterResponse;
 import semo.back.service.feature.handover.vo.ClubHandoverNoteResponse;
@@ -68,7 +54,6 @@ import semo.back.service.feature.handover.vo.CreateOperatingTermRequest;
 import semo.back.service.feature.handover.vo.HandoverMemberOptionResponse;
 import semo.back.service.feature.handover.vo.HandoverPositionOptionResponse;
 import semo.back.service.feature.handover.vo.HandoverQueueItemResponse;
-import semo.back.service.feature.handover.vo.HandoverQueueSummaryResponse;
 import semo.back.service.feature.handover.vo.HandoverRecentDecisionResponse;
 import semo.back.service.feature.handover.vo.UpdateOperatingTermRequest;
 import semo.back.service.feature.handover.vo.UpsertExecutiveAssignmentRequest;
@@ -83,9 +68,6 @@ public class ClubHandoverService {
     public static final String FEATURE_HANDOVER = "HANDOVER";
     private static final Set<String> TERM_TYPES = Set.of("YEAR", "SEMESTER", "SEASON", "CUSTOM");
     private static final Set<String> EDITABLE_NOTE_STATUSES = Set.of("DRAFT", "READY");
-    private static final Set<String> OPEN_TODO_STATUSES = Set.of("OPEN", "IN_PROGRESS");
-    private static final Set<String> OPEN_FEEDBACK_STATUSES = Set.of("RECEIVED", "IN_REVIEW");
-    private static final String REQUEST_STATUS_SUBMITTED = "SUBMITTED";
 
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
@@ -99,17 +81,9 @@ public class ClubHandoverService {
     private final ClubMemberRepository clubMemberRepository;
     private final ClubProfileRepository clubProfileRepository;
     private final ClubMemberPositionRepository clubMemberPositionRepository;
-    private final TodoItemRepository todoItemRepository;
-    private final FinancePaymentRepository financePaymentRepository;
-    private final FinanceRequestRepository financeRequestRepository;
-    private final FinanceObligationRepository financeObligationRepository;
-    private final FinanceExpenseRepository financeExpenseRepository;
-    private final ClubScheduleEventRepository clubScheduleEventRepository;
-    private final ClubFeedbackRepository clubFeedbackRepository;
-    private final ClubJoinRequestRepository clubJoinRequestRepository;
-    private final TournamentRecordRepository tournamentRecordRepository;
     private final ClubNotificationPublisher clubNotificationPublisher;
     private final DecisionRecordRepository decisionRecordRepository;
+    private final ClubHandoverReadProjectionService clubHandoverReadProjectionService;
 
     public ClubHandoverCenterResponse getCenter(Long clubId, String userKey, Long selectedTermId) {
         ClubAccessResolver.ClubAccess access = requireViewAccess(clubId, userKey);
@@ -168,7 +142,7 @@ public class ClubHandoverService {
         Map<Long, ClubOperatingTerm> termsById = terms.stream()
                 .collect(Collectors.toMap(ClubOperatingTerm::getClubOperatingTermId, Function.identity()));
 
-        QueueSnapshot queue = buildQueue(clubId);
+        QueueSnapshot queue = clubHandoverReadProjectionService.loadQueue(clubId);
         List<HandoverRecentDecisionResponse> recentDecisions = clubFeatureService.isFeatureEnabled(
                 clubId,
                 "DECISION_LOG"
@@ -202,7 +176,9 @@ public class ClubHandoverService {
                 queue.summary(),
                 queue.items(),
                 recentDecisions,
-                selectedTerm == null ? ClubTermMetricsResponse.empty() : buildTermMetrics(clubId, selectedTerm),
+                selectedTerm == null
+                        ? ClubTermMetricsResponse.empty()
+                        : clubHandoverReadProjectionService.loadTermMetrics(clubId, selectedTerm),
                 members.stream()
                         .map(item -> new HandoverMemberOptionResponse(
                                 item.membership().getClubMemberId(),
@@ -331,7 +307,7 @@ public class ClubHandoverService {
                     clubId,
                     sourceTerm,
                     term,
-                    buildCarryoverCandidates(clubId),
+                    clubHandoverReadProjectionService.loadCarryoverCandidates(clubId),
                     access.clubProfile().getClubProfileId(),
                     now
             );
@@ -754,217 +730,6 @@ public class ClubHandoverService {
         }
     }
 
-    private QueueSnapshot buildQueue(Long clubId) {
-        LocalDateTime now = LocalDateTime.now();
-        boolean todoEnabled = clubFeatureService.isFeatureEnabled(clubId, "TODO");
-        boolean financeEnabled = clubFeatureService.isFeatureEnabled(clubId, "FINANCE");
-        boolean scheduleEnabled = clubFeatureService.isFeatureEnabled(clubId, "SCHEDULE_MANAGE");
-        boolean feedbackEnabled = clubFeatureService.isFeatureEnabled(clubId, "FEEDBACK");
-        boolean joinRequestEnabled = clubFeatureService.isFeatureEnabled(clubId, "JOIN_REQUEST");
-        List<TodoItem> openTodos = todoEnabled
-                ? todoItemRepository.findByStatusCodes(clubId, OPEN_TODO_STATUSES, PageRequest.of(0, 5))
-                : List.of();
-        List<FinanceRequest> pendingFinanceRequests = financeEnabled ? financeRequestRepository
-                .findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(
-                        clubId,
-                        REQUEST_STATUS_SUBMITTED,
-                        PageRequest.of(0, 3)
-                ) : List.of();
-        List<ClubScheduleEvent> upcomingSchedules = scheduleEnabled
-                ? clubScheduleEventRepository.findUpcomingActiveEvents(clubId, now, PageRequest.of(0, 3))
-                : List.of();
-        List<ClubFeedback> openFeedback = feedbackEnabled
-                ? clubFeedbackRepository.findOpenFeedback(clubId, OPEN_FEEDBACK_STATUSES, PageRequest.of(0, 2))
-                : List.of();
-        int openTodoCount = todoEnabled
-                ? safeCount(todoItemRepository.countByClubIdAndStatusCodeIn(clubId, OPEN_TODO_STATUSES))
-                : 0;
-        int overdueTodoCount = todoEnabled ? safeCount(todoItemRepository.countOverdueForAdmin(clubId, now)) : 0;
-        int pendingFinanceRequestCount = financeEnabled ? safeCount(
-                financeRequestRepository.countByClubIdAndStatusCode(clubId, REQUEST_STATUS_SUBMITTED)
-        ) : 0;
-        int upcomingScheduleCount = scheduleEnabled
-                ? safeCount(clubScheduleEventRepository.countUpcomingActiveEvents(clubId, now))
-                : 0;
-        int openFeedbackCount = feedbackEnabled ? safeCount(
-                clubFeedbackRepository.countByClubIdAndDeletedFalseAndStatusCodeIn(clubId, OPEN_FEEDBACK_STATUSES)
-        ) : 0;
-        int pendingJoinRequestCount = joinRequestEnabled ? safeCount(
-                clubJoinRequestRepository.countByClubIdAndRequestStatus(clubId, "PENDING")
-        ) : 0;
-        ClubAdminFinanceSummaryAggregate financeSummary = financeEnabled
-                ? financePaymentRepository.summarizeAdminFinance(clubId, now)
-                : null;
-        int unpaidPaymentCount = financeSummary == null ? 0 : safeCount(financeSummary.pendingPaymentCount());
-        int openNoteCount = safeCount(clubHandoverNoteRepository.countByClubIdAndDeletedFalseAndStatusCodeIn(
-                clubId,
-                List.of("DRAFT", "READY")
-        ));
-        int openCarryoverCount = safeCount(clubTermCarryoverItemRepository.countByClubIdAndStatusCode(clubId, "OPEN"));
-
-        List<HandoverQueueItemResponse> items = new ArrayList<>();
-        openTodos.stream()
-                .sorted(Comparator
-                        .comparing(TodoItem::getDueAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(TodoItem::getTodoItemId))
-                .limit(5)
-                .map(item -> new HandoverQueueItemResponse(
-                        "TODO_ITEM",
-                        item.getTodoItemId(),
-                        item.getTitle(),
-                        "IN_PROGRESS".equals(item.getStatusCode()) ? "진행 중" : "대기",
-                        item.getDueAt(),
-                        "/clubs/%d/admin/more/todos".formatted(clubId),
-                        item.getDueAt() != null && item.getDueAt().isBefore(now)
-                ))
-                .forEach(items::add);
-        pendingFinanceRequests.stream().limit(3)
-                .map(item -> new HandoverQueueItemResponse(
-                        "FINANCE_REQUEST",
-                        item.getFinanceRequestId(),
-                        item.getTitle(),
-                        "정산 검토 대기",
-                        null,
-                        "/clubs/%d/admin/more/finance?tab=settlements".formatted(clubId),
-                        false
-                ))
-                .forEach(items::add);
-        upcomingSchedules.stream().limit(3)
-                .map(item -> new HandoverQueueItemResponse(
-                        "SCHEDULE_EVENT",
-                        item.getEventId(),
-                        item.getTitle(),
-                        "예정 일정",
-                        item.getStartAt(),
-                        "/clubs/%d/schedule/%d".formatted(clubId, item.getEventId()),
-                        false
-                ))
-                .forEach(items::add);
-        openFeedback.stream().limit(2)
-                .map(item -> new HandoverQueueItemResponse(
-                        "FEEDBACK",
-                        item.getFeedbackId(),
-                        item.getTitle(),
-                        "IN_REVIEW".equals(item.getStatusCode()) ? "검토 중" : "접수",
-                        null,
-                        "/clubs/%d/admin/more/feedback".formatted(clubId),
-                        false
-                ))
-                .forEach(items::add);
-        if (pendingJoinRequestCount > 0) {
-            items.add(new HandoverQueueItemResponse(
-                    "JOIN_REQUEST",
-                    null,
-                    "가입 신청 " + pendingJoinRequestCount + "건",
-                    "승인 대기",
-                    null,
-                    "/clubs/%d/admin/more/join-requests".formatted(clubId),
-                    false
-            ));
-        }
-
-        return new QueueSnapshot(
-                new HandoverQueueSummaryResponse(
-                        openTodoCount,
-                        overdueTodoCount,
-                        unpaidPaymentCount,
-                        pendingFinanceRequestCount,
-                        upcomingScheduleCount,
-                        openFeedbackCount,
-                        pendingJoinRequestCount,
-                        openNoteCount,
-                        openCarryoverCount
-                ),
-                items.stream()
-                        .sorted(Comparator
-                                .comparing(HandoverQueueItemResponse::urgent).reversed()
-                                .thenComparing(
-                                        HandoverQueueItemResponse::dueAt,
-                                        Comparator.nullsLast(Comparator.naturalOrder())
-                                ))
-                        .limit(12)
-                        .toList()
-        );
-    }
-
-    private List<HandoverQueueItemResponse> buildCarryoverCandidates(Long clubId) {
-        LocalDateTime now = LocalDateTime.now();
-        List<HandoverQueueItemResponse> items = new ArrayList<>();
-        if (clubFeatureService.isFeatureEnabled(clubId, "TODO")) {
-            todoItemRepository.findAllByStatusCodes(clubId, OPEN_TODO_STATUSES).stream()
-                    .map(item -> new HandoverQueueItemResponse(
-                            "TODO_ITEM",
-                            item.getTodoItemId(),
-                            item.getTitle(),
-                            "IN_PROGRESS".equals(item.getStatusCode()) ? "진행 중" : "대기",
-                            item.getDueAt(),
-                            "/clubs/%d/admin/more/todos".formatted(clubId),
-                            item.getDueAt() != null && item.getDueAt().isBefore(now)
-                    ))
-                    .forEach(items::add);
-        }
-        if (clubFeatureService.isFeatureEnabled(clubId, "FINANCE")) {
-            financeRequestRepository.findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(
-                            clubId,
-                            REQUEST_STATUS_SUBMITTED
-                    ).stream()
-                    .map(item -> new HandoverQueueItemResponse(
-                            "FINANCE_REQUEST",
-                            item.getFinanceRequestId(),
-                            item.getTitle(),
-                            "정산 검토 대기",
-                            null,
-                            "/clubs/%d/admin/more/finance?tab=settlements".formatted(clubId),
-                            false
-                    ))
-                    .forEach(items::add);
-        }
-        if (clubFeatureService.isFeatureEnabled(clubId, "FEEDBACK")) {
-            clubFeedbackRepository.findAllOpenFeedback(clubId, OPEN_FEEDBACK_STATUSES).stream()
-                    .map(item -> new HandoverQueueItemResponse(
-                            "FEEDBACK",
-                            item.getFeedbackId(),
-                            item.getTitle(),
-                            "IN_REVIEW".equals(item.getStatusCode()) ? "검토 중" : "접수",
-                            null,
-                            "/clubs/%d/admin/more/feedback".formatted(clubId),
-                            false
-                    ))
-                    .forEach(items::add);
-        }
-        return List.copyOf(items);
-    }
-
-    private ClubTermMetricsResponse buildTermMetrics(Long clubId, ClubOperatingTerm term) {
-        LocalDateTime from = term.getStartDate().atStartOfDay();
-        LocalDateTime toExclusive = term.getEndDate().plusDays(1).atStartOfDay();
-        int todoCount = safeCount(todoItemRepository.countWithinTerm(clubId, from, toExclusive));
-        int scheduleCount = safeCount(clubScheduleEventRepository.countActiveEventsWithinTerm(
-                clubId,
-                from,
-                toExclusive
-        ));
-        int tournamentCount = safeCount(tournamentRecordRepository
-                .countByClubIdAndDeletedFalseAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
-                        clubId,
-                        term.getEndDate(),
-                        term.getStartDate()
-                ));
-        int obligationCount = safeCount(financeObligationRepository.countWithinTerm(clubId, from, toExclusive));
-        int financeRequestCount = safeCount(financeRequestRepository
-                .countByClubIdAndCreateDateGreaterThanEqualAndCreateDateLessThan(clubId, from, toExclusive));
-        BigDecimal expenseAmount = financeExpenseRepository.sumAmountWithinTerm(clubId, from, toExclusive);
-        return new ClubTermMetricsResponse(
-                todoCount,
-                scheduleCount,
-                tournamentCount,
-                obligationCount,
-                financeRequestCount,
-                expenseAmount,
-                "KRW"
-        );
-    }
-
     private ClubHandoverNote requireNote(Long clubId, Long noteId) {
         return clubHandoverNoteRepository.findByClubHandoverNoteIdAndClubIdAndDeletedFalse(noteId, clubId)
                 .orElseThrow(() -> new SemoException.ResourceNotFoundException(
@@ -1185,13 +950,6 @@ public class ClubHandoverService {
         return value.trim();
     }
 
-    private int safeCount(long value) {
-        if (value <= 0) {
-            return 0;
-        }
-        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
-    }
-
     private record TermDraft(
             String termName,
             String termType,
@@ -1213,9 +971,4 @@ public class ClubHandoverService {
     ) {
     }
 
-    private record QueueSnapshot(
-            HandoverQueueSummaryResponse summary,
-            List<HandoverQueueItemResponse> items
-    ) {
-    }
 }

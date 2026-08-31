@@ -297,6 +297,34 @@ CREATE TABLE IF NOT EXISTS club_profile (
 CREATE INDEX idx_club_profile_display_name
     ON club_profile (display_name);
 
+-- Active and dormant memberships must already have a club-scoped profile before
+-- read APIs are served. This idempotent backfill repairs rows created by older
+-- versions that provisioned club_profile lazily during a GET request.
+INSERT INTO club_profile (
+    club_member_id,
+    display_name,
+    tagline,
+    intro_text,
+    avatar_file_name,
+    create_date,
+    update_date
+)
+SELECT
+    cm.club_member_id,
+    COALESCE(NULLIF(TRIM(pu.display_name), ''), 'SEMO Member'),
+    NULLIF(TRIM(pu.tagline), ''),
+    NULL,
+    NULL,
+    NOW(),
+    NOW()
+FROM club_member cm
+JOIN profile_user pu
+    ON pu.profile_id = cm.profile_id
+LEFT JOIN club_profile cp
+    ON cp.club_member_id = cm.club_member_id
+WHERE cm.membership_status IN ('ACTIVE', 'DORMANT')
+  AND cp.club_profile_id IS NULL;
+
 CREATE TABLE IF NOT EXISTS member_directory_setting (
     member_directory_setting_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     club_id BIGINT NOT NULL,

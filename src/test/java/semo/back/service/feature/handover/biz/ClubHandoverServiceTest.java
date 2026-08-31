@@ -7,12 +7,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,36 +19,26 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import semo.back.service.common.exception.SemoException;
 import semo.back.service.database.pub.entity.Club;
-import semo.back.service.database.pub.entity.ClubFeedback;
 import semo.back.service.database.pub.entity.ClubMember;
 import semo.back.service.database.pub.entity.ClubOperatingTerm;
 import semo.back.service.database.pub.entity.ClubProfile;
-import semo.back.service.database.pub.entity.FinanceRequest;
 import semo.back.service.database.pub.entity.ProfileUser;
 import semo.back.service.database.pub.entity.ClubTermCarryoverItem;
-import semo.back.service.database.pub.entity.TodoItem;
-import semo.back.service.database.pub.repository.ClubFeedbackRepository;
 import semo.back.service.database.pub.repository.ClubHandoverNoteRepository;
-import semo.back.service.database.pub.repository.ClubJoinRequestRepository;
 import semo.back.service.database.pub.repository.ClubMemberPositionRepository;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubOperatingTermRepository;
 import semo.back.service.database.pub.repository.ClubPositionRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
-import semo.back.service.database.pub.repository.ClubScheduleEventRepository;
 import semo.back.service.database.pub.repository.ClubTermCarryoverItemRepository;
 import semo.back.service.database.pub.repository.ClubTermExecutiveAssignmentRepository;
 import semo.back.service.database.pub.repository.DecisionRecordRepository;
-import semo.back.service.database.pub.repository.FinanceExpenseRepository;
-import semo.back.service.database.pub.repository.FinanceObligationRepository;
-import semo.back.service.database.pub.repository.FinancePaymentRepository;
-import semo.back.service.database.pub.repository.FinanceRequestRepository;
-import semo.back.service.database.pub.repository.TodoItemRepository;
-import semo.back.service.database.pub.repository.TournamentRecordRepository;
 import semo.back.service.feature.club.biz.policy.ClubAccessResolver;
 import semo.back.service.feature.clubfeature.biz.ClubFeatureService;
 import semo.back.service.feature.handover.vo.CreateOperatingTermRequest;
+import semo.back.service.feature.handover.biz.support.ClubHandoverReadProjectionService;
+import semo.back.service.feature.handover.vo.HandoverQueueItemResponse;
 import semo.back.service.feature.handover.vo.UpsertHandoverNoteRequest;
 import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
 import semo.back.service.feature.position.biz.ClubPositionPermissionEvaluator;
@@ -70,17 +57,9 @@ class ClubHandoverServiceTest {
     @Mock private ClubMemberRepository clubMemberRepository;
     @Mock private ClubProfileRepository clubProfileRepository;
     @Mock private ClubMemberPositionRepository clubMemberPositionRepository;
-    @Mock private TodoItemRepository todoItemRepository;
-    @Mock private FinancePaymentRepository financePaymentRepository;
-    @Mock private FinanceRequestRepository financeRequestRepository;
-    @Mock private FinanceObligationRepository financeObligationRepository;
-    @Mock private FinanceExpenseRepository financeExpenseRepository;
-    @Mock private ClubScheduleEventRepository clubScheduleEventRepository;
-    @Mock private ClubFeedbackRepository clubFeedbackRepository;
-    @Mock private ClubJoinRequestRepository clubJoinRequestRepository;
-    @Mock private TournamentRecordRepository tournamentRecordRepository;
     @Mock private ClubNotificationPublisher clubNotificationPublisher;
     @Mock private DecisionRecordRepository decisionRecordRepository;
+    @Mock private ClubHandoverReadProjectionService clubHandoverReadProjectionService;
 
     @InjectMocks
     private ClubHandoverService clubHandoverService;
@@ -118,36 +97,10 @@ class ClubHandoverServiceTest {
         when(clubOperatingTermRepository
                 .findFirstByClubIdAndStatusCodeOrderByStartDateDescClubOperatingTermIdDesc(1L, "ACTIVE"))
                 .thenReturn(Optional.of(current));
-        when(clubFeatureService.isFeatureEnabled(1L, "TODO")).thenReturn(true);
-        when(clubFeatureService.isFeatureEnabled(1L, "FINANCE")).thenReturn(true);
-        when(clubFeatureService.isFeatureEnabled(1L, "FEEDBACK")).thenReturn(true);
-        when(todoItemRepository.findAllByStatusCodes(1L, Set.of("OPEN", "IN_PROGRESS"))).thenReturn(List.of(
-                TodoItem.builder()
-                        .todoItemId(11L)
-                        .clubId(1L)
-                        .statusCode("OPEN")
-                        .title("행사 장소 확정")
-                        .dueAt(LocalDateTime.of(2026, 7, 5, 18, 0))
-                        .build()
-        ));
-        when(financeRequestRepository.findByClubIdAndStatusCodeOrderByFinanceRequestIdDesc(1L, "SUBMITTED"))
-                .thenReturn(List.of(
-                FinanceRequest.builder()
-                        .financeRequestId(21L)
-                        .clubId(1L)
-                        .statusCode("SUBMITTED")
-                        .title("대회 교통비 정산")
-                        .amount(BigDecimal.valueOf(30_000))
-                        .build()
-        ));
-        when(clubFeedbackRepository.findAllOpenFeedback(1L, Set.of("RECEIVED", "IN_REVIEW"))).thenReturn(List.of(
-                ClubFeedback.builder()
-                        .feedbackId(31L)
-                        .clubId(1L)
-                        .statusCode("IN_REVIEW")
-                        .title("정기 모임 시간 변경")
-                        .deleted(false)
-                        .build()
+        when(clubHandoverReadProjectionService.loadCarryoverCandidates(1L)).thenReturn(List.of(
+                queueItem("TODO_ITEM", 11L, "행사 장소 확정"),
+                queueItem("FINANCE_REQUEST", 21L, "대회 교통비 정산"),
+                queueItem("FEEDBACK", 31L, "정기 모임 시간 변경")
         ));
         when(clubTermCarryoverItemRepository.existsByToTermIdAndResourceTypeAndResourceId(any(), any(), any()))
                 .thenReturn(false);
@@ -220,6 +173,18 @@ class ClubHandoverServiceTest {
                 .displayName("운영자")
                 .build();
         return new ClubAccessResolver.ClubAccess(club, member, profile, user);
+    }
+
+    private HandoverQueueItemResponse queueItem(String resourceType, Long resourceId, String title) {
+        return new HandoverQueueItemResponse(
+                resourceType,
+                resourceId,
+                title,
+                "대기",
+                null,
+                "/test",
+                false
+        );
     }
 
     private ClubOperatingTerm term(Long id, String name, String status, LocalDate startDate) {
