@@ -60,12 +60,21 @@ dependencies {
 }
 
 ext {
-    set('springCloudVersion', "2025.1.0")
+    set('springCloudVersion', "2025.1.3")
 }
 
 dependencyManagement {
     imports {
+        // 루트 멀티모듈이 플러그인 클래스패스를 소유하므로 SEMO 런타임 BOM만 보안 패치선에 고정합니다.
+        mavenBom "org.springframework.boot:spring-boot-dependencies:4.0.8"
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+    dependencies {
+        // Eureka 전이 의존성이 요청하는 취약 버전을 각 보안 수정 버전으로 올립니다.
+        dependency 'org.apache.httpcomponents:httpclient:4.5.14'
+        dependency 'org.apache.httpcomponents.client5:httpclient5:5.6.4'
+        dependency 'org.apache.httpcomponents.core5:httpcore5:5.4.3'
+        dependency 'org.apache.httpcomponents.core5:httpcore5-h2:5.4.3'
     }
 }
 
