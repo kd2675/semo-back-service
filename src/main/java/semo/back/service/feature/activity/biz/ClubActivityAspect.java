@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
+import semo.back.service.feature.growth.biz.ClubGrowthCoreRefreshCoordinator;
 
 @Aspect
 @Component
@@ -17,6 +18,7 @@ import org.springframework.util.StringUtils;
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class ClubActivityAspect {
     private final ClubActivityRecorder clubActivityRecorder;
+    private final ClubGrowthCoreRefreshCoordinator clubGrowthCoreRefreshCoordinator;
 
     @Around("@annotation(recordClubActivity)")
     public Object recordActivity(ProceedingJoinPoint joinPoint, RecordClubActivity recordClubActivity) throws Throwable {
@@ -31,7 +33,10 @@ public class ClubActivityAspect {
                     recordClubActivity.successDetail(),
                     recordClubActivity.subject() + " 작업을 완료했습니다."
             );
-            Runnable recordTask = () -> clubActivityRecorder.recordSuccessSafely(clubId, userKey, recordClubActivity.subject(), detail);
+            Runnable recordTask = () -> {
+                clubActivityRecorder.recordSuccessSafely(clubId, userKey, recordClubActivity.subject(), detail);
+                clubGrowthCoreRefreshCoordinator.refreshSafely(clubId);
+            };
             if (TransactionSynchronizationManager.isActualTransactionActive()
                     && TransactionSynchronizationManager.isSynchronizationActive()) {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {

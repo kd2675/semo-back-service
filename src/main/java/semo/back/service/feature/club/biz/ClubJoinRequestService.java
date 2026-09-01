@@ -32,6 +32,8 @@ import semo.back.service.feature.club.vo.ClubJoinRequestInboxItemResponse;
 import semo.back.service.feature.club.vo.ClubJoinRequestInboxResponse;
 import semo.back.service.feature.club.vo.ReviewClubJoinRequestRequest;
 import semo.back.service.feature.club.vo.SubmitClubJoinRequestRequest;
+import semo.back.service.feature.growth.biz.ClubGrowthCoreQueryService;
+import semo.back.service.feature.growth.vo.ClubGrowthCoreResponse;
 import semo.back.service.feature.notification.biz.ClubNotificationPublisher;
 import semo.back.service.feature.notification.biz.ClubNotificationPublisher.NotificationCommand;
 
@@ -76,6 +78,7 @@ public class ClubJoinRequestService {
     private final ClubAccessResolver clubAccessResolver;
     private final ClubFeatureService clubFeatureService;
     private final ClubNotificationPublisher clubNotificationPublisher;
+    private final ClubGrowthCoreQueryService clubGrowthCoreQueryService;
 
     public ClubDiscoverResponse getDiscoverClubs(String userKey, String query) {
         ProfileUser profileUser = requireProfileUser(userKey);
@@ -117,6 +120,7 @@ public class ClubJoinRequestService {
         );
         Map<Long, ClubJoinRequest> joinRequestByClubId = clubJoinRequestRepository.findByProfileIdAndClubIdIn(profileUser.getProfileId(), clubIds).stream()
                 .collect(Collectors.toMap(ClubJoinRequest::getClubId, Function.identity()));
+        Map<Long, ClubGrowthCoreResponse> growthCoreByClubId = clubGrowthCoreQueryService.getByClubIds(clubIds);
 
         Comparator<Club> comparator = buildDiscoverComparator(normalizedQuery, preferredCategoryKeys, preferredActivityTags, publicActivityTagsByClubId, joinRequestByClubId);
         List<ClubDiscoverSummaryResponse> clubs = publicClubs.stream()
@@ -133,7 +137,8 @@ public class ClubJoinRequestService {
                                 club.getAffiliationType(),
                                 club.getCategoryKey()
                         ).activityCategory()),
-                        hasMatchingTags(preferredActivityTags, publicActivityTagsByClubId.getOrDefault(club.getClubId(), List.of()))
+                        hasMatchingTags(preferredActivityTags, publicActivityTagsByClubId.getOrDefault(club.getClubId(), List.of())),
+                        growthCoreByClubId.get(club.getClubId())
                 ))
                 .toList();
 
@@ -379,7 +384,8 @@ public class ClubJoinRequestService {
             int activeMemberCount,
             ClubJoinRequest joinRequest,
             boolean recommendedByCategory,
-            boolean recommendedByTags
+            boolean recommendedByTags,
+            ClubGrowthCoreResponse growthCore
     ) {
         String fileName = club.getImageFileName();
         ClubClassificationSupport.ResolvedClubClassification resolvedClassification = clubClassificationSupport.resolveStored(
@@ -412,7 +418,8 @@ public class ClubJoinRequestService {
                 joinRequest == null ? "NONE" : joinRequest.getRequestStatus(),
                 joinRequest == null ? null : joinRequest.getClubJoinRequestId(),
                 recommendedByCategory,
-                recommendedByTags
+                recommendedByTags,
+                growthCore
         );
     }
 

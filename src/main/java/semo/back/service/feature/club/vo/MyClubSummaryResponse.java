@@ -2,6 +2,8 @@ package semo.back.service.feature.club.vo;
 
 import java.util.List;
 
+import semo.back.service.feature.growth.vo.ClubGrowthCoreResponse;
+
 public record MyClubSummaryResponse(
         Long clubId,
         String name,
@@ -21,6 +23,7 @@ public record MyClubSummaryResponse(
         boolean admin,
         String fileName,
         String imageUrl,
-        String thumbnailUrl
+        String thumbnailUrl,
+        ClubGrowthCoreResponse growthCore
 ) {
 }

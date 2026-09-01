@@ -43,6 +43,8 @@ import semo.back.service.feature.club.vo.CreateClubRequest;
 import semo.back.service.feature.club.vo.MyClubSummaryResponse;
 import semo.back.service.feature.club.vo.UpdateClubSettingsRequest;
 import semo.back.service.feature.club.vo.UpdateClubProfileRequest;
+import semo.back.service.feature.growth.biz.ClubGrowthCoreQueryService;
+import semo.back.service.feature.growth.vo.ClubGrowthCoreResponse;
 import semo.back.service.feature.profile.biz.ProfileUserService;
 import semo.back.service.feature.profile.vo.ProfileSummaryResponse;
 
@@ -85,6 +87,7 @@ public class ClubService {
     private final ClubRegionCatalog clubRegionCatalog;
     private final ClubAccessResolver clubAccessResolver;
     private final ClubProfileProvisioner clubProfileProvisioner;
+    private final ClubGrowthCoreQueryService clubGrowthCoreQueryService;
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.REQUIRES_NEW)
     public ClubCreateResponse createClub(String userKey, String userName, CreateClubRequest request) {
@@ -125,6 +128,7 @@ public class ClubService {
                 .imageFileName(finalImageFileName)
                 .active(true)
                 .build());
+        ClubGrowthCoreResponse growthCore = clubGrowthCoreQueryService.initialize(club.getClubId());
         saveActivityTags(club.getClubId(), resolvedClassification.activityTags());
 
         ClubMember membership = clubMemberRepository.save(ClubMember.builder()
@@ -158,7 +162,8 @@ public class ClubService {
                 ROLE_OWNER,
                 finalImageFileName,
                 imageFileUrlResolver.resolveImageUrl(finalImageFileName),
-                imageFileUrlResolver.resolveThumbnailUrl(finalImageFileName)
+                imageFileUrlResolver.resolveThumbnailUrl(finalImageFileName),
+                growthCore
         );
     }
 
@@ -177,12 +182,14 @@ public class ClubService {
         clubRepository.findByClubIdInAndActiveTrue(clubIds)
                 .forEach(club -> clubById.put(club.getClubId(), club));
         Map<Long, List<String>> activityTagsByClubId = toActivityTagsByClubId(clubActivityTagRepository.findByClubIdIn(clubIds));
+        Map<Long, ClubGrowthCoreResponse> growthCoreByClubId = clubGrowthCoreQueryService.getByClubIds(clubIds);
 
         return memberships.stream()
                 .map(membership -> toMyClubSummary(
                         membership,
                         clubById.get(membership.getClubId()),
-                        activityTagsByClubId.getOrDefault(membership.getClubId(), List.of())
+                        activityTagsByClubId.getOrDefault(membership.getClubId(), List.of()),
+                        growthCoreByClubId.get(membership.getClubId())
                 ))
                 .filter(response -> response != null)
                 .toList();
@@ -195,7 +202,8 @@ public class ClubService {
         return toMyClubSummary(
                 membership,
                 club,
-                toTagKeys(clubActivityTagRepository.findByClubId(clubId))
+                toTagKeys(clubActivityTagRepository.findByClubId(clubId)),
+                clubGrowthCoreQueryService.get(clubId)
         );
     }
 
@@ -456,7 +464,12 @@ public class ClubService {
         return normalized;
     }
 
-    private MyClubSummaryResponse toMyClubSummary(ClubMember membership, Club club, List<String> storedActivityTags) {
+    private MyClubSummaryResponse toMyClubSummary(
+            ClubMember membership,
+            Club club,
+            List<String> storedActivityTags,
+            ClubGrowthCoreResponse growthCore
+    ) {
         if (club == null) {
             return null;
         }
@@ -488,7 +501,8 @@ public class ClubService {
                 isAdminRole(roleCode),
                 fileName,
                 imageFileUrlResolver.resolveImageUrl(fileName),
-                imageFileUrlResolver.resolveThumbnailUrl(fileName)
+                imageFileUrlResolver.resolveThumbnailUrl(fileName),
+                growthCore
         );
     }
 

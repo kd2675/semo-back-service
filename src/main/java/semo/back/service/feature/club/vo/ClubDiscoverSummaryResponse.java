@@ -2,6 +2,8 @@ package semo.back.service.feature.club.vo;
 
 import java.util.List;
 
+import semo.back.service.feature.growth.vo.ClubGrowthCoreResponse;
+
 public record ClubDiscoverSummaryResponse(
         Long clubId,
         String name,
@@ -26,6 +28,7 @@ public record ClubDiscoverSummaryResponse(
         String joinStatus,
         Long clubJoinRequestId,
         boolean recommendedByCategory,
-        boolean recommendedByTags
+        boolean recommendedByTags,
+        ClubGrowthCoreResponse growthCore
 ) {
 }

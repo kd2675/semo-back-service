@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
+import semo.back.service.database.pub.repository.ClubGrowthCoreRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
 import semo.back.service.database.pub.repository.ClubFeatureRepository;
@@ -34,6 +35,9 @@ class ClubServiceTest {
 
     @Autowired
     private ClubRepository clubRepository;
+
+    @Autowired
+    private ClubGrowthCoreRepository clubGrowthCoreRepository;
 
     @Autowired
     private ClubMemberRepository clubMemberRepository;
@@ -64,6 +68,7 @@ class ClubServiceTest {
 
     @BeforeEach
     void setUp() {
+        clubGrowthCoreRepository.deleteAll();
         clubScheduleVoteSelectionRepository.deleteAll();
         clubScheduleVoteOptionRepository.deleteAll();
         clubScheduleVoteRepository.deleteAll();
@@ -113,6 +118,8 @@ class ClubServiceTest {
         assertThat(response.regionDepth2Name()).isEqualTo("송파구");
         assertThat(response.regionLabel()).isEqualTo("서울특별시 송파구");
         assertThat(response.fileName()).isNull();
+        assertThat(response.growthCore().tierCode()).isEqualTo("RAW");
+        assertThat(clubGrowthCoreRepository.findById(response.clubId())).isPresent();
         assertThat(profileUserRepository.count()).isOne();
         assertThat(clubRepository.count()).isOne();
         assertThat(clubMemberRepository.count()).isOne();

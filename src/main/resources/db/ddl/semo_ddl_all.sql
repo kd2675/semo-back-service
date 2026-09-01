@@ -52,6 +52,34 @@ CREATE TABLE IF NOT EXISTS club (
 CREATE INDEX idx_club_category_active
     ON club (category_key, active, club_id);
 
+-- ============================================================
+-- Mandatory club growth core
+-- Created with every club. This is an always-on projection, not a
+-- feature activation. Tier is permanent; axis scores are recalculated
+-- from canonical club records under a versioned policy.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS club_growth_core (
+    club_id BIGINT PRIMARY KEY,
+    tier_level INT NOT NULL DEFAULT 0,
+    together_score BIGINT NOT NULL DEFAULT 0,
+    operations_score BIGINT NOT NULL DEFAULT 0,
+    continuity_score BIGINT NOT NULL DEFAULT 0,
+    recent_activity_count INT NOT NULL DEFAULT 0,
+    policy_version INT NOT NULL DEFAULT 1,
+    last_projected_at DATETIME(6) NULL,
+    tier_changed_at DATETIME(6) NULL,
+    row_version BIGINT NOT NULL DEFAULT 0,
+    create_date DATETIME(6) NOT NULL,
+    update_date DATETIME(6) NOT NULL,
+    CONSTRAINT fk_club_growth_core_club
+        FOREIGN KEY (club_id) REFERENCES club(club_id) ON DELETE CASCADE,
+    CONSTRAINT chk_club_growth_core_tier
+        CHECK (tier_level BETWEEN 0 AND 6),
+    CONSTRAINT chk_club_growth_core_scores
+        CHECK (together_score >= 0 AND operations_score >= 0 AND continuity_score >= 0),
+    INDEX idx_club_growth_core_stale (last_projected_at, club_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS club_activity_tag (
     club_activity_tag_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     club_id BIGINT NOT NULL,

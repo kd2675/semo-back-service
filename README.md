@@ -310,6 +310,8 @@
 - Seed source of truth
   - `src/main/resources/db/seed/semo_seed_all.sql`
 - 현재 유지되는 목적별 DDL
+  - `src/main/resources/db/ddl/semo_growth_core_apply.sql`
+  - 모임과 1:1인 상시 `club_growth_core` 테이블을 만들고 기존 모임을 원석 상태로 백필합니다. 누락·고아 건수가 0인지 확인한 뒤 애플리케이션의 bounded reconciler가 실제 원장 기록을 정책 V1 점수로 투영합니다.
   - `src/main/resources/db/ddl/semo_club_profile_backfill.sql`
   - 가입·가입 승인·멤버 상태 변경 쓰기를 일시 중지한 상태에서 실행하는 운영 데이터 보정입니다. 적용 전 누락 건수를 기록하고 적용 후 누락 건수가 0인지 확인한 뒤 애플리케이션을 배포하고 쓰기를 재개합니다.
   - `src/main/resources/db/ddl/semo_timeline_feature_remove.sql`
@@ -320,6 +322,12 @@
   - `invalid_session_event_mapping_count`, `unmapped_daily_checkin_count`, `unmapped_legacy_attendance_count`가 모두 0이고 백업·이관 행을 검증한 뒤에만 주석 처리된 레거시 테이블/컬럼 제거문을 별도로 실행
 
 과거 문서에서 안내하던 `src/main/resources/db/ops/*.sql` 파일은 현재 저장소에 존재하지 않습니다. 재정·대회·할 일·결정 기능의 현재 스키마 계약은 기준 DDL에 통합되어 있으며, 운영 반영 파일명이나 적용 순서를 존재하지 않는 경로에서 추정하지 않습니다.
+
+## Mandatory Growth Core
+
+모임 생성은 `club`, OWNER `club_member`, `club_profile`과 함께 `club_growth_core` 원석 행을 같은 트랜잭션에서 저장합니다. 성장 코어는 feature activation이 아니며 별도 More API를 만들지 않습니다. 생성·내 모임·공개 탐색 응답의 `growthCore` 필드로 현재 소재, 다음 소재, `함께`·`운영`·`이어짐` 진행, 최근 활동 밝기를 제공합니다.
+
+점수는 출석, 일정 투표, 게시판 읽음, 공지, 할 일, 피드백, 결정, 운영 임기와 인수인계 원장의 실제 상태를 단일 bounded 집계로 다시 계산합니다. 사람이 읽는 활동 로그 문구는 티어 근거로 사용하지 않습니다. 성공 활동 로그는 최근 14일 절대 활동 밝기에만 사용합니다. 정책 V1의 구체적인 증거와 가중치, 비경쟁 원칙은 `semo-front-service/SEMO_MORE_FEATURE_GUIDE.md`의 모임 성장 코어 절을 기준으로 합니다.
 
 현재 seed에는 아래 카탈로그 성격의 데이터가 포함됩니다.
 

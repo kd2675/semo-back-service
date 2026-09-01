@@ -50,3 +50,8 @@ database:
 integration:
   image:
     internal-token: test-semo-attachment-token
+
+semo:
+  growth-core:
+    reconcile:
+      enabled: false
