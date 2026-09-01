@@ -119,6 +119,7 @@ class ClubServiceTest {
         assertThat(response.regionLabel()).isEqualTo("서울특별시 송파구");
         assertThat(response.fileName()).isNull();
         assertThat(response.growthCore().tierCode()).isEqualTo("RAW");
+        assertThat(response.growthCore().memberCount()).isEqualTo(1);
         assertThat(clubGrowthCoreRepository.findById(response.clubId())).isPresent();
         assertThat(profileUserRepository.count()).isOne();
         assertThat(clubRepository.count()).isOne();
@@ -152,6 +153,7 @@ class ClubServiceTest {
         assertThat(club.name()).isEqualTo("Semo Hiking");
         assertThat(club.roleCode()).isEqualTo("OWNER");
         assertThat(club.admin()).isTrue();
+        assertThat(club.growthCore().memberCount()).isEqualTo(1);
     }
 
     @Test

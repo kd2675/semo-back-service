@@ -8,7 +8,7 @@ public record ClubGrowthCoreResponse(
         int togetherProgress,
         int operationsProgress,
         int continuityProgress,
-        int overallProgress,
+        int memberCount,
         int activityLevel,
         int policyVersion,
         String lastProjectedAt

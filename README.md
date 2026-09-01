@@ -325,7 +325,7 @@
 
 ## Mandatory Growth Core
 
-모임 생성은 `club`, OWNER `club_member`, `club_profile`과 함께 `club_growth_core` 원석 행을 같은 트랜잭션에서 저장합니다. 성장 코어는 feature activation이 아니며 별도 More API를 만들지 않습니다. 생성·내 모임·공개 탐색 응답의 `growthCore` 필드로 현재 소재, 다음 소재, `함께`·`운영`·`이어짐` 진행, 최근 활동 밝기를 제공합니다.
+모임 생성은 `club`, OWNER `club_member`, `club_profile`과 함께 `club_growth_core` 원석 행을 같은 트랜잭션에서 저장합니다. 성장 코어는 feature activation이 아니며 별도 More API를 만들지 않습니다. 생성·내 모임·공개 탐색 응답의 `growthCore` 필드로 현재 소재, 다음 소재, `함께`·`운영`·`이어짐` 진행, 활성 멤버 수, 최근 활동 밝기를 제공합니다. `memberCount`는 성장 테이블에 중복 저장하지 않고 현재 `club_member` 원장에서 조회 시 집계합니다.
 
 점수는 출석, 일정 투표, 게시판 읽음, 공지, 할 일, 피드백, 결정, 운영 임기와 인수인계 원장의 실제 상태를 단일 bounded 집계로 다시 계산합니다. 사람이 읽는 활동 로그 문구는 티어 근거로 사용하지 않습니다. 성공 활동 로그는 최근 14일 절대 활동 밝기에만 사용합니다. 정책 V1의 구체적인 증거와 가중치, 비경쟁 원칙은 `semo-front-service/SEMO_MORE_FEATURE_GUIDE.md`의 모임 성장 코어 절을 기준으로 합니다.
 

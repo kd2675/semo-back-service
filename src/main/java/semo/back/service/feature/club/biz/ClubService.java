@@ -128,7 +128,7 @@ public class ClubService {
                 .imageFileName(finalImageFileName)
                 .active(true)
                 .build());
-        ClubGrowthCoreResponse growthCore = clubGrowthCoreQueryService.initialize(club.getClubId());
+        clubGrowthCoreQueryService.initialize(club.getClubId());
         saveActivityTags(club.getClubId(), resolvedClassification.activityTags());
 
         ClubMember membership = clubMemberRepository.save(ClubMember.builder()
@@ -141,6 +141,7 @@ public class ClubService {
                 .build());
 
         clubProfileProvisioner.ensureProfile(membership, userName, null, null);
+        ClubGrowthCoreResponse growthCore = clubGrowthCoreQueryService.get(club.getClubId());
 
         return new ClubCreateResponse(
                 club.getClubId(),

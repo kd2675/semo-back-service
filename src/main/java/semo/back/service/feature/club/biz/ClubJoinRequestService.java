@@ -14,7 +14,6 @@ import semo.back.service.database.pub.entity.ClubProfile;
 import semo.back.service.database.pub.entity.ProfileUser;
 import semo.back.service.database.pub.repository.ClubJoinRequestRepository;
 import semo.back.service.database.pub.repository.ClubActivityTagRepository;
-import semo.back.service.database.pub.repository.ClubMemberCountRow;
 import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.database.pub.repository.ClubProfileRepository;
 import semo.back.service.database.pub.repository.ClubRepository;
@@ -115,9 +114,6 @@ public class ClubJoinRequestService {
 
         List<Long> clubIds = publicClubs.stream().map(Club::getClubId).toList();
         Map<Long, List<String>> publicActivityTagsByClubId = toActivityTagsByClubId(clubActivityTagRepository.findByClubIdIn(clubIds));
-        Map<Long, Integer> activeMemberCountByClubId = toActiveMemberCountMap(
-                clubMemberRepository.countMembersByClubIdInAndMembershipStatus(clubIds, STATUS_ACTIVE)
-        );
         Map<Long, ClubJoinRequest> joinRequestByClubId = clubJoinRequestRepository.findByProfileIdAndClubIdIn(profileUser.getProfileId(), clubIds).stream()
                 .collect(Collectors.toMap(ClubJoinRequest::getClubId, Function.identity()));
         Map<Long, ClubGrowthCoreResponse> growthCoreByClubId = clubGrowthCoreQueryService.getByClubIds(clubIds);
@@ -129,7 +125,7 @@ public class ClubJoinRequestService {
                 .map(club -> toDiscoverSummary(
                         club,
                         publicActivityTagsByClubId.getOrDefault(club.getClubId(), List.of()),
-                        activeMemberCountByClubId.getOrDefault(club.getClubId(), 0),
+                        growthCoreByClubId.get(club.getClubId()).memberCount(),
                         joinRequestByClubId.get(club.getClubId()),
                         preferredCategoryKeys.contains(clubClassificationSupport.resolveStored(
                                 club.getActivityCategory(),
@@ -481,14 +477,6 @@ public class ClubJoinRequestService {
         return requests.stream()
                 .map(request -> toJoinRequestInboxItemResponse(request, profileUserById.get(request.getProfileId())))
                 .toList();
-    }
-
-    private Map<Long, Integer> toActiveMemberCountMap(List<ClubMemberCountRow> rows) {
-        Map<Long, Integer> result = new HashMap<>();
-        for (ClubMemberCountRow row : rows) {
-            result.put(row.getClubId(), Math.toIntExact(row.getMemberCount()));
-        }
-        return result;
     }
 
     private Map<Long, List<String>> toActivityTagsByClubId(List<ClubActivityTag> activityTags) {

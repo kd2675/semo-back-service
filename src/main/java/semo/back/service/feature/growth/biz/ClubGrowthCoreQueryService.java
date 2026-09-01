@@ -6,34 +6,40 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import semo.back.service.database.pub.entity.ClubGrowthCore;
 import semo.back.service.database.pub.repository.ClubGrowthCoreRepository;
+import semo.back.service.database.pub.repository.ClubMemberCountRow;
+import semo.back.service.database.pub.repository.ClubMemberRepository;
 import semo.back.service.feature.growth.vo.ClubGrowthCoreResponse;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class ClubGrowthCoreQueryService {
+    private static final String STATUS_ACTIVE = "ACTIVE";
+
     private final ClubGrowthCoreRepository clubGrowthCoreRepository;
+    private final ClubMemberRepository clubMemberRepository;
     private final ClubGrowthCorePolicy clubGrowthCorePolicy;
 
     @Transactional(transactionManager = "pubTransactionManager", propagation = Propagation.MANDATORY)
-    public ClubGrowthCoreResponse initialize(Long clubId) {
-        ClubGrowthCore core = clubGrowthCoreRepository.findById(clubId)
+    public void initialize(Long clubId) {
+        clubGrowthCoreRepository.findById(clubId)
                 .orElseGet(() -> clubGrowthCoreRepository.save(
                         ClubGrowthCore.initial(clubId, ClubGrowthCorePolicy.POLICY_VERSION)
                 ));
-        return toResponse(core);
     }
 
     @Transactional(transactionManager = "pubTransactionManager", readOnly = true)
     public ClubGrowthCoreResponse get(Long clubId) {
+        int memberCount = getActiveMemberCounts(List.of(clubId)).getOrDefault(clubId, 0);
         return clubGrowthCoreRepository.findById(clubId)
-                .map(this::toResponse)
-                .orElseGet(this::initialResponse);
+                .map(core -> toResponse(core, memberCount))
+                .orElseGet(() -> initialResponse(memberCount));
     }
 
     @Transactional(transactionManager = "pubTransactionManager", readOnly = true)
@@ -44,16 +50,22 @@ public class ClubGrowthCoreQueryService {
         Map<Long, ClubGrowthCore> coreByClubId = new HashMap<>();
         clubGrowthCoreRepository.findByClubIdIn(clubIds)
                 .forEach(core -> coreByClubId.put(core.getClubId(), core));
+        Map<Long, Integer> activeMemberCountByClubId = getActiveMemberCounts(clubIds);
 
         Map<Long, ClubGrowthCoreResponse> result = new LinkedHashMap<>();
-        clubIds.stream().distinct().forEach(clubId -> result.put(
-                clubId,
-                coreByClubId.containsKey(clubId) ? toResponse(coreByClubId.get(clubId)) : initialResponse()
-        ));
+        clubIds.stream().distinct().forEach(clubId -> {
+            int memberCount = activeMemberCountByClubId.getOrDefault(clubId, 0);
+            result.put(
+                    clubId,
+                    coreByClubId.containsKey(clubId)
+                            ? toResponse(coreByClubId.get(clubId), memberCount)
+                            : initialResponse(memberCount)
+            );
+        });
         return result;
     }
 
-    private ClubGrowthCoreResponse toResponse(ClubGrowthCore core) {
+    private ClubGrowthCoreResponse toResponse(ClubGrowthCore core, int memberCount) {
         ClubGrowthTier tier = ClubGrowthTier.fromLevel(core.getTierLevel());
         ClubGrowthTier nextTier = tier.level() >= ClubGrowthCorePolicy.MAX_TIER_LEVEL
                 ? null
@@ -61,7 +73,6 @@ public class ClubGrowthCoreQueryService {
         int togetherProgress = clubGrowthCorePolicy.progress(core.getTogetherScore(), tier.level());
         int operationsProgress = clubGrowthCorePolicy.progress(core.getOperationsScore(), tier.level());
         int continuityProgress = clubGrowthCorePolicy.progress(core.getContinuityScore(), tier.level());
-        int overallProgress = (togetherProgress + operationsProgress + continuityProgress) / 3;
         return new ClubGrowthCoreResponse(
                 tier.name(),
                 tier.label(),
@@ -70,14 +81,14 @@ public class ClubGrowthCoreQueryService {
                 togetherProgress,
                 operationsProgress,
                 continuityProgress,
-                overallProgress,
+                memberCount,
                 clubGrowthCorePolicy.activityLevel(core.getRecentActivityCount()),
                 core.getPolicyVersion(),
                 format(core.getLastProjectedAt())
         );
     }
 
-    private ClubGrowthCoreResponse initialResponse() {
+    private ClubGrowthCoreResponse initialResponse(int memberCount) {
         return new ClubGrowthCoreResponse(
                 ClubGrowthTier.RAW.name(),
                 ClubGrowthTier.RAW.label(),
@@ -86,11 +97,22 @@ public class ClubGrowthCoreQueryService {
                 0,
                 0,
                 0,
-                0,
+                memberCount,
                 0,
                 ClubGrowthCorePolicy.POLICY_VERSION,
                 null
         );
+    }
+
+    private Map<Long, Integer> getActiveMemberCounts(Collection<Long> clubIds) {
+        Map<Long, Integer> result = new HashMap<>();
+        for (ClubMemberCountRow row : clubMemberRepository.countMembersByClubIdInAndMembershipStatus(
+                clubIds,
+                STATUS_ACTIVE
+        )) {
+            result.put(row.getClubId(), Math.toIntExact(row.getMemberCount()));
+        }
+        return result;
     }
 
     private String format(LocalDateTime dateTime) {
